@@ -83,8 +83,8 @@ if (typeof QRCode === 'undefined') {
     </div>
     {% endif %}
 
-    {# ─── POLL / TRIVIA (multi-question) ─── #}
-    {% if gt in ('poll', 'trivia') %}
+    {# ─── POLL (multi-question) ─── #}
+    {% if gt == 'poll' %}
       {% set questions = lobby.get('questions', [lobby.question]) %}
 
       {% for q in questions %}
@@ -118,7 +118,6 @@ if (typeof QRCode === 'undefined') {
             <div class="ew-success-banner">You voted: <strong>{{ q_my_vote }}</strong></div>
             {% if lobby.revealed %}
               <div style="margin-top:0.6rem;">
-                {% if gt=='trivia' and q.correct_option %}<div style="margin-bottom:0.5rem;">Correct: <strong style="color:var(--success-color);">{{ q.correct_option }}</strong> {% if q_my_vote == q.correct_option %}<span class="ew-badge ew-badge--success" style="margin-left:4px;">Correct</span>{% else %}<span class="ew-badge ew-badge--danger" style="margin-left:4px;">Incorrect</span>{% endif %}</div>{% endif %}
                 {% set q_counts = lobby.counts.get(qi|string, lobby.counts) if lobby.counts else {} %}
                 {% set total_q = q_counts.values()|list|sum if q_counts else 0 %}
                 {% for opt in q.options %}
@@ -147,6 +146,283 @@ if (typeof QRCode === 'undefined') {
           {% endif %}
         </div>
       {% endfor %}
+
+    {# ─── LIVE MULTIPLAYER TRIVIA (KAHOOT-STYLE) ─── #}
+    {% elif gt == 'trivia' %}
+      {% set questions = lobby.get('questions', [lobby.question]) %}
+      {% set current_qi = lobby.get('current_q_idx', 0) %}
+      {% set cur_q = questions[current_qi] if current_qi < questions|length else questions[0] %}
+      {% set phase = lobby.get('phase', 'lobby') %}
+      {% set timer_sec = lobby.get('timer_seconds', 20) or 20 %}
+      {% set my_answered = lobby.get('live_answers', {}).get(current_qi|string, {}).get(player_id) %}
+      {% set my_player_score = lobby.get('live_scores', {}).get(player_id, {'score': 0, 'streak': 0}) %}
+
+      <!-- Top Live Trivia Control Bar (PIN, Round, Stats) -->
+      <div class="ew-card" style="padding: 0.9rem 1.25rem; margin-bottom: 1rem; border-left: 4px solid var(--primary-color);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.6rem;">
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <span class="ew-badge" style="background:rgba(62,34,23,0.08); color:var(--text-dark-color); font-weight:700; font-size:0.85rem; padding:0.3rem 0.65rem;">
+              PIN: <span style="font-family:monospace; letter-spacing:1px;" id="live-pin-display">{{ lobby.pin or 'N/A' }}</span>
+            </span>
+            <span style="font-size:0.85rem; color:var(--text-secondary);" id="live-round-indicator">
+              Round <strong id="live-q-num">{{ current_qi + 1 }}</strong> of {{ questions|length }}
+            </span>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            {% if is_host %}
+              <div id="host-controls" style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+                {% if phase == 'lobby' %}
+                  <button type="button" onclick="hostStartLiveGame()" class="ew-btn ew-btn--sm" id="btn-host-start" style="cursor:pointer; font-weight:700;">
+                    ▶ Start Live Game
+                  </button>
+                {% elif phase == 'question' %}
+                  <button type="button" onclick="hostRevealLiveQuestion()" class="ew-btn ew-btn--sm ew-btn--outline" id="btn-host-reveal" style="cursor:pointer;">
+                    Reveal Answers
+                  </button>
+                {% elif phase == 'reveal' %}
+                  <button type="button" onclick="hostShowLeaderboard()" class="ew-btn ew-btn--sm" id="btn-host-lead" style="cursor:pointer;">
+                    Show Leaderboard &rarr;
+                  </button>
+                {% elif phase == 'leaderboard' %}
+                  {% if current_qi + 1 < questions|length %}
+                    <button type="button" onclick="hostNextLiveQuestion()" class="ew-btn ew-btn--sm" id="btn-host-next" style="cursor:pointer;">
+                      Next Question &rarr;
+                    </button>
+                  {% else %}
+                    <button type="button" onclick="hostShowPodium()" class="ew-btn ew-btn--sm" id="btn-host-podium" style="cursor:pointer; font-weight:700;">
+                      🏆 View Finale Podium!
+                    </button>
+                  {% endif %}
+                {% elif phase == 'podium' %}
+                  <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">
+                    Full Results Table
+                  </a>
+                {% endif %}
+              </div>
+            {% else %}
+              <div style="font-size:0.85rem; color:var(--text-secondary);">
+                <span>Score: <strong style="color:var(--text-dark-color);" id="player-hud-score">{{ my_player_score.score }}</strong></span>
+                {% if my_player_score.streak > 1 %}
+                  <span class="ew-badge" style="margin-left:4px; background:rgba(217,83,79,0.12); color:#b8423f;" id="player-hud-streak">🔥 {{ my_player_score.streak }}</span>
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Container (Switchable Phases) -->
+      <div id="trivia-live-stage">
+
+        <!-- 1. LOBBY PHASE -->
+        <div id="phase-lobby-view" style="display:{% if phase == 'lobby' %}block{% else %}none{% endif %};">
+          <div class="ew-card" style="text-align:center; padding:2rem 1.5rem;">
+            <div style="display:inline-flex; align-items:center; justify-content:center; width:52px; height:52px; border-radius:50%; background:rgba(62,34,23,0.06); font-size:1.5rem; margin-bottom:0.75rem;">
+              🎮
+            </div>
+            <h2 style="margin:0 0 0.5rem 0; font-size:1.45rem; font-weight:700; color:var(--text-dark-color);">
+              {{ lobby.title }}
+            </h2>
+            <div style="font-size:0.9rem; color:var(--text-secondary); margin-bottom:1.5rem;">
+              Join on phone/browser with PIN: <span style="font-family:monospace; font-size:1.3rem; font-weight:700; color:var(--text-dark-color); letter-spacing:2px; background:rgba(62,34,23,0.06); padding:0.2rem 0.6rem; border-radius:6px;">{{ lobby.pin }}</span>
+            </div>
+
+            <!-- Host Roster vs Player Waiting -->
+            {% if is_host %}
+              <div style="background:var(--surface-bg); border:1px solid var(--border-color); border-radius:10px; padding:1.25rem; margin-bottom:1.5rem; max-width:520px; margin-left:auto; margin-right:auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                  <span style="font-size:0.85rem; font-weight:700; color:var(--text-dark-color);">Players in Room (<span id="roster-count">0</span>)</span>
+                  <span style="font-size:0.78rem; color:var(--text-muted);">Waiting for you to start</span>
+                </div>
+                <div id="roster-grid" style="display:flex; flex-wrap:wrap; gap:0.5rem; justify-content:center; min-height:48px;">
+                  <div style="color:var(--text-muted); font-size:0.85rem; padding:0.75rem;">Waiting for players to join with PIN...</div>
+                </div>
+              </div>
+              <button type="button" onclick="hostStartLiveGame()" class="ew-btn" style="padding:0.85rem 2rem; font-size:1.05rem; font-weight:700; cursor:pointer;">
+                ▶ Start Game Now
+              </button>
+            {% else %}
+              <div class="ew-card" style="max-width:440px; margin:0 auto; background:var(--surface-bg); border:1px solid var(--border-color); padding:1.5rem; text-align:center;">
+                <div style="font-size:1.1rem; font-weight:700; color:var(--text-dark-color); margin-bottom:0.3rem;">
+                  You're in, {{ player_name }}! 🎉
+                </div>
+                <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">
+                  You will see questions and answer buttons right here as soon as the host starts the game.
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- 2. QUESTION PHASE -->
+        <div id="phase-question-view" style="display:{% if phase == 'question' %}block{% else %}none{% endif %};">
+          <!-- Live Timer Bar -->
+          <div style="background:var(--border-color); height:8px; border-radius:4px; overflow:hidden; margin-bottom:1rem;">
+            <div id="live-timer-bar" style="width:100%; height:100%; background:var(--primary-color); transition:width 1s linear;"></div>
+          </div>
+
+          <!-- Question Card -->
+          <div class="ew-card" style="text-align:center; padding:1.75rem 1.25rem; margin-bottom:1rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem; font-size:0.8rem; color:var(--text-secondary);">
+              <span id="question-badge">Question <span id="q-stage-num">{{ current_qi + 1 }}</span> of {{ questions|length }}</span>
+              <span style="font-weight:700; font-size:1rem; color:var(--primary-color);" id="live-timer-num">{{ timer_sec }}s</span>
+            </div>
+            <h3 style="margin:0; font-size:1.25rem; font-weight:700; color:var(--text-dark-color); line-height:1.4;" id="live-question-label">
+              {{ cur_q.label }}
+            </h3>
+            {% if is_host %}
+              <div style="margin-top:0.75rem; display:flex; align-items:center; justify-content:center; gap:0.75rem;" id="host-answers-status">
+                <span id="answers-in-count" style="font-size:0.85rem; color:var(--text-secondary);">0 answered</span>
+                <button type="button" onclick="hostRevealLiveQuestion()" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor:pointer; padding:0.3rem 0.8rem; font-size:0.8rem;">
+                  Reveal Now &rarr;
+                </button>
+              </div>
+            {% endif %}
+          </div>
+
+          <!-- Answer Grid (4 Warm Colored Shapes) -->
+          <div id="live-choices-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:1rem;">
+            {% set shapes = [
+              {'icon': '▲', 'bg': '#b8423f', 'name': 'triangle'},
+              {'icon': '◆', 'bg': '#2c5f8a', 'name': 'diamond'},
+              {'icon': '●', 'bg': '#c68a35', 'name': 'circle'},
+              {'icon': '■', 'bg': '#3f7e52', 'name': 'square'}
+            ] %}
+            {% for opt in cur_q.options %}
+              {% set sh = shapes[loop.index0 % 4] %}
+              {% if is_host %}
+                <!-- Host Display Card -->
+                <div class="choice-host-card" style="background:{{ sh.bg }}; color:#ffffff; border-radius:10px; padding:1.25rem 1rem; display:flex; align-items:center; gap:0.75rem; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+                  <span style="font-size:1.5rem; line-height:1;">{{ sh.icon }}</span>
+                  <span style="font-size:1.05rem; font-weight:600; flex:1;" class="choice-text">{{ opt }}</span>
+                </div>
+              {% else %}
+                <!-- Player Interactive Controller Button -->
+                <button type="button" 
+                  onclick="playerSubmitAnswer('{{ opt|replace("'", "\\'") }}')" 
+                  class="choice-btn"
+                  id="choice-btn-{{ loop.index0 }}"
+                  data-option="{{ opt }}"
+                  style="background:{{ sh.bg }}; color:#ffffff; border:none; border-radius:10px; padding:1.5rem 1rem; display:flex; align-items:center; justify-content:center; gap:0.75rem; cursor:pointer; font-size:1.05rem; font-weight:600; text-align:center; transition:transform 0.1s, opacity 0.2s; -webkit-tap-highlight-color:transparent;">
+                  <span style="font-size:1.5rem; line-height:1;">{{ sh.icon }}</span>
+                  <span class="choice-text">{{ opt }}</span>
+                </button>
+              {% endif %}
+            {% endfor %}
+          </div>
+
+          <!-- Player Answered Confirmation -->
+          <div id="player-locked-banner" style="display:{% if my_answered %}block{% else %}none{% endif %}; text-align:center; padding:1rem; background:rgba(62,34,23,0.05); border-radius:8px; margin-bottom:1rem;">
+            <div style="font-weight:700; color:var(--text-dark-color); font-size:1.05rem;">
+              ⚡ Answer Locked In!
+            </div>
+            <div style="font-size:0.82rem; color:var(--text-secondary); margin-top:0.2rem;">
+              Waiting for other players or time to expire...
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. REVEAL / RESULTS PHASE -->
+        <div id="phase-reveal-view" style="display:{% if phase == 'reveal' %}block{% else %}none{% endif %};">
+          <div class="ew-card" style="padding:1.5rem; margin-bottom:1rem;">
+            <!-- Player feedback card -->
+            <div id="reveal-player-feedback" style="text-align:center; margin-bottom:1.25rem;">
+              <div id="feedback-badge" style="display:inline-block; font-size:1.25rem; font-weight:700; padding:0.6rem 1.5rem; border-radius:8px; margin-bottom:0.4rem;"></div>
+              <div id="feedback-points" style="font-size:0.95rem; font-weight:600; color:var(--text-secondary);"></div>
+            </div>
+
+            <div style="font-weight:700; color:var(--text-dark-color); font-size:1.1rem; margin-bottom:0.75rem; text-align:center;" id="reveal-q-label">
+              {{ cur_q.label }}
+            </div>
+
+            <!-- Distribution Bars -->
+            <div id="reveal-distribution-bars" style="display:flex; flex-direction:column; gap:0.6rem; margin-bottom:1.25rem;"></div>
+
+            {% if is_host %}
+              <div style="text-align:center;">
+                <button type="button" onclick="hostShowLeaderboard()" class="ew-btn" style="cursor:pointer; padding:0.75rem 2rem;">
+                  Show Leaderboard &rarr;
+                </button>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- 4. LEADERBOARD PHASE -->
+        <div id="phase-leaderboard-view" style="display:{% if phase == 'leaderboard' %}block{% else %}none{% endif %};">
+          <div class="ew-card" style="padding:1.5rem; margin-bottom:1rem;">
+            <div style="text-align:center; margin-bottom:1.25rem;">
+              <div class="ew-badge" style="margin-bottom:0.3rem;">Current Standings</div>
+              <h3 style="margin:0; font-size:1.35rem; font-weight:700; color:var(--text-dark-color);">Top Players</h3>
+            </div>
+
+            <div id="leaderboard-list" style="display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1.5rem;">
+              <!-- Populated dynamically via JS -->
+            </div>
+
+            {% if is_host %}
+              <div style="text-align:center;">
+                {% if current_qi + 1 < questions|length %}
+                  <button type="button" onclick="hostNextLiveQuestion()" class="ew-btn" style="cursor:pointer; padding:0.75rem 2rem;">
+                    Next Question &rarr;
+                  </button>
+                {% else %}
+                  <button type="button" onclick="hostShowPodium()" class="ew-btn" style="cursor:pointer; padding:0.75rem 2rem; font-weight:700;">
+                    🏆 View Finale Podium!
+                  </button>
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- 5. PODIUM FINALE PHASE -->
+        <div id="phase-podium-view" style="display:{% if phase == 'podium' %}block{% else %}none{% endif %};">
+          <div class="ew-card" style="padding:2rem 1.5rem; text-align:center; margin-bottom:1rem; overflow:hidden;">
+            <div style="font-size:2.2rem; margin-bottom:0.25rem;">🏆</div>
+            <h2 style="margin:0 0 0.3rem 0; font-size:1.6rem; font-weight:800; color:var(--text-dark-color);">
+              Game Finished!
+            </h2>
+            <div style="font-size:0.88rem; color:var(--text-secondary); margin-bottom:1.75rem;">
+              Congratulations to our top trivia masters!
+            </div>
+
+            <!-- 3-Tier Podium -->
+            <div id="podium-tier-container" style="display:flex; align-items:flex-end; justify-content:center; gap:0.75rem; min-height:180px; margin-bottom:1.75rem;">
+              <!-- 2nd Place -->
+              <div id="podium-2" style="flex:1; max-width:130px; display:flex; flex-direction:column; align-items:center;">
+                <div class="podium-name" style="font-weight:700; font-size:0.85rem; margin-bottom:0.3rem; color:var(--text-dark-color);">-</div>
+                <div class="podium-score" style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:0.4rem;">0 pts</div>
+                <div style="width:100%; height:95px; background:linear-gradient(to top, #c0c7ce, #d8dee4); border-radius:8px 8px 0 0; display:flex; align-items:center; justify-content:center; font-size:1.4rem; font-weight:800; color:#4a5568;">2</div>
+              </div>
+              <!-- 1st Place -->
+              <div id="podium-1" style="flex:1; max-width:140px; display:flex; flex-direction:column; align-items:center;">
+                <div style="font-size:1.2rem; margin-bottom:0.1rem;">👑</div>
+                <div class="podium-name" style="font-weight:800; font-size:0.95rem; margin-bottom:0.3rem; color:var(--text-dark-color);">-</div>
+                <div class="podium-score" style="font-size:0.78rem; font-weight:600; color:var(--text-secondary); margin-bottom:0.4rem;">0 pts</div>
+                <div style="width:100%; height:135px; background:linear-gradient(to top, #d4a034, #f5c452); border-radius:8px 8px 0 0; display:flex; align-items:center; justify-content:center; font-size:1.8rem; font-weight:900; color:#5c4308;">1</div>
+              </div>
+              <!-- 3rd Place -->
+              <div id="podium-3" style="flex:1; max-width:130px; display:flex; flex-direction:column; align-items:center;">
+                <div class="podium-name" style="font-weight:700; font-size:0.85rem; margin-bottom:0.3rem; color:var(--text-dark-color);">-</div>
+                <div class="podium-score" style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:0.4rem;">0 pts</div>
+                <div style="width:100%; height:70px; background:linear-gradient(to top, #c78b66, #deb397); border-radius:8px 8px 0 0; display:flex; align-items:center; justify-content:center; font-size:1.3rem; font-weight:800; color:#5c351c;">3</div>
+              </div>
+            </div>
+
+            <div style="display:flex; justify-content:center; gap:0.6rem; flex-wrap:wrap;">
+              <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn" style="text-decoration:none;">
+                View Results Table
+              </a>
+              <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline" style="text-decoration:none;">
+                All Games Hub
+              </a>
+            </div>
+          </div>
+        </div>
+
+      </div>
 
     {# ─── WOULD YOU RATHER ─── #}
     {% elif gt == 'wyr' %}
@@ -422,7 +698,199 @@ window.toggleQRCode = function(){
   const lobbyId = "{{ lobby.lobby_id if (lobby and not expired) else '' }}";
   if(!lobbyId || typeof io==='undefined') return;
 
-  {% if lobby and lobby.timer_seconds and lobby.timer_seconds > 0 and not is_host and not lobby.revealed %}
+  const isLiveTrivia = "{{ gt }}" === "trivia";
+  const isHost = {{ 'true' if is_host else 'false' }};
+  let currentPhase = "{{ phase or 'lobby' }}";
+  let currentQIdx = {{ current_qi or 0 }};
+  let totalQuestions = {{ questions|length if questions else 1 }};
+  let questionTimer = null;
+  let timerTotalSeconds = {{ timer_sec or 20 }};
+  let timerRemaining = {{ timer_sec or 20 }};
+  let playerAnswerSubmitted = {{ 'true' if my_answered else 'false' }};
+  let myLastResult = null;
+
+  const SHAPES = [
+    { icon: '▲', bg: '#b8423f', name: 'triangle' },
+    { icon: '◆', bg: '#2c5f8a', name: 'diamond' },
+    { icon: '●', bg: '#c68a35', name: 'circle' },
+    { icon: '■', bg: '#3f7e52', name: 'square' }
+  ];
+
+  function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if(meta) return meta.getAttribute('content');
+    const input = document.querySelector('input[name="csrf_token"]');
+    if(input) return input.value;
+    return '';
+  }
+
+  function switchPhase(newPhase) {
+    currentPhase = newPhase;
+    const phases = ['lobby', 'question', 'reveal', 'leaderboard', 'podium'];
+    phases.forEach(p => {
+      const el = document.getElementById('phase-' + p + '-view');
+      if(el) el.style.display = (p === newPhase) ? 'block' : 'none';
+    });
+  }
+
+  function startLiveCountdown(seconds) {
+    if(questionTimer) clearInterval(questionTimer);
+    timerTotalSeconds = seconds;
+    timerRemaining = seconds;
+
+    const display = document.getElementById('live-timer-num');
+    const bar = document.getElementById('live-timer-bar');
+    if(display) {
+      display.textContent = seconds + 's';
+      display.style.color = 'var(--primary-color)';
+    }
+    if(bar) {
+      bar.style.width = '100%';
+      bar.style.background = 'var(--primary-color)';
+    }
+
+    questionTimer = setInterval(() => {
+      timerRemaining--;
+      if(display) display.textContent = Math.max(0, timerRemaining) + 's';
+      if(bar) {
+        const pct = Math.max(0, (timerRemaining / timerTotalSeconds) * 100);
+        bar.style.width = pct + '%';
+      }
+      if(timerRemaining <= 5) {
+        if(display) display.style.color = 'var(--danger-color, #b8423f)';
+        if(bar) bar.style.background = 'var(--danger-color, #b8423f)';
+      }
+      if(timerRemaining <= 0) {
+        clearInterval(questionTimer);
+        questionTimer = null;
+        if(display) display.textContent = "Time's up!";
+        if(!isHost && !playerAnswerSubmitted) {
+          document.querySelectorAll('.choice-btn').forEach(btn => {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'default';
+          });
+        }
+        if(isHost) {
+          setTimeout(() => {
+            window.hostRevealLiveQuestion();
+          }, 800);
+        }
+      }
+    }, 1000);
+  }
+
+  // Window-level Host & Player actions for Live Trivia
+  window.hostStartLiveGame = async function() {
+    try {
+      const res = await fetch(`/g/${lobbyId}/live/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() }
+      });
+      const data = await res.json();
+      if(!data.ok) alert(data.error || 'Failed to start game');
+    } catch(err) {
+      console.error('Error starting game:', err);
+    }
+  };
+
+  window.playerSubmitAnswer = async function(option) {
+    if(playerAnswerSubmitted || timerRemaining <= 0) return;
+    playerAnswerSubmitted = true;
+
+    const btns = document.querySelectorAll('.choice-btn');
+    btns.forEach(btn => {
+      btn.disabled = true;
+      if(btn.dataset.option === option) {
+        btn.style.outline = '3px solid #ffffff';
+        btn.style.transform = 'scale(0.97)';
+      } else {
+        btn.style.opacity = '0.35';
+      }
+    });
+    const banner = document.getElementById('player-locked-banner');
+    if(banner) banner.style.display = 'block';
+
+    try {
+      const res = await fetch(`/g/${lobbyId}/live/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+        body: JSON.stringify({ option: option, time_remaining: timerRemaining })
+      });
+      const data = await res.json();
+      if(data.ok) {
+        myLastResult = data;
+        const hudScore = document.getElementById('player-hud-score');
+        if(hudScore && data.new_total != null) hudScore.textContent = data.new_total;
+        const hudStreak = document.getElementById('player-hud-streak');
+        if(hudStreak) {
+          if(data.streak > 1) {
+            hudStreak.textContent = '🔥 ' + data.streak;
+            hudStreak.style.display = 'inline-block';
+          } else {
+            hudStreak.style.display = 'none';
+          }
+        }
+      }
+    } catch(err) {
+      console.error('Error submitting answer:', err);
+    }
+  };
+
+  window.hostRevealLiveQuestion = async function() {
+    try {
+      const res = await fetch(`/g/${lobbyId}/live/reveal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() }
+      });
+      const data = await res.json();
+      if(!data.ok) console.error('Reveal error:', data.error);
+    } catch(err) {
+      console.error('Error revealing answer:', err);
+    }
+  };
+
+  window.hostShowLeaderboard = async function() {
+    try {
+      const res = await fetch(`/g/${lobbyId}/live/leaderboard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() }
+      });
+      const data = await res.json();
+      if(!data.ok) console.error('Leaderboard error:', data.error);
+    } catch(err) {
+      console.error('Error showing leaderboard:', err);
+    }
+  };
+
+  window.hostNextLiveQuestion = async function() {
+    try {
+      const res = await fetch(`/g/${lobbyId}/live/next`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() }
+      });
+      const data = await res.json();
+      if(!data.ok) console.error('Next question error:', data.error);
+    } catch(err) {
+      console.error('Error next question:', err);
+    }
+  };
+
+  window.hostShowPodium = async function() {
+    try {
+      const res = await fetch(`/g/${lobbyId}/live/podium`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() }
+      });
+      const data = await res.json();
+      if(!data.ok) console.error('Podium error:', data.error);
+    } catch(err) {
+      console.error('Error podium:', err);
+    }
+  };
+
+  // Poll timer for non-trivia games
+  {% if lobby and lobby.timer_seconds and lobby.timer_seconds > 0 and not is_host and not lobby.revealed and gt != 'trivia' %}
   (function(){
     const totalSeconds = {{ lobby.timer_seconds }};
     let remaining = totalSeconds;
@@ -462,26 +930,227 @@ window.toggleQRCode = function(){
 
   const socket = io({transports:['websocket','polling']});
   socket.on('connect', ()=>{ socket.emit('join_game', {lobby_id: lobbyId}); });
+  
   socket.on('game_presence_update', (data)=>{
     const el=document.getElementById('presence-list');
     if(el && data.players) el.textContent = data.players.length + ' player' + (data.players.length!==1?'s':'') + ': ' + data.players.map(p=>p.name).join(', ');
     const pc=document.getElementById('presence-count');
     if(pc && data.players) pc.textContent = data.players.length;
+
+    // Live trivia lobby roster
+    const rCount = document.getElementById('roster-count');
+    if(rCount && data.players) rCount.textContent = data.players.length;
+    const rGrid = document.getElementById('roster-grid');
+    if(rGrid && data.players) {
+      if(data.players.length === 0) {
+        rGrid.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:0.75rem;">Waiting for players to join with PIN...</div>';
+      } else {
+        rGrid.innerHTML = data.players.map(p => 
+          `<span class="ew-badge" style="padding:0.4rem 0.8rem; font-size:0.85rem; background:rgba(62,34,23,0.08); color:var(--text-dark-color); border-radius:16px;">${p.name}</span>`
+        ).join('');
+      }
+    }
   });
+
+  // Live Trivia Real-Time Sockets
+  socket.on('live_trivia_state', (data)=>{
+    if(data.phase === 'question') {
+      currentPhase = 'question';
+      currentQIdx = data.current_q_idx;
+      totalQuestions = data.total_questions;
+      playerAnswerSubmitted = false;
+      myLastResult = null;
+
+      switchPhase('question');
+
+      const qNumEl = document.getElementById('q-stage-num');
+      if(qNumEl) qNumEl.textContent = currentQIdx + 1;
+      const qLabelEl = document.getElementById('live-question-label');
+      if(qLabelEl && data.question) qLabelEl.textContent = data.question.label;
+
+      const lockedBanner = document.getElementById('player-locked-banner');
+      if(lockedBanner) lockedBanner.style.display = 'none';
+
+      const ansIn = document.getElementById('answers-in-count');
+      if(ansIn) ansIn.textContent = '0 answered';
+
+      const grid = document.getElementById('live-choices-grid');
+      if(grid && data.question && data.question.options) {
+        grid.innerHTML = '';
+        data.question.options.forEach((opt, idx) => {
+          const sh = SHAPES[idx % 4];
+          if(isHost) {
+            const card = document.createElement('div');
+            card.className = 'choice-host-card';
+            card.style.cssText = `background:${sh.bg}; color:#ffffff; border-radius:10px; padding:1.25rem 1rem; display:flex; align-items:center; gap:0.75rem; box-shadow:0 2px 8px rgba(0,0,0,0.08);`;
+            card.innerHTML = `<span style="font-size:1.5rem; line-height:1;">${sh.icon}</span><span style="font-size:1.05rem; font-weight:600; flex:1;" class="choice-text">${opt}</span>`;
+            grid.appendChild(card);
+          } else {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'choice-btn';
+            btn.id = 'choice-btn-' + idx;
+            btn.dataset.option = opt;
+            btn.style.cssText = `background:${sh.bg}; color:#ffffff; border:none; border-radius:10px; padding:1.5rem 1rem; display:flex; align-items:center; justify-content:center; gap:0.75rem; cursor:pointer; font-size:1.05rem; font-weight:600; text-align:center; transition:transform 0.1s, opacity 0.2s; -webkit-tap-highlight-color:transparent;`;
+            btn.innerHTML = `<span style="font-size:1.5rem; line-height:1;">${sh.icon}</span><span class="choice-text">${opt}</span>`;
+            btn.onclick = () => window.playerSubmitAnswer(opt);
+            grid.appendChild(btn);
+          }
+        });
+      }
+
+      startLiveCountdown(data.timer_seconds || 20);
+    }
+  });
+
+  socket.on('live_trivia_answer_count', (data)=>{
+    const el = document.getElementById('answers-in-count');
+    if(el) el.textContent = `${data.total_answers} answered`;
+  });
+
+  socket.on('live_trivia_reveal', (data)=>{
+    if(questionTimer) { clearInterval(questionTimer); questionTimer = null; }
+    switchPhase('reveal');
+
+    const revealLabel = document.getElementById('reveal-q-label');
+    const curLabel = document.getElementById('live-question-label');
+    if(revealLabel && curLabel) revealLabel.textContent = curLabel.textContent;
+
+    // Distribution bars
+    const distContainer = document.getElementById('reveal-distribution-bars');
+    if(distContainer && data.counts) {
+      distContainer.innerHTML = '';
+      let totalVotes = 0;
+      Object.values(data.counts).forEach(v => { totalVotes += v; });
+      const options = Object.keys(data.counts);
+      options.forEach((opt, idx) => {
+        const sh = SHAPES[idx % 4];
+        const count = data.counts[opt] || 0;
+        const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+        const isCorrect = (opt === data.correct_option);
+
+        const row = document.createElement('div');
+        row.style.cssText = `background:var(--surface-bg); border:2px solid ${isCorrect ? '#3f7e52' : 'var(--border-color)'}; border-radius:8px; padding:0.6rem 0.85rem; position:relative; overflow:hidden;`;
+        row.innerHTML = `
+          <div style="position:absolute; top:0; left:0; bottom:0; width:${pct}%; background:${isCorrect ? 'rgba(63,126,82,0.15)' : 'rgba(62,34,23,0.06)'}; z-index:1; transition:width 0.6s ease;"></div>
+          <div style="position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+            <div style="display:flex; align-items:center; gap:0.5rem; font-weight:600; color:var(--text-dark-color); font-size:0.95rem;">
+              <span style="color:${sh.bg}; font-size:1.1rem; line-height:1;">${sh.icon}</span>
+              <span>${opt}</span>
+              ${isCorrect ? '<span class="ew-badge ew-badge--success" style="font-size:0.7rem; margin-left:0.3rem;">✓ Correct</span>' : ''}
+            </div>
+            <div style="font-size:0.85rem; font-weight:700; color:var(--text-dark-color);">
+              ${count} <span style="font-size:0.75rem; color:var(--text-secondary); font-weight:400;">(${pct}%)</span>
+            </div>
+          </div>
+        `;
+        distContainer.appendChild(row);
+      });
+    }
+
+    // Feedback for player
+    const fbBadge = document.getElementById('feedback-badge');
+    const fbPts = document.getElementById('feedback-points');
+    if(fbBadge && fbPts) {
+      if(isHost) {
+        fbBadge.style.display = 'none';
+        fbPts.textContent = 'Question results: Correct answer highlighted in green';
+      } else {
+        fbBadge.style.display = 'inline-block';
+        if(myLastResult && myLastResult.correct) {
+          fbBadge.textContent = '🎉 Correct!';
+          fbBadge.style.background = 'rgba(63,126,82,0.15)';
+          fbBadge.style.color = '#3f7e52';
+          let ptsText = `+${myLastResult.points_awarded || 0} pts`;
+          if(myLastResult.streak > 1) {
+            ptsText += ` • 🔥 ${myLastResult.streak} streak!`;
+          }
+          fbPts.textContent = ptsText;
+        } else if(playerAnswerSubmitted) {
+          fbBadge.textContent = '❌ Incorrect';
+          fbBadge.style.background = 'rgba(184,66,63,0.15)';
+          fbBadge.style.color = '#b8423f';
+          fbPts.textContent = '+0 pts';
+        } else {
+          fbBadge.textContent = "⏱️ Time's up!";
+          fbBadge.style.background = 'rgba(62,34,23,0.1)';
+          fbBadge.style.color = 'var(--text-secondary)';
+          fbPts.textContent = '+0 pts (no answer submitted)';
+        }
+      }
+    }
+  });
+
+  socket.on('live_trivia_leaderboard', (data)=>{
+    switchPhase('leaderboard');
+    const lbList = document.getElementById('leaderboard-list');
+    if(lbList && data.leaderboard) {
+      lbList.innerHTML = '';
+      if(data.leaderboard.length === 0) {
+        lbList.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:1rem;">No scores yet</div>';
+      } else {
+        data.leaderboard.forEach((entry, idx) => {
+          const rankIcon = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : (idx === 2 ? '🥉' : `${idx + 1}`));
+          const row = document.createElement('div');
+          row.style.cssText = `display:flex; align-items:center; justify-content:space-between; padding:0.7rem 1rem; background:var(--surface-bg); border-radius:8px; border:1px solid var(--border-color); ${idx === 0 ? 'border-left:4px solid #d4a034;' : ''}`;
+          row.innerHTML = `
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+              <span style="font-weight:700; font-size:1rem; width:26px; text-align:center;">${rankIcon}</span>
+              <span style="font-weight:600; color:var(--text-dark-color);">${entry.name}</span>
+              ${entry.streak > 1 ? `<span class="ew-badge" style="background:rgba(217,83,79,0.12); color:#b8423f; font-size:0.75rem;">🔥 ${entry.streak}</span>` : ''}
+            </div>
+            <span style="font-weight:700; font-size:1rem; color:var(--primary-color);">${entry.score} pts</span>
+          `;
+          lbList.appendChild(row);
+        });
+      }
+    }
+  });
+
+  socket.on('live_trivia_podium', (data)=>{
+    switchPhase('podium');
+    const p = data.podium || [];
+    if(p[0]) {
+      const elN = document.querySelector('#podium-1 .podium-name');
+      const elS = document.querySelector('#podium-1 .podium-score');
+      if(elN) elN.textContent = p[0].name;
+      if(elS) elS.textContent = p[0].score + ' pts';
+    }
+    if(p[1]) {
+      const elN = document.querySelector('#podium-2 .podium-name');
+      const elS = document.querySelector('#podium-2 .podium-score');
+      if(elN) elN.textContent = p[1].name;
+      if(elS) elS.textContent = p[1].score + ' pts';
+    }
+    if(p[2]) {
+      const elN = document.querySelector('#podium-3 .podium-name');
+      const elS = document.querySelector('#podium-3 .podium-score');
+      if(elN) elN.textContent = p[2].name;
+      if(elS) elS.textContent = p[2].score + ' pts';
+    }
+  });
+
+  // Non-trivia socket events
   socket.on('game_vote', (data)=>{
     if(data.lobby_id!==lobbyId) return;
     const vc=document.getElementById('vote-count');
     if(vc) vc.textContent = data.total;
   });
-  socket.on('game_reveal', ()=>{ location.reload(); });
-  socket.on('game_phase_change', ()=>{ location.reload(); });
+  socket.on('game_reveal', ()=>{ if(!isLiveTrivia) location.reload(); });
+  socket.on('game_phase_change', ()=>{ if(!isLiveTrivia) location.reload(); });
   socket.on('game_story_update', (data)=>{
     if(data.lobby_id!==lobbyId) return;
     location.reload();
   });
   socket.on('game_ttal_submit', ()=>{ location.reload(); });
   socket.on('game_caption_submit', ()=>{ location.reload(); });
-  // offline vote queue
+
+  // If page loads already in question phase for live trivia, begin countdown
+  if(isLiveTrivia && currentPhase === 'question') {
+    startLiveCountdown(timerRemaining);
+  }
+
+  // offline vote queue for static polls
   document.querySelectorAll('.vote-form, #vote-form').forEach(form => {
     form.addEventListener('submit', async (e)=>{
       if(!navigator.onLine){

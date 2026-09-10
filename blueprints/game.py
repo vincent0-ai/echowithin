@@ -125,6 +125,25 @@ def _decrypt_submission(sub, lobby_id):
     sub['content'] = content
     return sub
 
+def _generate_game_pin():
+    import main as m
+    for _ in range(15):
+        pin = str(secrets.randbelow(900000) + 100000)
+        if not m.game_sessions_conf.find_one({'pin': pin, 'deactivated': {'$ne': True}}):
+            return pin
+    return str(secrets.randbelow(900000) + 100000)
+
+def _get_player_identity():
+    """Returns (player_id, player_name, player_avatar) for the current user or guest."""
+    if current_user.is_authenticated:
+        return (str(current_user.id), current_user.username, getattr(current_user, 'profile_image_url', None))
+    pid = session.get('game_player_id')
+    if not pid:
+        pid = secrets.token_urlsafe(10)
+        session['game_player_id'] = pid
+    pname = session.get('game_nickname') or 'Player'
+    return (pid, pname, None)
+
 @bp.route('/games')
 @login_required
 def games_list():
@@ -132,6 +151,51 @@ def games_list():
     raw_lobbies = list(m.game_sessions_conf.find({'host_id': ObjectId(current_user.id)}).sort('created_at', -1).limit(50))
     lobbies = [_decrypt_lobby(l) for l in raw_lobbies]
     return render_template('games_list.html', lobbies=lobbies, active_page='games')
+
+@bp.route('/games/join', methods=['GET', 'POST'])
+def games_join():
+    import main as m
+    pin = (request.args.get('pin') or (request.form.get('pin') if request.method == 'POST' else '') or '').strip()
+    nickname = (request.form.get('nickname') or '').strip()
+
+    if request.method == 'POST':
+        if not pin:
+            flash('Please enter a 6-digit Game PIN.', 'warning')
+            return render_template('game_join.html', pin=pin, active_page='games')
+        lobby = m.game_sessions_conf.find_one({'pin': pin, 'deactivated': {'$ne': True}})
+        if not lobby or not _is_lobby_active(lobby):
+            flash('Game PIN not found or lobby has expired.', 'danger')
+            return render_template('game_join.html', pin=pin, active_page='games')
+
+        if not current_user.is_authenticated:
+            if nickname:
+                session['game_nickname'] = nickname[:30]
+            if 'game_player_id' not in session:
+                session['game_player_id'] = secrets.token_urlsafe(12)
+        return redirect(url_for('game.view_lobby', lobby_id=lobby['lobby_id']))
+
+    return render_template('game_join.html', pin=pin, active_page='games')
+
+@bp.route('/g/join')
+def g_join_redirect():
+    pin = request.args.get('pin', '')
+    return redirect(url_for('game.games_join', pin=pin))
+
+@bp.route('/api/game/trivia/categories', methods=['GET'])
+def api_trivia_categories():
+    from blueprints.trivia_decks import TRIVIA_CATEGORIES
+    return jsonify({'categories': TRIVIA_CATEGORIES})
+
+@bp.route('/api/game/trivia/fetch', methods=['POST'])
+@limits(calls=30, period=60)
+def api_trivia_fetch():
+    from blueprints.trivia_decks import fetch_community_trivia
+    data = request.get_json(silent=True) or {}
+    amount = data.get('amount', 10)
+    category = data.get('category')
+    difficulty = data.get('difficulty')
+    questions = fetch_community_trivia(amount=amount, category=category, difficulty=difficulty)
+    return jsonify({'success': True, 'questions': questions, 'count': len(questions)})
 
 @bp.route('/games/floppy-bird')
 def floppy_bird():
@@ -367,6 +431,15 @@ def games_create():
 
         doc['allow_anonymous'] = allow_anonymous
         doc['timer_seconds'] = timer_seconds
+        doc['pin'] = _generate_game_pin()
+        if game_type == 'trivia':
+            doc['is_live'] = True
+            doc['phase'] = 'lobby'
+            doc['current_q_idx'] = 0
+            doc['live_scores'] = {}
+            doc['live_answers'] = {}
+            if not timer_seconds:
+                doc['timer_seconds'] = 20
         m.game_sessions_conf.insert_one(doc)
         flash('Game lobby created — share the link.', 'success')
         return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
@@ -408,7 +481,16 @@ def api_create_poll():
         timer_seconds = max(0, min(300, int(data.get('timer_seconds', 0) or 0)))
     except (ValueError, TypeError):
         timer_seconds = 0
-    doc={'lobby_id':lobby_id,'host_id':ObjectId(current_user.id),'host_username':current_user.username,'title':title,'game_type':game_type,'question':{'label':question,'options':opts,'correct_option':correct},'counts':{o:0 for o in opts},'status':'active','max_players':MAX_PLAYERS,'expires_at':expires_at,'created_at':now,'revealed':False,'allow_anonymous':bool(allow_anonymous),'timer_seconds':timer_seconds}
+    pin = _generate_game_pin()
+    if game_type == 'trivia' and not timer_seconds:
+        timer_seconds = 20
+    doc={'lobby_id':lobby_id,'pin':pin,'host_id':ObjectId(current_user.id),'host_username':current_user.username,'title':title,'game_type':game_type,'question':{'label':question,'options':opts,'correct_option':correct},'counts':{o:0 for o in opts},'status':'active','max_players':MAX_PLAYERS,'expires_at':expires_at,'created_at':now,'revealed':False,'allow_anonymous':bool(allow_anonymous),'timer_seconds':timer_seconds}
+    if game_type == 'trivia':
+        doc['is_live'] = True
+        doc['phase'] = 'lobby'
+        doc['current_q_idx'] = 0
+        doc['live_scores'] = {}
+        doc['live_answers'] = {}
     m.game_sessions_conf.insert_one(doc)
     share_url = url_for('game.view_lobby', lobby_id=lobby_id, _external=True)
     return jsonify({'success':True,'lobby_id':lobby_id,'share_url':share_url}),201
@@ -491,7 +573,36 @@ def view_lobby(lobby_id):
             my_caption = _decrypt_submission(my_caption, lobby_id)
         extra = {'captions': subs, 'my_caption': my_caption}
 
-    return render_template('game_lobby.html', lobby=lobby, is_host=is_host, has_voted=has_voted, my_vote=my_vote, total_votes=total, **extra)
+    player_id, player_name, player_avatar = _get_player_identity()
+    is_live = bool(lobby.get('is_live') or (gt == 'trivia'))
+    lobby_render = dict(lobby)
+    if is_live and not is_host and lobby.get('phase') == 'question':
+        safe_qs = []
+        for q in (lobby.get('questions') or []):
+            sq = dict(q)
+            sq.pop('correct_option', None)
+            safe_qs.append(sq)
+        lobby_render['questions'] = safe_qs
+        if 'question' in lobby_render and isinstance(lobby_render['question'], dict):
+            sq0 = dict(lobby_render['question'])
+            sq0.pop('correct_option', None)
+            lobby_render['question'] = sq0
+
+    live_leaderboard = _build_live_leaderboard(lobby.get('live_scores', {}))
+    return render_template(
+        'game_lobby.html',
+        lobby=lobby_render,
+        is_host=is_host,
+        has_voted=has_voted,
+        my_vote=my_vote,
+        total_votes=total,
+        is_live=is_live,
+        player_id=player_id,
+        player_name=player_name,
+        player_avatar=player_avatar,
+        leaderboard=live_leaderboard,
+        **extra
+    )
 
 
 @bp.route('/g/<lobby_id>/vote', methods=['POST'])
@@ -746,6 +857,472 @@ def delete_lobby(lobby_id):
     if 'personal_space' in referrer:
         return redirect(url_for('pages.personal_space') + '#games')
     return redirect(url_for('game.games_list'))
+
+
+# ─── Live Multiplayer Trivia (Kahoot-Style) Engine ───
+
+def _build_live_leaderboard(scores):
+    """Sort and rank participants by score descending."""
+    board = []
+    for pid, pdata in (scores or {}).items():
+        board.append({
+            'id': pid,
+            'name': pdata.get('name', 'Player'),
+            'avatar': pdata.get('avatar'),
+            'score': int(pdata.get('score', 0)),
+            'streak': int(pdata.get('streak', 0)),
+            'last_points': int(pdata.get('last_points', 0)),
+            'last_correct': bool(pdata.get('last_correct', False)),
+            'correct_count': int(pdata.get('correct_count', 0)),
+            'total_answered': int(pdata.get('total_answered', 0))
+        })
+    board.sort(key=lambda x: x['score'], reverse=True)
+    for rank, p in enumerate(board, 1):
+        p['rank'] = rank
+    return board
+
+@bp.route('/g/<lobby_id>/live/start', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def live_start_game(lobby_id):
+    """Host starts live game show, broadcasting Question 0."""
+    import main as m
+    lobby = _get_lobby(lobby_id)
+    if not lobby:
+        return jsonify({'error': 'Lobby not found'}), 404
+    if not _is_host(lobby):
+        return jsonify({'error': 'Host authorization required'}), 403
+
+    questions = lobby.get('questions', [])
+    if not questions:
+        return jsonify({'error': 'No questions in this trivia game'}), 400
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    m.game_sessions_conf.update_one(
+        {'lobby_id': lobby_id},
+        {'$set': {
+            'phase': 'question',
+            'current_q_idx': 0,
+            'q_started_at': now,
+            'status': 'active',
+            'revealed': False
+        }}
+    )
+
+    q0 = questions[0]
+    payload = {
+        'lobby_id': lobby_id,
+        'phase': 'question',
+        'q_idx': 0,
+        'total_q': len(questions),
+        'label': q0.get('label', ''),
+        'options': q0.get('options', []),
+        'timer_seconds': lobby.get('timer_seconds', 20) or 20,
+        'started_at': now.astimezone(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
+    }
+    try:
+        m.socketio.emit('live_trivia_state', payload, room=lobby_id)
+    except Exception:
+        pass
+    return jsonify({'ok': True, 'success': True, 'state': payload})
+
+@bp.route('/g/<lobby_id>/live/answer', methods=['POST'])
+@limits(calls=60, period=60)
+def live_submit_answer(lobby_id):
+    """Player submits answer during live question phase with speed + streak scoring."""
+    import main as m
+    lobby = _get_lobby(lobby_id)
+    if not lobby:
+        return jsonify({'error': 'Lobby not found'}), 404
+    if lobby.get('phase') != 'question':
+        return jsonify({'error': 'Not in question answering phase'}), 400
+
+    data = request.get_json(silent=True) or {}
+    option = (data.get('option') or request.form.get('option') or '').strip()
+    q_idx = int(data.get('q_idx') or request.form.get('q_idx') or 0)
+    current_q_idx = int(lobby.get('current_q_idx', 0))
+
+    if q_idx != current_q_idx:
+        return jsonify({'error': 'Question mismatch'}), 400
+
+    questions = lobby.get('questions', [])
+    if q_idx >= len(questions):
+        return jsonify({'error': 'Invalid question index'}), 400
+
+    q_data = questions[q_idx]
+    if option not in q_data.get('options', []):
+        return jsonify({'error': 'Option not found in choices'}), 400
+
+    player_id, player_name, player_avatar = _get_player_identity()
+
+    # Check if this player already answered
+    live_answers = lobby.get('live_answers', {}).get(str(q_idx), {})
+    if player_id in live_answers:
+        return jsonify({'error': 'Already answered this question'}), 409
+
+    correct_option = (q_data.get('correct_option') or '').strip()
+    is_correct = (option.strip() == correct_option)
+
+    timer_total = float(lobby.get('timer_seconds', 20) or 20)
+    raw_time_rem = data.get('time_remaining') or request.form.get('time_remaining') or 0
+    try:
+        time_rem = max(0.0, min(timer_total, float(raw_time_rem)))
+    except (ValueError, TypeError):
+        time_rem = 0.0
+
+    scores = lobby.get('live_scores', {})
+    player_stats = scores.get(player_id, {'score': 0, 'streak': 0, 'correct_count': 0, 'total_answered': 0})
+
+    if is_correct:
+        base_points = 500
+        speed_bonus = round(500 * (time_rem / timer_total)) if timer_total > 0 else 250
+        streak = int(player_stats.get('streak', 0)) + 1
+        streak_bonus = min(250, streak * 50)
+        points_earned = base_points + speed_bonus + streak_bonus
+    else:
+        streak = 0
+        points_earned = 0
+
+    new_score = int(player_stats.get('score', 0)) + points_earned
+    new_correct = int(player_stats.get('correct_count', 0)) + (1 if is_correct else 0)
+    new_total = int(player_stats.get('total_answered', 0)) + 1
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    # Save to MongoDB
+    m.game_sessions_conf.update_one(
+        {'lobby_id': lobby_id},
+        {
+            '$set': {
+                f'live_scores.{player_id}': {
+                    'name': player_name,
+                    'avatar': player_avatar,
+                    'score': new_score,
+                    'streak': streak,
+                    'last_points': points_earned,
+                    'last_correct': is_correct,
+                    'correct_count': new_correct,
+                    'total_answered': new_total,
+                    'last_answered_at': now
+                },
+                f'live_answers.{q_idx}.{player_id}': {
+                    'option': m.encrypt_game_data(option, lobby_id),
+                    'is_correct': is_correct,
+                    'points': points_earned,
+                    'time_remaining': time_rem
+                }
+            },
+            '$inc': {
+                f'counts.{q_idx}.{option}': 1
+            }
+        }
+    )
+
+    # Record persistent vote document
+    ip = (request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or request.remote_addr or '')
+    ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:16] if ip else ''
+    m.game_votes_conf.insert_one({
+        'lobby_id': lobby_id,
+        'user_id': ObjectId(current_user.id) if current_user.is_authenticated else None,
+        'player_id': player_id,
+        'username': player_name,
+        'question_index': q_idx,
+        'option': m.encrypt_game_data(option, lobby_id),
+        'is_correct': is_correct,
+        'points': points_earned,
+        'submitted_at': now,
+        'ip_hash': ip_hash
+    })
+
+    # Broadcast answer count update to room
+    try:
+        fresh = m.game_sessions_conf.find_one({'lobby_id': lobby_id}, {'live_answers': 1})
+        fresh_answers = fresh.get('live_answers', {}).get(str(q_idx), {}) if fresh else {}
+        m.socketio.emit('live_trivia_answer_count', {
+            'q_idx': q_idx,
+            'answered': len(fresh_answers)
+        }, room=lobby_id)
+    except Exception:
+        pass
+
+    return jsonify({
+        'ok': True,
+        'success': True,
+        'option': option,
+        'correct': is_correct,
+        'is_correct': is_correct,
+        'points_awarded': points_earned,
+        'points_earned': points_earned,
+        'streak': streak,
+        'new_score': new_score
+    })
+
+@bp.route('/g/<lobby_id>/live/reveal', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def live_reveal_question(lobby_id):
+    """Host reveals the answer distribution and correct answer for current question."""
+    import main as m
+    lobby = _get_lobby(lobby_id)
+    if not lobby:
+        return jsonify({'error': 'Lobby not found'}), 404
+    if not _is_host(lobby):
+        return jsonify({'error': 'Host authorization required'}), 403
+
+    current_q_idx = int(lobby.get('current_q_idx', 0))
+    questions = lobby.get('questions', [])
+    if current_q_idx >= len(questions):
+        return jsonify({'error': 'Invalid question index'}), 400
+
+    q_data = questions[current_q_idx]
+    correct_option = (q_data.get('correct_option') or '').strip()
+
+    m.game_sessions_conf.update_one(
+        {'lobby_id': lobby_id},
+        {'$set': {'phase': 'reveal'}}
+    )
+
+    fresh = m.game_sessions_conf.find_one({'lobby_id': lobby_id})
+    counts_raw = dict(fresh.get('counts', {}).get(str(current_q_idx), {})) if fresh else {}
+    if not counts_raw and fresh:
+        ans_bucket = fresh.get('live_answers', {})
+        q_ans = ans_bucket.get(str(current_q_idx), ans_bucket)
+        if isinstance(q_ans, dict):
+            for p_info in q_ans.values():
+                if isinstance(p_info, dict):
+                    opt = p_info.get('option')
+                    if opt:
+                        try:
+                            dec = m.decrypt_game_data(opt, lobby_id)
+                            opt = dec if dec else opt
+                        except Exception:
+                            pass
+                        counts_raw[opt] = counts_raw.get(opt, 0) + 1
+
+    leaderboard = _build_live_leaderboard(fresh.get('live_scores', {}) if fresh else {})
+
+    payload = {
+        'lobby_id': lobby_id,
+        'phase': 'reveal',
+        'q_idx': current_q_idx,
+        'correct_option': correct_option,
+        'counts': counts_raw,
+        'leaderboard': leaderboard[:5]
+    }
+    try:
+        m.socketio.emit('live_trivia_reveal', payload, room=lobby_id)
+    except Exception:
+        pass
+    return jsonify({
+        'ok': True,
+        'success': True,
+        'correct_option': correct_option,
+        'counts': counts_raw,
+        'leaderboard': leaderboard[:5],
+        'state': payload
+    })
+
+@bp.route('/g/<lobby_id>/live/leaderboard', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def live_show_leaderboard(lobby_id):
+    """Host transitions to leaderboard screen."""
+    import main as m
+    lobby = _get_lobby(lobby_id)
+    if not lobby:
+        return jsonify({'error': 'Lobby not found'}), 404
+    if not _is_host(lobby):
+        return jsonify({'error': 'Host authorization required'}), 403
+
+    m.game_sessions_conf.update_one(
+        {'lobby_id': lobby_id},
+        {'$set': {'phase': 'leaderboard'}}
+    )
+
+    fresh = m.game_sessions_conf.find_one({'lobby_id': lobby_id})
+    leaderboard = _build_live_leaderboard(fresh.get('live_scores', {}) if fresh else {})
+
+    payload = {
+        'lobby_id': lobby_id,
+        'phase': 'leaderboard',
+        'q_idx': int(lobby.get('current_q_idx', 0)),
+        'total_q': len(lobby.get('questions', [])),
+        'leaderboard': leaderboard[:10]
+    }
+    try:
+        m.socketio.emit('live_trivia_leaderboard', payload, room=lobby_id)
+    except Exception:
+        pass
+    return jsonify({
+        'ok': True,
+        'success': True,
+        'leaderboard': leaderboard[:10],
+        'state': payload
+    })
+
+@bp.route('/g/<lobby_id>/live/next', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def live_next_question(lobby_id):
+    """Host advances to next question or concludes game to podium."""
+    import main as m
+    lobby = _get_lobby(lobby_id)
+    if not lobby:
+        return jsonify({'error': 'Lobby not found'}), 404
+    if not _is_host(lobby):
+        return jsonify({'error': 'Host authorization required'}), 403
+
+    questions = lobby.get('questions', [])
+    current_q_idx = int(lobby.get('current_q_idx', 0))
+    next_idx = current_q_idx + 1
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    if next_idx < len(questions):
+        m.game_sessions_conf.update_one(
+            {'lobby_id': lobby_id},
+            {'$set': {
+                'phase': 'question',
+                'current_q_idx': next_idx,
+                'q_started_at': now
+            }}
+        )
+        q_next = questions[next_idx]
+        payload = {
+            'lobby_id': lobby_id,
+            'phase': 'question',
+            'q_idx': next_idx,
+            'total_q': len(questions),
+            'label': q_next.get('label', ''),
+            'options': q_next.get('options', []),
+            'timer_seconds': lobby.get('timer_seconds', 20) or 20,
+            'started_at': now.astimezone(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
+        }
+        try:
+            m.socketio.emit('live_trivia_state', payload, room=lobby_id)
+        except Exception:
+            pass
+        return jsonify({'ok': True, 'success': True, 'phase': 'question', 'q_idx': next_idx, 'state': payload})
+    else:
+        # All questions completed -> Finale Podium!
+        m.game_sessions_conf.update_one(
+            {'lobby_id': lobby_id},
+            {'$set': {
+                'phase': 'podium',
+                'status': 'finished',
+                'revealed': True,
+                'revealed_at': now
+            }}
+        )
+        fresh = m.game_sessions_conf.find_one({'lobby_id': lobby_id})
+        leaderboard = _build_live_leaderboard(fresh.get('live_scores', {}) if fresh else {})
+        podium = leaderboard[:3]
+
+        payload = {
+            'lobby_id': lobby_id,
+            'phase': 'podium',
+            'podium': podium,
+            'leaderboard': leaderboard
+        }
+        try:
+            m.socketio.emit('live_trivia_podium', payload, room=lobby_id)
+        except Exception:
+            pass
+        return jsonify({'ok': True, 'success': True, 'phase': 'podium', 'podium': podium, 'leaderboard': leaderboard, 'state': payload})
+
+@bp.route('/g/<lobby_id>/live/podium', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def live_show_podium(lobby_id):
+    """Host manually triggers podium celebration."""
+    import main as m
+    lobby = _get_lobby(lobby_id)
+    if not lobby:
+        return jsonify({'error': 'Lobby not found'}), 404
+    if not _is_host(lobby):
+        return jsonify({'error': 'Host authorization required'}), 403
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    m.game_sessions_conf.update_one(
+        {'lobby_id': lobby_id},
+        {'$set': {
+            'phase': 'podium',
+            'status': 'finished',
+            'revealed': True,
+            'revealed_at': now
+        }}
+    )
+
+    fresh = m.game_sessions_conf.find_one({'lobby_id': lobby_id})
+    leaderboard = _build_live_leaderboard(fresh.get('live_scores', {}) if fresh else {})
+    podium = leaderboard[:3]
+
+    payload = {
+        'lobby_id': lobby_id,
+        'phase': 'podium',
+        'podium': podium,
+        'leaderboard': leaderboard
+    }
+    try:
+        m.socketio.emit('live_trivia_podium', payload, room=lobby_id)
+    except Exception:
+        pass
+    return jsonify({
+        'ok': True,
+        'success': True,
+        'podium': podium,
+        'leaderboard': leaderboard,
+        'state': payload
+    })
+
+@bp.route('/api/game/<lobby_id>/live_state', methods=['GET'])
+def api_game_live_state(lobby_id):
+    """Sync endpoint for clients joining mid-game or recovering connection."""
+    import main as m
+    lobby = _get_lobby(lobby_id)
+    if not lobby or not _is_lobby_active(lobby):
+        return jsonify({'error': 'Lobby not found or expired'}), 404
+
+    is_host = _is_host(lobby)
+    phase = lobby.get('phase', 'lobby')
+    current_q_idx = int(lobby.get('current_q_idx', 0))
+    questions = lobby.get('questions', [])
+    player_id, player_name, _ = _get_player_identity()
+
+    current_q = None
+    if questions and current_q_idx < len(questions):
+        raw_q = questions[current_q_idx]
+        current_q = {
+            'label': raw_q.get('label', ''),
+            'options': raw_q.get('options', [])
+        }
+        if is_host or phase in ('reveal', 'podium', 'leaderboard'):
+            current_q['correct_option'] = raw_q.get('correct_option')
+
+    counts = lobby.get('counts', {}).get(str(current_q_idx), {})
+    live_scores = lobby.get('live_scores', {})
+    leaderboard = _build_live_leaderboard(live_scores)
+    my_answered = lobby.get('live_answers', {}).get(str(current_q_idx), {}).get(player_id)
+    my_stats = live_scores.get(player_id, {'score': 0, 'streak': 0, 'rank': len(leaderboard)})
+
+    return jsonify({
+        'lobby_id': lobby_id,
+        'pin': lobby.get('pin', ''),
+        'game_type': lobby.get('game_type', 'trivia'),
+        'phase': phase,
+        'current_q_idx': current_q_idx,
+        'total_q': len(questions),
+        'question': current_q,
+        'timer_seconds': lobby.get('timer_seconds', 20) or 20,
+        'counts': counts,
+        'leaderboard': leaderboard[:10],
+        'podium': leaderboard[:3],
+        'is_host': is_host,
+        'my_answered': bool(my_answered),
+        'my_answer_info': my_answered if (phase in ('reveal', 'leaderboard', 'podium') or not my_answered) else {'option': 'locked'},
+        'my_stats': my_stats
+    })
+
 
 # ─── TTAL: Two Truths and a Lie ───
 

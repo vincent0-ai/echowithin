@@ -994,6 +994,7 @@ form_responses_conf.create_index([('share_id', 1), ('submitted_at', -1)])
 
 # --- Game Lobbies (2+ players, anytime) ---
 game_sessions_conf.create_index('lobby_id', unique=True, sparse=True)
+game_sessions_conf.create_index('pin', sparse=True)
 game_sessions_conf.create_index([('host_id', 1), ('created_at', -1)])
 # NOTE: Not unique — TTAL guesses create multiple docs per user per lobby.
 # Application-level duplicate checks handle poll/trivia/wyr one-vote-per-user.
@@ -1812,34 +1813,40 @@ def _game_access(lobby_id):
     return lobby
 
 @socketio.on('join_game')
-@authenticated_only
 def handle_join_game(data=None, *args, **kwargs):
     lobby_id = (data or {}).get('lobby_id') if isinstance(data, dict) else None
     lobby = _game_access(lobby_id)
     if not lobby:
         emit('game_error', {'message': 'Lobby not found or expired.'}, room=request.sid)
         return
+    if not lobby.get('allow_anonymous', True) and not current_user.is_authenticated:
+        emit('game_error', {'message': 'Authentication required for this lobby.'}, room=request.sid)
+        return
     # 2+ players guard: max 30
     players = active_game_players.get(lobby_id, {})
-    if len(players) >= 30 and str(current_user.id) not in players:
+    if current_user.is_authenticated:
+        user_id = str(current_user.id)
+        player_name = current_user.username
+        player_avatar = getattr(current_user, 'profile_image_url', None)
+    else:
+        user_id = str((data or {}).get('player_id') or session.get('game_player_id') or request.sid)
+        player_name = str((data or {}).get('nickname') or session.get('game_nickname') or 'Player')[:30]
+        player_avatar = None
+
+    if len(players) >= 30 and user_id not in players:
         emit('game_error', {'message': 'Lobby full (30 max).'}, room=request.sid)
         return
     join_room(lobby_id)
-    # track presence like active_note_viewers
-    user_id = str(current_user.id)
-    players[user_id] = {'name': current_user.username, 'avatar': getattr(current_user, 'profile_image_url', None), 'id': user_id}
+    players[user_id] = {'name': player_name, 'avatar': player_avatar, 'id': user_id}
     active_game_players[lobby_id] = players
     emit('game_presence_update', {'players': list(players.values()), 'count': len(players)}, room=lobby_id)
 
 @socketio.on('leave_game')
-@authenticated_only
 def handle_leave_game(data=None, *args, **kwargs):
     lobby_id = (data or {}).get('lobby_id') if isinstance(data, dict) else None
     if not lobby_id:
         return
-    user_id = str(current_user.id)
-    leaving = request.sid
-    # leave room
+    user_id = str(current_user.id) if current_user.is_authenticated else str((data or {}).get('player_id') or session.get('game_player_id') or request.sid)
     try:
         leave_room(lobby_id)
     except: pass

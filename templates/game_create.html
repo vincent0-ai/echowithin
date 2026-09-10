@@ -29,6 +29,60 @@
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem; flex-wrap:wrap; gap:0.5rem;">
         <div style="font-weight:700; color:var(--text-dark-color); font-size:1.05rem;">Questions</div>
       </div>
+
+      <!-- Quick-Fill from Community & Bible Trivia -->
+      <div id="trivia-gen-panel" style="display:none; background:rgba(62,34,23,0.03); border:1px solid var(--border-color); border-radius:8px; padding:1rem; margin-bottom:1rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem; flex-wrap:wrap; gap:0.4rem;">
+          <div style="font-weight:700; font-size:0.95rem; color:var(--text-dark-color);">
+            🎲 Quick-Fill from Community &amp; Bible Trivia
+          </div>
+          <span class="ew-badge" style="background:rgba(62,34,23,0.08); color:var(--primary-color);">Instant Deck</span>
+        </div>
+        <div style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:0.75rem;">
+          Generate questions in 1 click from curated Scripture decks or Open Trivia DB.
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:0.6rem; margin-bottom:0.75rem;">
+          <div>
+            <label class="ew-form-label" style="font-size:0.75rem;">Category</label>
+            <select id="gen-category" class="form-input" style="font-size:0.85rem; padding:0.4rem 0.6rem;">
+              <option value="bible" selected>📖 Bible &amp; Scripture</option>
+              <option value="any">🎲 Mixed / Any</option>
+              <option value="9">General Knowledge</option>
+              <option value="17">Science &amp; Nature</option>
+              <option value="18">Computers &amp; Tech</option>
+              <option value="23">World History</option>
+              <option value="22">Geography &amp; Travel</option>
+              <option value="11">Film &amp; Cinema</option>
+              <option value="12">Music</option>
+              <option value="15">Video Games &amp; Pop Culture</option>
+            </select>
+          </div>
+          <div>
+            <label class="ew-form-label" style="font-size:0.75rem;">Difficulty</label>
+            <select id="gen-difficulty" class="form-input" style="font-size:0.85rem; padding:0.4rem 0.6rem;">
+              <option value="any" selected>Any Difficulty</option>
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+          <div>
+            <label class="ew-form-label" style="font-size:0.75rem;">Count</label>
+            <select id="gen-count" class="form-input" style="font-size:0.85rem; padding:0.4rem 0.6rem;">
+              <option value="5">5 Questions</option>
+              <option value="10" selected>10 Questions</option>
+              <option value="15">15 Questions</option>
+              <option value="20">20 Questions</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end;">
+          <button type="button" id="btn-fetch-trivia" onclick="fetchCommunityTrivia()" class="ew-btn ew-btn--sm" style="cursor:pointer;">
+            Fetch Questions &rarr;
+          </button>
+        </div>
+      </div>
+
       <input type="hidden" name="questions_json" id="questions_json">
       <div id="mq-container"></div>
       <button type="button" onclick="addMQ()" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor:pointer; margin-top:0.5rem;">Add Question</button>
@@ -85,12 +139,13 @@
       </div>
       <div>
         <label class="ew-form-label">Question timer</label>
-        <select name="timer_seconds" class="form-input">
-          <option value="0" selected>None (no time limit)</option>
-          <option value="15">15 seconds</option>
+        <select name="timer_seconds" id="timer_seconds" class="form-input">
+          <option value="20" selected>20 seconds (Standard)</option>
+          <option value="15">15 seconds (Speed)</option>
           <option value="30">30 seconds</option>
           <option value="45">45 seconds</option>
           <option value="60">60 seconds</option>
+          <option value="0">Untimed</option>
         </select>
       </div>
     </div>
@@ -228,16 +283,66 @@ function renderMQ(){
   `}).join('');
 }
 
+async function fetchCommunityTrivia(){
+  const btn = document.getElementById('btn-fetch-trivia');
+  const cat = document.getElementById('gen-category').value;
+  const diff = document.getElementById('gen-difficulty').value;
+  const count = document.getElementById('gen-count').value;
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Fetching...';
+
+  try {
+    const csrfEl = document.querySelector('input[name="csrf_token"]');
+    const csrf = csrfEl ? csrfEl.value : '';
+    const res = await fetch('/api/game/trivia/fetch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrf
+      },
+      body: JSON.stringify({ amount: parseInt(count), category: cat, difficulty: diff })
+    });
+    const data = await res.json();
+    if(data.success && data.questions && data.questions.length > 0){
+      const isCurrentBlank = mqQuestions.length === 1 && !mqQuestions[0].label.trim() && !mqQuestions[0].options.some(o => o.trim());
+      if(isCurrentBlank){
+        mqQuestions = data.questions;
+      } else {
+        mqQuestions = mqQuestions.concat(data.questions);
+      }
+      renderMQ();
+    } else {
+      alert('Could not fetch questions. Please try another category.');
+    }
+  } catch(err) {
+    alert('Error fetching questions: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+}
+
 function toggleFields(){
   const gt = document.getElementById('game_type').value;
   const show = (id, v) => { const el = document.getElementById(id); if(el) el.style.display = v ? '' : 'none'; };
   const isMultiQ = ['poll','trivia'].includes(gt);
+  const isTrivia = (gt === 'trivia');
   show('fields-multi-q', isMultiQ);
+  show('trivia-gen-panel', isTrivia);
   show('fields-question', gt === 'wyr');
   show('fields-options', gt === 'wyr');
   show('fields-story', gt === 'story');
   show('fields-caption', gt === 'caption');
   show('fields-ttal', gt === 'ttal');
+
+  if(isTrivia){
+    const timerEl = document.getElementById('timer_seconds');
+    if(timerEl && (timerEl.value === '0' || !timerEl.value)){
+      timerEl.value = '20';
+    }
+  }
+
   // Set required attributes
   document.querySelectorAll('[name=question]').forEach(el => el.required = gt === 'wyr');
   document.querySelectorAll('[name=starter_sentence]').forEach(el => el.required = gt === 'story');

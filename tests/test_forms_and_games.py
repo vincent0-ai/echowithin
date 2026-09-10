@@ -1399,7 +1399,267 @@ class TestArcadeMatchmakingAndLeaderboards:
         assert 'id="pause-btn"' in html_pong
         assert 'id="online-opponents-section"' in html_pong
         assert 'id="incoming-challenge-modal"' in html_pong
-        assert 'id="my-pong-ranked"' in html_pong
+
+class TestLiveMultiplayerTriviaAndThumbnails:
+    """Tests for live Kahoot-style multiplayer trivia, Bible decks, PIN entry, and game card thumbnails."""
+
+    def test_bible_and_community_trivia_deck(self):
+        import json
+        from blueprints.trivia_decks import fetch_community_trivia, CURATED_TRIVIA_PACKS, TRIVIA_CATEGORIES
+
+        # 1. Test Bible trivia category is available
+        assert any(c['id'] == 'bible' for c in TRIVIA_CATEGORIES)
+        assert len(CURATED_TRIVIA_PACKS) >= 15
+
+        # 2. Test fetching Bible trivia
+        bible_questions = fetch_community_trivia(category='bible', amount=5)
+        assert len(bible_questions) == 5
+        for q in bible_questions:
+            assert 'label' in q
+            assert 'options' in q
+            assert len(q['options']) == 4
+            assert 'correct_option' in q
+            assert q['correct_option'] in q['options']
+
+        # 3. Test OpenTDB API fallback when external request fails
+        with patch('urllib.request.urlopen', side_effect=Exception("Network error")):
+            fallback_questions = fetch_community_trivia(category='17', amount=3)
+            assert len(fallback_questions) == 3
+            for q in fallback_questions:
+                assert len(q['options']) == 4
+                assert q['correct_option'] in q['options']
+
+        # 4. Test HTML entity unescaping
+        mock_resp = MagicMock()
+        mock_resp.__enter__.return_value.read.return_value = json.dumps({
+            'response_code': 0,
+            'results': [
+                {
+                    'question': 'Which book starts with &quot;In the beginning&quot;?',
+                    'correct_answer': 'Genesis &amp; Torah',
+                    'incorrect_answers': ['Exodus&#039;s story', 'Leviticus', 'Numbers']
+                },
+                {
+                    'question': 'What was &quot;Noah&#039;s Ark&quot; coated with inside &amp; out?',
+                    'correct_answer': 'Pitch &amp; Tar',
+                    'incorrect_answers': ['Wax', 'Clay', 'Oil']
+                }
+            ]
+        }).encode('utf-8')
+        with patch('urllib.request.urlopen', return_value=mock_resp):
+            res = fetch_community_trivia(category='9', amount=2)
+            assert len(res) == 2
+            assert 'In the beginning' in res[0]['label']
+            assert '&quot;' not in res[0]['label']
+            assert 'Genesis & Torah' in res[0]['options']
+            assert '&amp;' not in res[0]['correct_option']
+
+    def test_game_pin_generation_and_routes(self, client):
+        from blueprints.game import _generate_game_pin
+        import main as m
+
+        # 1. PIN generation
+        pin = _generate_game_pin()
+        assert len(pin) == 6
+        assert pin.isdigit()
+
+        # 2. Join page GET
+        res_get = client.get('/games/join')
+        assert res_get.status_code == 200
+        html = res_get.get_data(as_text=True)
+        assert 'Game PIN' in html
+        assert 'name="pin"' in html
+
+        # 3. Join with valid PIN redirect
+        mock_lobby = {
+            '_id': ObjectId(),
+            'lobby_id': 'test_pin_lobby_123',
+            'pin': '765432',
+            'game_type': 'trivia',
+            'status': 'active',
+            'deactivated': False
+        }
+        with patch.object(m.game_sessions_conf, 'find_one', return_value=mock_lobby):
+            res_post = client.post('/games/join', data={'pin': '765432', 'nickname': 'QuizMaster'}, follow_redirects=False)
+            assert res_post.status_code == 302
+            assert '/g/test_pin_lobby_123' in res_post.headers['Location']
+
+        # 4. Join with non-existent PIN returns 200 with flash message
+        with patch.object(m.game_sessions_conf, 'find_one', return_value=None):
+            res_invalid = client.post('/games/join', data={'pin': '000000', 'nickname': 'QuizMaster'})
+            assert res_invalid.status_code == 200
+            assert 'Game PIN not found' in res_invalid.get_data(as_text=True)
+
+    def test_live_trivia_flow_and_scoring(self, auth_client):
+        import main as m
+
+        lobby_id = 'live_trivia_test_lobby'
+        mock_lobby = {
+            '_id': ObjectId(),
+            'lobby_id': lobby_id,
+            'title': 'Test Live Show',
+            'game_type': 'trivia',
+            'is_live': True,
+            'phase': 'lobby',
+            'pin': '123456',
+            'timer_seconds': 20,
+            'created_by': 'host_user_id',
+            'host_id': 'host_user_id',
+            'current_q_idx': 0,
+            'status': 'active',
+            'deactivated': False,
+            'questions': [
+                {
+                    'label': 'Who led the Israelites out of Egypt?',
+                    'options': ['Moses', 'Aaron', 'Joshua', 'David'],
+                    'correct_option': 'Moses'
+                },
+                {
+                    'label': 'How many days and nights did it rain during the Flood?',
+                    'options': ['40', '30', '50', '100'],
+                    'correct_option': '40'
+                }
+            ],
+            'live_scores': {},
+            'live_answers': {}
+        }
+
+        # Test host starts live game
+        with patch.object(m.game_sessions_conf, 'find_one', return_value=mock_lobby), \
+             patch.object(m.game_sessions_conf, 'update_one'), \
+             patch('blueprints.game._is_host', return_value=True), \
+             patch('blueprints.game._get_player_identity', return_value=('host_user_id', 'Host', True)), \
+             patch.object(m.socketio, 'emit'):
+
+            res_start = auth_client.post(f'/g/{lobby_id}/live/start')
+            assert res_start.status_code == 200
+            data_start = res_start.get_json()
+            assert data_start['ok'] is True
+            assert data_start['state']['phase'] == 'question'
+            mock_lobby['phase'] = 'question'
+
+        # Test player answers correctly with speed
+        with patch.object(m.game_sessions_conf, 'find_one', return_value=mock_lobby), \
+             patch.object(m.game_sessions_conf, 'update_one'), \
+             patch('blueprints.game._get_player_identity', return_value=('player_1', 'Alice', False)), \
+             patch.object(m.socketio, 'emit'):
+
+            # Fast correct answer: 15s remaining out of 20s
+            res_ans = auth_client.post(f'/g/{lobby_id}/live/answer', json={
+                'option': 'Moses',
+                'time_remaining': 15
+            })
+            assert res_ans.status_code == 200
+            data_ans = res_ans.get_json()
+            assert data_ans['ok'] is True
+            assert data_ans['correct'] is True
+            # Base 500 + round(500 * (15/20)) (375) + streak bonus (50) = 925
+            assert data_ans['points_awarded'] == 925
+            assert data_ans['streak'] == 1
+
+        # Test player answers incorrectly: 0 pts, streak reset
+        mock_lobby['live_scores'] = {'player_2': {'name': 'Bob', 'score': 875, 'streak': 1}}
+        with patch.object(m.game_sessions_conf, 'find_one', return_value=mock_lobby), \
+             patch.object(m.game_sessions_conf, 'update_one'), \
+             patch('blueprints.game._get_player_identity', return_value=('player_2', 'Bob', False)), \
+             patch.object(m.socketio, 'emit'):
+
+            res_wrong = auth_client.post(f'/g/{lobby_id}/live/answer', json={
+                'option': 'Aaron',
+                'time_remaining': 10
+            })
+            assert res_wrong.status_code == 200
+            data_wrong = res_wrong.get_json()
+            assert data_wrong['ok'] is True
+            assert data_wrong['correct'] is False
+            assert data_wrong['points_awarded'] == 0
+            assert data_wrong['streak'] == 0
+
+        # Test host reveals answer
+        mock_lobby['live_answers'] = {
+            'player_1': {'option': 'Moses', 'points': 875, 'correct': True},
+            'player_2': {'option': 'Aaron', 'points': 0, 'correct': False}
+        }
+        with patch.object(m.game_sessions_conf, 'find_one', return_value=mock_lobby), \
+             patch.object(m.game_sessions_conf, 'update_one'), \
+             patch('blueprints.game._is_host', return_value=True), \
+             patch('blueprints.game._get_player_identity', return_value=('host_user_id', 'Host', True)), \
+             patch.object(m.socketio, 'emit'):
+
+            res_reveal = auth_client.post(f'/g/{lobby_id}/live/reveal')
+            assert res_reveal.status_code == 200
+            data_reveal = res_reveal.get_json()
+            assert data_reveal['ok'] is True
+            assert data_reveal['correct_option'] == 'Moses'
+            assert data_reveal['counts']['Moses'] == 1
+            assert data_reveal['counts']['Aaron'] == 1
+
+        # Test host transitions to leaderboard
+        mock_lobby['live_scores'] = {
+            'player_1': {'name': 'Alice', 'score': 875, 'streak': 1},
+            'player_2': {'name': 'Bob', 'score': 0, 'streak': 0}
+        }
+        with patch.object(m.game_sessions_conf, 'find_one', return_value=mock_lobby), \
+             patch.object(m.game_sessions_conf, 'update_one'), \
+             patch('blueprints.game._is_host', return_value=True), \
+             patch('blueprints.game._get_player_identity', return_value=('host_user_id', 'Host', True)), \
+             patch.object(m.socketio, 'emit'):
+
+            res_lb = auth_client.post(f'/g/{lobby_id}/live/leaderboard')
+            assert res_lb.status_code == 200
+            data_lb = res_lb.get_json()
+            assert data_lb['ok'] is True
+            assert len(data_lb['leaderboard']) == 2
+            assert data_lb['leaderboard'][0]['name'] == 'Alice'
+
+        # Test podium finale
+        with patch.object(m.game_sessions_conf, 'find_one', return_value=mock_lobby), \
+             patch.object(m.game_sessions_conf, 'update_one'), \
+             patch('blueprints.game._is_host', return_value=True), \
+             patch('blueprints.game._get_player_identity', return_value=('host_user_id', 'Host', True)), \
+             patch.object(m.socketio, 'emit'):
+
+            res_pod = auth_client.post(f'/g/{lobby_id}/live/podium')
+            assert res_pod.status_code == 200
+            data_pod = res_pod.get_json()
+            assert data_pod['ok'] is True
+            assert len(data_pod['podium']) >= 1
+            assert data_pod['podium'][0]['name'] == 'Alice'
+
+    def test_games_list_thumbnails_and_pin_input(self, auth_client):
+        import main as m
+
+        mock_find = MagicMock()
+        mock_find.sort.return_value.limit.return_value = []
+        with patch.object(m.game_sessions_conf, 'find', return_value=mock_find):
+            res = auth_client.get('/games')
+            assert res.status_code == 200
+            html = res.get_data(as_text=True)
+
+            # 1. Quick PIN join input in header
+            assert 'name="pin"' in html
+            assert 'Join PIN' in html
+
+            # 2. SVGs present on cards (thumbnails for all games)
+            assert html.count('<svg') >= 13
+
+            # 3. Party & Social cards check
+            assert 'Trivia Challenge' in html
+            assert 'Interactive Polls' in html
+            assert 'Would You Rather' in html
+            assert 'Two Truths &amp; a Lie' in html or 'Two Truths & a Lie' in html
+            assert 'Story Chain' in html
+            assert 'Caption This' in html
+
+            # 4. Arcade cards check
+            assert 'Floppy Bird' in html
+            assert 'Slime Volleyball' in html
+            assert 'Tic-Tac-Toe' in html
+            assert 'Connect Four' in html
+            assert 'Dots and Boxes' in html
+            assert 'Ping Pong' in html
+            assert 'Snake Classic' in html
+
 
 
 

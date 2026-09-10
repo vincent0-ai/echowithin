@@ -2007,6 +2007,175 @@ def handle_cancel_slime_matchmaking(data=None, *args, **kwargs):
     emit('slime_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
 
 
+# --- Ping Pong 1v1 Real-Time Handlers ---
+active_pong_rooms = {}
+pong_matchmaking_queue = []
+
+@socketio.on('join_pong_room')
+def handle_join_pong_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id or not isinstance(room_id, str):
+        return
+    room_id = room_id.strip()[:32]
+    if not room_id:
+        return
+
+    join_room(room_id)
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    sid = request.sid
+
+    room_info = active_pong_rooms.get(room_id)
+    if not room_info:
+        room_info = {
+            'host_sid': sid,
+            'host_name': user_name,
+            'guest_sid': None,
+            'guest_name': None,
+            'scores': [0, 0]
+        }
+        active_pong_rooms[room_id] = room_info
+        emit('pong_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': user_name,
+            'guest_name': None,
+            'player': 0
+        }, room=sid)
+    else:
+        room_info['guest_sid'] = sid
+        room_info['guest_name'] = user_name
+        active_pong_rooms[room_id] = room_info
+
+        emit('pong_room_joined', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': room_info['host_name'],
+            'guest_name': user_name,
+            'player': 1
+        }, room=sid)
+        emit('pong_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': room_info['host_name'],
+            'guest_name': user_name,
+            'player': 0
+        }, room=room_info['host_sid'])
+
+@socketio.on('leave_pong_room')
+def handle_leave_pong_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id:
+        return
+    sid = request.sid
+    try:
+        leave_room(room_id)
+    except Exception:
+        pass
+    room_info = active_pong_rooms.get(room_id)
+    if room_info:
+        if room_info.get('host_sid') == sid or room_info.get('guest_sid') == sid:
+            emit('pong_player_left', {'room_id': room_id}, room=room_id)
+            active_pong_rooms.pop(room_id, None)
+
+@socketio.on('pong_paddle_sync')
+def handle_pong_paddle_sync(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    emit('pong_paddle_sync', data, room=room_id, include_self=False)
+
+@socketio.on('pong_ball_sync')
+def handle_pong_ball_sync(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    emit('pong_ball_sync', data, room=room_id, include_self=False)
+
+@socketio.on('pong_score_update')
+def handle_pong_score_update(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    room_info = active_pong_rooms.get(room_id)
+    if room_info and 'scores' in data:
+        room_info['scores'] = data['scores']
+    emit('pong_score_update', data, room=room_id)
+
+@socketio.on('pong_restart')
+def handle_pong_restart(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    room_info = active_pong_rooms.get(room_id)
+    if room_info:
+        room_info['scores'] = [0, 0]
+    emit('pong_restart', {}, room=room_id)
+
+@socketio.on('find_pong_match')
+def handle_find_pong_match(data=None, *args, **kwargs):
+    sid = request.sid
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+
+    global pong_matchmaking_queue
+    pong_matchmaking_queue = [q for q in pong_matchmaking_queue if q['sid'] != sid]
+
+    if pong_matchmaking_queue:
+        opponent = pong_matchmaking_queue.pop(0)
+        room_id = f"pong_{secrets.token_hex(4)}"
+
+        active_pong_rooms[room_id] = {
+            'host_sid': opponent['sid'],
+            'host_name': opponent['user_name'],
+            'guest_sid': sid,
+            'guest_name': user_name,
+            'scores': [0, 0]
+        }
+
+        try:
+            join_room(room_id, sid=opponent['sid'])
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+
+        emit('pong_match_found', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': opponent['user_name'],
+            'guest_name': user_name,
+            'player': 0
+        }, room=opponent['sid'])
+
+        emit('pong_match_found', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': opponent['user_name'],
+            'guest_name': user_name,
+            'player': 1
+        }, room=sid)
+    else:
+        pong_matchmaking_queue.append({
+            'sid': sid,
+            'user_name': user_name,
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        })
+        emit('pong_matchmaking_waiting', {'status': 'waiting'}, room=sid)
+
+@socketio.on('cancel_pong_matchmaking')
+def handle_cancel_pong_matchmaking(data=None, *args, **kwargs):
+    sid = request.sid
+    global pong_matchmaking_queue
+    pong_matchmaking_queue = [q for q in pong_matchmaking_queue if q['sid'] != sid]
+    emit('pong_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
+
+
 # --- Tic-Tac-Toe 1v1 Real-Time Handlers ---
 active_ttt_rooms = {}
 ttt_matchmaking_queue = []
@@ -2936,6 +3105,8 @@ def handle_send_dm(data=None, *args, **kwargs):
                     g_url = f"/games/connect-four?room={lobby_id}"
                 elif g_type in ('dots_and_boxes', 'dnb', 'dotsandboxes'):
                     g_url = f"/games/dots-and-boxes?room={lobby_id}"
+                elif g_type in ('ping_pong', 'pong', 'pingpong'):
+                    g_url = f"/games/ping-pong?room={lobby_id}"
                 elif lobby_id:
                     g_url = f"/g/{lobby_id}"
             message_doc['game_data'] = {

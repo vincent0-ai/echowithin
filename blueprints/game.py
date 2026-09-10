@@ -153,6 +153,14 @@ def connect_four():
 def dots_and_boxes():
     return render_template('dots_and_boxes.html', active_page='games')
 
+@bp.route('/games/ping-pong')
+def ping_pong():
+    return render_template('ping_pong.html', active_page='games')
+
+@bp.route('/games/snake')
+def snake():
+    return render_template('snake.html', active_page='games')
+
 @bp.route('/games/create', methods=['GET', 'POST'])
 @login_required
 @limits(calls=10, period=60)
@@ -1023,13 +1031,15 @@ def api_my_game_lobbies():
     return jsonify({'lobbies': active})
 
 
-# --- 2D Arcade Leaderboards (Floppy Bird, Slime Volleyball, Tic-Tac-Toe, Connect Four & Dots-and-Boxes) ---
+# --- 2D Arcade Leaderboards (Floppy Bird, Slime Volleyball, Tic-Tac-Toe, Connect Four, Dots-and-Boxes, Ping Pong & Snake) ---
 VALID_ARCADE_CATEGORIES = {
     'floppy_bird': ('campaign_stars', 'endless_score'),
     'slime_volleyball': ('win_streak', 'volleys_returned', 'ranked_score'),
     'tic_tac_toe': ('win_streak', 'total_wins', 'ranked_score'),
     'connect_four': ('win_streak', 'total_wins', 'ranked_score'),
-    'dots_and_boxes': ('win_streak', 'total_wins', 'ranked_score')
+    'dots_and_boxes': ('win_streak', 'total_wins', 'ranked_score'),
+    'ping_pong': ('win_streak', 'volleys_returned', 'total_wins', 'ranked_score'),
+    'snake': ('high_score', 'ranked_score', 'food_eaten')
 }
 
 @bp.route('/api/games/leaderboard/submit', methods=['POST'])
@@ -1054,14 +1064,16 @@ def api_leaderboard_submit():
     # Bounds validation to prevent unrealistic / cheated submissions
     if category == 'campaign_stars' and not (0 <= score <= 42):
         return jsonify({'error': 'Campaign stars must be between 0 and 42'}), 400
-    if category == 'endless_score' and not (0 <= score <= 1000000):
-        return jsonify({'error': 'Endless score out of valid bounds'}), 400
+    if category in ('endless_score', 'high_score') and not (0 <= score <= 1000000):
+        return jsonify({'error': 'Score out of valid bounds'}), 400
     if category == 'win_streak' and not (1 <= score <= 500):
         return jsonify({'error': 'Win streak out of valid bounds'}), 400
     if category == 'volleys_returned' and not (1 <= score <= 1000000):
         return jsonify({'error': 'Volleys returned out of valid bounds'}), 400
     if category == 'total_wins' and not (1 <= score <= 100000):
         return jsonify({'error': 'Total wins out of valid bounds'}), 400
+    if category == 'food_eaten' and not (0 <= score <= 100000):
+        return jsonify({'error': 'Food eaten out of valid bounds'}), 400
     if category == 'ranked_score' and not (1 <= score <= 10000000):
         return jsonify({'error': 'Ranked score out of valid bounds'}), 400
 

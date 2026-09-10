@@ -1160,6 +1160,144 @@ class TestArcadeMatchmakingAndLeaderboards:
             find_call_arg = mock_lb.find.call_args[0][0]
             assert find_call_arg.get('metadata.difficulty') == 'hard'
 
+    def test_ping_pong_and_snake_routes_and_ui(self, client):
+        """Verify routes, templates, responsive mobile controls, and styling for Ping Pong and Snake."""
+        # 1. Ping Pong access and template elements
+        res_pong = client.get('/games/ping-pong')
+        assert res_pong.status_code == 200
+        html_pong = res_pong.get_data(as_text=True)
+        assert 'id="pong-canvas"' in html_pong
+        assert 'touch-up' in html_pong
+        assert 'touch-down' in html_pong
+        assert 'First to:' in html_pong
+        assert 'data-diff="easy"' in html_pong
+        # Ensure platform clean design (no emojis)
+        assert '🎮' not in html_pong
+        assert '🏓' not in html_pong
+        assert '⚡' not in html_pong
+
+        # 2. Snake access and template elements
+        res_snake = client.get('/games/snake')
+        assert res_snake.status_code == 200
+        html_snake = res_snake.get_data(as_text=True)
+        assert 'id="snake-canvas"' in html_snake
+        assert 'dpad-up' in html_snake
+        assert 'dpad-left' in html_snake
+        assert 'dpad-down' in html_snake
+        assert 'dpad-right' in html_snake
+        assert 'data-diff="casual"' in html_snake
+        assert 'data-wall="solid"' in html_snake
+        assert '🐍' not in html_snake
+        assert '🍎' not in html_snake
+
+    def test_ping_pong_and_snake_leaderboards(self, client):
+        """Verify leaderboard submissions, bounds checking, and mode isolation for Ping Pong and Snake."""
+        import main as m
+        mock_lb = MagicMock()
+        mock_lb.find_one.return_value = None
+        mock_lb.update_one.return_value = MagicMock()
+        with patch.object(m, 'arcade_leaderboards_conf', mock_lb):
+            # 1. Ping Pong valid ranked_score submission
+            res_pong = client.post('/api/games/leaderboard/submit', json={
+                'game': 'ping_pong',
+                'category': 'ranked_score',
+                'score': 850,
+                'guest_token': 'g_pong_tok',
+                'metadata': {'difficulty': 'hard', 'returns': 17, 'multiplier': 20}
+            })
+            assert res_pong.status_code == 200
+            assert res_pong.get_json()['score'] == 850
+
+            # 2. Ping Pong local mode rejection (anti-farming)
+            res_local = client.post('/api/games/leaderboard/submit', json={
+                'game': 'ping_pong',
+                'category': 'ranked_score',
+                'score': 500,
+                'guest_token': 'g_pong_local',
+                'metadata': {'mode': 'local'}
+            })
+            assert res_local.status_code == 400
+
+            # 3. Snake valid submissions
+            res_snake_ranked = client.post('/api/games/leaderboard/submit', json={
+                'game': 'snake',
+                'category': 'ranked_score',
+                'score': 450,
+                'guest_token': 'g_snake_tok',
+                'metadata': {'difficulty': 'normal', 'food_eaten': 30}
+            })
+            assert res_snake_ranked.status_code == 200
+
+            res_snake_food = client.post('/api/games/leaderboard/submit', json={
+                'game': 'snake',
+                'category': 'food_eaten',
+                'score': 42,
+                'guest_token': 'g_snake_tok'
+            })
+            assert res_snake_food.status_code == 200
+
+            # 4. Out of bounds checking
+            res_oob = client.post('/api/games/leaderboard/submit', json={
+                'game': 'snake',
+                'category': 'food_eaten',
+                'score': 9999999,
+                'guest_token': 'g_snake_oob'
+            })
+            assert res_oob.status_code == 400
+
+    def test_ping_pong_socket_events(self, app):
+        """Verify Socket.IO room lifecycle and matchmaking for Ping Pong."""
+        import main as m
+        handlers = {}
+        for call in m.socketio.on.mock_calls:
+            if len(call.args) > 0 and callable(call.args[0]):
+                fn = call.args[0]
+                handlers[getattr(fn, '__name__', '')] = fn
+
+        join_handler = handlers.get('handle_join_pong_room')
+        leave_handler = handlers.get('handle_leave_pong_room')
+        find_match_handler = handlers.get('handle_find_pong_match')
+        cancel_match_handler = handlers.get('handle_cancel_pong_matchmaking')
+
+        assert join_handler is not None
+        assert leave_handler is not None
+        assert find_match_handler is not None
+        assert cancel_match_handler is not None
+
+        # Clean state
+        m.active_pong_rooms.clear()
+        m.pong_matchmaking_queue.clear()
+
+        # Simulate within request context
+        with app.test_request_context():
+            with patch.object(m, 'request') as mock_req, \
+                 patch.object(m, 'emit') as mock_emit, \
+                 patch.object(m, 'join_room'):
+                mock_req.sid = 'sid_pong_host'
+                join_handler({'room_id': 'pong_test_1'})
+                assert 'pong_test_1' in m.active_pong_rooms
+                assert m.active_pong_rooms['pong_test_1']['host_sid'] == 'sid_pong_host'
+                assert mock_emit.called
+
+                # Simulate guest joining
+                mock_req.sid = 'sid_pong_guest'
+                join_handler({'room_id': 'pong_test_1'})
+                assert m.active_pong_rooms['pong_test_1']['guest_sid'] == 'sid_pong_guest'
+
+                # Simulate leave
+                leave_handler({'room_id': 'pong_test_1'})
+                assert 'pong_test_1' not in m.active_pong_rooms
+
+                # Simulate Matchmaking Queue
+                mock_req.sid = 'sid_player_a'
+                find_match_handler()
+                assert len(m.pong_matchmaking_queue) == 1
+
+                mock_req.sid = 'sid_player_b'
+                find_match_handler()
+                assert len(m.pong_matchmaking_queue) == 0
+
+
 
 
 

@@ -1,0 +1,421 @@
+{% extends "base.html" %}
+{% block title %}<title>Ping Pong: Arcade Duel — EchoWithin</title>{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+  #mobile-reload-btn, .mobile-fab {
+    display: none !important;
+  }
+  .pong-stage-card {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    border-radius: 12px;
+  }
+  .pong-canvas-wrap {
+    width: 100%;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  #pong-canvas {
+    display: block;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(62, 34, 23, 0.12);
+    width: 100%;
+    max-width: min(800px, 100%);
+    max-height: min(500px, calc(100vh - 180px));
+    height: auto;
+    aspect-ratio: 16 / 10;
+    touch-action: none;
+    background: #121212;
+    margin: 0 auto;
+  }
+  .pong-touch-row {
+    display: none;
+    gap: 0.75rem;
+    justify-content: center;
+    width: 100%;
+    max-width: 580px;
+    margin-top: 1rem;
+  }
+  @media (max-width: 768px) {
+    .pong-touch-row {
+      display: flex;
+    }
+  }
+  @media (max-width: 600px) {
+    .pong-page-wrapper {
+      padding-left: 0.25rem !important;
+      padding-right: 0.25rem !important;
+    }
+    .pong-stage-card {
+      padding: 0.6rem 0.25rem !important;
+      border-radius: 8px !important;
+    }
+    .pong-canvas-wrap, #pong-canvas {
+      max-width: 100% !important;
+      border-radius: 8px !important;
+    }
+    .pong-touch-row {
+      max-width: 100% !important;
+    }
+  }
+</style>
+
+<div class="content-wrapper pong-page-wrapper" style="max-width: 1000px; margin: 0 auto; padding-bottom: 2rem;">
+  <!-- Header Row -->
+  <div class="ew-header-row" style="margin-bottom: 1rem;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <h2 style="margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--text-dark-color);">Ping Pong</h2>
+        <span class="ew-badge">1v1 & Solo</span>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+        Classic paddle table tennis. Play solo vs AI, local 2-player pass-and-play, or 1v1 online duels.
+      </div>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <button type="button" id="mute-toggle-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">
+        Mute Sound
+      </button>
+      <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">
+        Back to Games
+      </a>
+    </div>
+  </div>
+
+  <!-- Mode Selector Tabs -->
+  <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+    <button type="button" id="tab-solo" class="ew-btn ew-btn--sm mode-tab" style="cursor: pointer;">
+      Solo (vs AI)
+    </button>
+    <button type="button" id="tab-local" class="ew-btn--outline ew-btn--sm mode-tab" style="cursor: pointer;">
+      Local 2-Player
+    </button>
+    <button type="button" id="tab-online" class="ew-btn--outline ew-btn--sm mode-tab" style="cursor: pointer;">
+      Online 1v1 Duel
+    </button>
+  </div>
+
+  <!-- Game Settings Bar: Difficulty & Match Target -->
+  <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
+    <!-- AI Difficulty Panel (shown in Solo mode) -->
+    <div id="ai-difficulty-panel" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+      <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">AI:</span>
+      <button type="button" class="ew-btn ew-btn--sm pong-diff-btn" data-diff="easy" style="cursor: pointer;">Easy</button>
+      <button type="button" class="ew-btn ew-btn--outline ew-btn--sm pong-diff-btn" data-diff="normal" style="cursor: pointer;">Normal</button>
+      <button type="button" class="ew-btn ew-btn--outline ew-btn--sm pong-diff-btn" data-diff="hard" style="cursor: pointer;">Hard</button>
+    </div>
+
+    <!-- Match Length / Target Score -->
+    <div id="target-score-panel" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+      <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">First to:</span>
+      <button type="button" class="ew-btn ew-btn--sm pong-target-btn" data-target="3" style="cursor: pointer;">3</button>
+      <button type="button" class="ew-btn ew-btn--outline ew-btn--sm pong-target-btn" data-target="5" style="cursor: pointer;">5</button>
+      <button type="button" class="ew-btn ew-btn--outline ew-btn--sm pong-target-btn" data-target="11" style="cursor: pointer;">11</button>
+      <button type="button" class="ew-btn ew-btn--outline ew-btn--sm pong-target-btn" data-target="endless" style="cursor: pointer;">Endless Rally</button>
+    </div>
+  </div>
+
+  <!-- Online Room Matchmaking Panel (shown when Online tab active) -->
+  <div id="online-panel" class="ew-card" style="display: none; margin-bottom: 1rem; padding: 1rem 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        <button type="button" id="find-match-btn" class="ew-btn ew-btn--sm" style="cursor: pointer; background: #e06a3b; border-color: #c95729; font-weight: 600;">
+          Find Match
+        </button>
+        <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); margin: 0 0.25rem;">or Room Code:</span>
+        <input type="text" id="room-code-input" placeholder="e.g. pong42" style="width: 130px; padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; background: var(--surface-bg); color: var(--text-dark-color);">
+        <button type="button" id="join-room-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Join</button>
+        <button type="button" id="create-room-btn" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor: pointer;">Create Custom</button>
+      </div>
+      <div id="online-status" style="font-size: 0.82rem; font-weight: 500; color: var(--text-secondary);">
+        Not connected. Use "Find Match" or enter a room code.
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Arena Card -->
+  <div class="ew-card pong-stage-card">
+    <div class="pong-canvas-wrap">
+      <canvas id="pong-canvas" width="800" height="500"></canvas>
+
+      <!-- Game Over Banner -->
+      <div id="game-over-banner" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(253, 251, 247, 0.96); border: 2px solid var(--border-color); border-radius: 12px; padding: 1.5rem 2.5rem; text-align: center; box-shadow: 0 12px 36px rgba(0,0,0,0.25); z-index: 10; min-width: 260px;">
+        <h3 id="winner-text" style="margin: 0 0 0.4rem 0; font-size: 1.4rem; color: var(--text-dark-color); font-weight: 700;">Match Complete</h3>
+        <div id="winner-streak" style="display: none; font-size: 0.95rem; font-weight: 600; color: #e06a3b; margin-bottom: 0.8rem;"></div>
+        <button type="button" id="rematch-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Play Again</button>
+      </div>
+    </div>
+
+    <!-- On-Screen Mobile Touch Controls (Up/Down) -->
+    <div class="pong-touch-row">
+      <button type="button" id="touch-up" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
+        Move Up
+      </button>
+      <button type="button" id="touch-down" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
+        Move Down
+      </button>
+    </div>
+
+    <!-- Controls Guide -->
+    <div style="width: 100%; max-width: 680px; margin-top: 0.8rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.65rem 0.9rem; font-size: 0.8rem; color: var(--text-secondary); text-align: center;">
+      Touch / drag paddle, W / S or arrows, or tap buttons &bull; Rally combos boost score
+    </div>
+
+    <!-- Leaderboard Card -->
+    <div style="width: 100%; max-width: 680px; margin-top: 1.2rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.25rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
+        <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-dark-color);">
+          Leaderboard
+        </div>
+        <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
+          <button type="button" class="ew-btn ew-btn--sm pong-lb-cat" data-cat="ranked_score" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Ranked Points</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm pong-lb-cat" data-cat="volleys_returned" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Volley Returns</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm pong-lb-cat" data-cat="win_streak" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Win Streaks</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm pong-lb-cat" data-cat="total_wins" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Total Wins</button>
+          <button type="button" id="pong-lb-refresh-btn" class="ew-btn--outline ew-btn--sm" style="font-size: 0.72rem; padding: 0.2rem 0.45rem; cursor: pointer;">Refresh</button>
+        </div>
+      </div>
+
+      <!-- Player Personal Stats Preview -->
+      <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.55rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.4rem; flex-wrap: wrap; gap: 0.4rem;">
+        <div>
+          Your Active Streak: <strong id="my-pong-streak" style="color: #e06a3b;">0 wins</strong> &bull; Volleys: <strong id="my-pong-volleys" style="color: #2e86ab;">0</strong> &bull; Total Wins: <strong id="my-pong-wins" style="color: #2e86ab;">0</strong>
+        </div>
+        <div id="my-pong-rank" style="font-weight: 600; color: #e06a3b;"></div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.4rem;">
+        <div style="display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap;">
+          <span style="font-size: 0.7rem; font-weight: 600; color: var(--text-secondary);">Filter:</span>
+          <button type="button" class="ew-btn ew-btn--sm pong-diff-filter" data-diff="all" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; cursor: pointer;">All</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm pong-diff-filter" data-diff="hard" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; cursor: pointer;">Hard</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm pong-diff-filter" data-diff="normal" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; cursor: pointer;">Normal</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm pong-diff-filter" data-diff="easy" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; cursor: pointer;">Easy</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm pong-diff-filter" data-diff="online" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; cursor: pointer;">Online</button>
+        </div>
+        <div style="display: flex; gap: 0.35rem;">
+          <button type="button" class="ew-btn ew-btn--sm pong-lb-period" data-period="weekly" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">This Week</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm pong-lb-period" data-period="daily" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">Today</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm pong-lb-period" data-period="all_time" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">All-Time</button>
+        </div>
+      </div>
+
+      <div id="pong-lb-body" style="font-size: 0.85rem; min-height: 70px;">
+        <div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Loading standings...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='ping_pong.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
+<script nonce="{{ csp_nonce }}">
+  document.addEventListener('DOMContentLoaded', () => {
+    const muteBtn = document.getElementById('mute-toggle-btn');
+    if (muteBtn && window.__pong) {
+      muteBtn.addEventListener('click', () => {
+        const isMuted = window.__pong.toggleMute();
+        muteBtn.textContent = isMuted ? 'Unmute Sound' : 'Mute Sound';
+      });
+    }
+
+    const tabSolo = document.getElementById('tab-solo');
+    const tabLocal = document.getElementById('tab-local');
+    const tabOnline = document.getElementById('tab-online');
+    const onlinePanel = document.getElementById('online-panel');
+    const aiDiffPanel = document.getElementById('ai-difficulty-panel');
+    const diffButtons = document.querySelectorAll('.pong-diff-btn');
+    const targetButtons = document.querySelectorAll('.pong-target-btn');
+
+    function updateDifficultyUI(selectedDiff) {
+      diffButtons.forEach(btn => {
+        btn.className = (btn.dataset.diff === selectedDiff)
+          ? 'ew-btn ew-btn--sm pong-diff-btn'
+          : 'ew-btn--outline ew-btn--sm pong-diff-btn';
+      });
+    }
+
+    const initialDiff = (window.__pong && typeof window.__pong.getDifficulty === 'function')
+      ? window.__pong.getDifficulty()
+      : (localStorage.getItem('ew_pong_difficulty') || 'normal');
+    updateDifficultyUI(initialDiff);
+
+    diffButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const diff = btn.dataset.diff;
+        if (window.__pong && typeof window.__pong.setDifficulty === 'function') {
+          window.__pong.setDifficulty(diff);
+        }
+        updateDifficultyUI(diff);
+      });
+    });
+
+    targetButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.target;
+        targetButtons.forEach(b => {
+          b.className = (b === btn) ? 'ew-btn ew-btn--sm pong-target-btn' : 'ew-btn--outline ew-btn--sm pong-target-btn';
+        });
+        if (window.__pong && typeof window.__pong.setTargetScore === 'function') {
+          window.__pong.setTargetScore(target);
+        }
+      });
+    });
+
+    function setActiveTab(activeBtn) {
+      [tabSolo, tabLocal, tabOnline].forEach(btn => {
+        btn.className = (btn === activeBtn) ? 'ew-btn ew-btn--sm mode-tab' : 'ew-btn--outline ew-btn--sm mode-tab';
+      });
+      if (aiDiffPanel) {
+        aiDiffPanel.style.display = (activeBtn === tabSolo) ? 'flex' : 'none';
+      }
+      if (onlinePanel) {
+        onlinePanel.style.display = (activeBtn === tabOnline) ? 'block' : 'none';
+      }
+    }
+
+    if (tabSolo) tabSolo.addEventListener('click', () => {
+      setActiveTab(tabSolo);
+      if (window.__pong) window.__pong.setMode('ai');
+    });
+    if (tabLocal) tabLocal.addEventListener('click', () => {
+      setActiveTab(tabLocal);
+      if (window.__pong) window.__pong.setMode('local');
+    });
+    if (tabOnline) tabOnline.addEventListener('click', () => {
+      setActiveTab(tabOnline);
+      if (window.__pong) window.__pong.setMode('online');
+    });
+
+    const findMatchBtn = document.getElementById('find-match-btn');
+    const joinRoomBtn = document.getElementById('join-room-btn');
+    const createRoomBtn = document.getElementById('create-room-btn');
+    const roomInput = document.getElementById('room-code-input');
+
+    if (findMatchBtn && window.__pong) {
+      findMatchBtn.addEventListener('click', () => window.__pong.findOnlineMatch());
+    }
+    if (joinRoomBtn && window.__pong) {
+      joinRoomBtn.addEventListener('click', () => {
+        const code = (roomInput.value || '').trim();
+        if (code) window.__pong.joinOnlineRoom(code);
+      });
+    }
+    if (createRoomBtn && window.__pong) {
+      createRoomBtn.addEventListener('click', () => {
+        const code = Math.random().toString(36).substring(2, 8);
+        if (roomInput) roomInput.value = code;
+        window.__pong.joinOnlineRoom(code);
+      });
+    }
+
+    const rematchBtn = document.getElementById('rematch-btn');
+    if (rematchBtn && window.__pong) {
+      rematchBtn.addEventListener('click', () => window.__pong.rematch());
+    }
+
+    let currentCat = 'ranked_score';
+    let currentPeriod = 'weekly';
+    let currentDiff = 'all';
+
+    const catButtons = document.querySelectorAll('.pong-lb-cat');
+    const periodButtons = document.querySelectorAll('.pong-lb-period');
+    const diffFilterButtons = document.querySelectorAll('.pong-diff-filter');
+    const refreshBtn = document.getElementById('pong-lb-refresh-btn');
+
+    async function loadLeaderboard() {
+      const lbBody = document.getElementById('pong-lb-body');
+      if (!lbBody) return;
+      lbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Loading standings...</div>';
+
+      try {
+        const diffParam = currentDiff !== 'all' ? `&difficulty=${currentDiff}` : '';
+        const res = await fetch(`/api/games/leaderboard?game=ping_pong&category=${currentCat}&period=${currentPeriod}${diffParam}`);
+        if (!res.ok) throw new Error('Failed to load');
+        const data = await res.json();
+        const entries = data.entries || [];
+
+        if (entries.length === 0) {
+          lbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No scores yet for this period. Be the first to rank!</div>';
+          return;
+        }
+
+        let html = '<div style="display: flex; flex-direction: column; gap: 0.35rem;">';
+        entries.forEach((e, idx) => {
+          const rank = idx + 1;
+          const isTop = rank <= 3;
+          const badgeClass = isTop ? 'color: #e06a3b; font-weight: 700;' : 'color: var(--text-secondary);';
+          let unit = 'pts';
+          if (currentCat === 'win_streak') unit = 'streak';
+          else if (currentCat === 'volleys_returned') unit = 'returns';
+          else if (currentCat === 'total_wins') unit = 'wins';
+
+          let diffTag = '';
+          if (e.metadata && e.metadata.difficulty) {
+            const d = e.metadata.difficulty.toLowerCase();
+            diffTag = `<span style="font-size: 0.68rem; padding: 0.1rem 0.35rem; border-radius: 4px; background: rgba(0,0,0,0.06); color: var(--text-secondary); margin-left: 0.4rem; text-transform: capitalize;">${d}</span>`;
+          }
+
+          html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.6rem; border-radius: 6px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color);">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="min-width: 1.5rem; ${badgeClass}">#${rank}</span>
+                <span style="font-weight: 600; color: var(--text-dark-color);">${e.username || 'Guest'}</span>
+                ${diffTag}
+              </div>
+              <div style="font-weight: 700; color: #e06a3b;">
+                ${e.score.toLocaleString()} <span style="font-size: 0.72rem; font-weight: 500; color: var(--text-secondary);">${unit}</span>
+              </div>
+            </div>
+          `;
+        });
+        html += '</div>';
+        lbBody.innerHTML = html;
+      } catch (err) {
+        lbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Unable to load standings right now.</div>';
+      }
+    }
+
+    catButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        catButtons.forEach(b => b.className = (b === btn) ? 'ew-btn ew-btn--sm pong-lb-cat' : 'ew-btn--outline ew-btn--sm pong-lb-cat');
+        currentCat = btn.dataset.cat;
+        loadLeaderboard();
+      });
+    });
+
+    periodButtons.forEach(btn => {
+      periodButtons.forEach(b => b.className = (b === btn) ? 'ew-btn ew-btn--sm pong-lb-period' : 'ew-btn--outline ew-btn--sm pong-lb-period');
+      btn.addEventListener('click', () => {
+        currentPeriod = btn.dataset.period;
+        loadLeaderboard();
+      });
+    });
+
+    diffFilterButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        diffFilterButtons.forEach(b => b.className = (b === btn) ? 'ew-btn ew-btn--sm pong-diff-filter' : 'ew-btn--outline ew-btn--sm pong-diff-filter');
+        currentDiff = btn.dataset.diff;
+        loadLeaderboard();
+      });
+    });
+
+    if (refreshBtn) refreshBtn.addEventListener('click', loadLeaderboard);
+
+    loadLeaderboard();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room');
+    if (roomParam && tabOnline && window.__pong) {
+      setActiveTab(tabOnline);
+      if (roomInput) roomInput.value = roomParam;
+      window.__pong.setMode('online');
+      window.__pong.joinOnlineRoom(roomParam);
+    }
+  });
+</script>
+{% endblock %}

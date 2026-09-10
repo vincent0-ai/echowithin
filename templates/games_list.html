@@ -103,6 +103,42 @@
           </a>
         </div>
       </div>
+
+      <!-- Ping Pong -->
+      <div class="ew-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 0.85rem; padding: 1.25rem;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem;">
+            <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Ping Pong</h3>
+            <span class="ew-badge">1v1 & Solo</span>
+          </div>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+            Classic paddle table tennis duel. Play solo vs balanced AI, local 2-player, or 1v1 online matchmaking.
+          </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <a href="{{ url_for('game.ping_pong') }}" class="ew-btn ew-btn--sm" style="text-decoration: none;">
+            Play 1v1 / Solo
+          </a>
+        </div>
+      </div>
+
+      <!-- Snake Classic -->
+      <div class="ew-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 0.85rem; padding: 1.25rem;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem;">
+            <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Snake Classic</h3>
+            <span class="ew-badge">Solo Arcade</span>
+          </div>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+            Navigate the grid, collect apples, and climb the leaderboard with touch swipe or D-pad controls.
+          </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <a href="{{ url_for('game.snake') }}" class="ew-btn ew-btn--sm" style="text-decoration: none;">
+            Play Solo
+          </a>
+        </div>
+      </div>
     </div>
     <!-- Weekly Arcade Champions Preview -->
     <div class="ew-card" style="margin-top: 1rem; padding: 1rem 1.25rem;">
@@ -133,30 +169,44 @@
           <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Dots & Boxes (Streak)</div>
           <div id="dnb-champ" style="font-weight: 600; color: var(--text-dark-color);">Loading...</div>
         </div>
+        <div style="padding: 0.6rem 0.75rem; border-radius: 6px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Ping Pong (Streak)</div>
+          <div id="pong-champ" style="font-weight: 600; color: var(--text-dark-color);">Loading...</div>
+        </div>
+        <div style="padding: 0.6rem 0.75rem; border-radius: 6px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Snake (Score)</div>
+          <div id="snake-champ" style="font-weight: 600; color: var(--text-dark-color);">Loading...</div>
+        </div>
       </div>
     </div>
   </div>
   <script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', async () => {
       try {
-        const [fbRes, slimeRes, tttRes, c4Res, dnbRes] = await Promise.all([
+        const [fbRes, slimeRes, tttRes, c4Res, dnbRes, pongRes, snakeRes] = await Promise.all([
           fetch('/api/games/leaderboard?game=floppy_bird&category=campaign_stars&period=weekly&limit=1'),
           fetch('/api/games/leaderboard?game=slime_volleyball&category=win_streak&period=weekly&limit=1'),
           fetch('/api/games/leaderboard?game=tic_tac_toe&category=win_streak&period=weekly&limit=1'),
           fetch('/api/games/leaderboard?game=connect_four&category=win_streak&period=weekly&limit=1'),
-          fetch('/api/games/leaderboard?game=dots_and_boxes&category=win_streak&period=weekly&limit=1')
+          fetch('/api/games/leaderboard?game=dots_and_boxes&category=win_streak&period=weekly&limit=1'),
+          fetch('/api/games/leaderboard?game=ping_pong&category=win_streak&period=weekly&limit=1'),
+          fetch('/api/games/leaderboard?game=snake&category=high_score&period=weekly&limit=1')
         ]);
         const fbData = await fbRes.json();
         const slimeData = await slimeRes.json();
         const tttData = await tttRes.json();
         const c4Data = await c4Res.json();
         const dnbData = await dnbRes.json();
+        const pongData = await pongRes.json();
+        const snakeData = await snakeRes.json();
 
         const fbEl = document.getElementById('fb-champ');
         const slimeEl = document.getElementById('slime-champ');
         const tttEl = document.getElementById('ttt-champ');
         const c4El = document.getElementById('c4-champ');
         const dnbEl = document.getElementById('dnb-champ');
+        const pongEl = document.getElementById('pong-champ');
+        const snakeEl = document.getElementById('snake-champ');
 
         if (fbEl) {
           if (fbData.entries && fbData.entries.length > 0) {
@@ -196,6 +246,22 @@
             dnbEl.innerHTML = `#1 <strong>${top.username}</strong> — ${top.score} streak`;
           } else {
             dnbEl.textContent = 'No records yet';
+          }
+        }
+        if (pongEl) {
+          if (pongData.entries && pongData.entries.length > 0) {
+            const top = pongData.entries[0];
+            pongEl.innerHTML = `#1 <strong>${top.username}</strong> — ${top.score} streak`;
+          } else {
+            pongEl.textContent = 'No records yet';
+          }
+        }
+        if (snakeEl) {
+          if (snakeData.entries && snakeData.entries.length > 0) {
+            const top = snakeData.entries[0];
+            snakeEl.innerHTML = `#1 <strong>${top.username}</strong> — ${top.score} pts`;
+          } else {
+            snakeEl.textContent = 'No records yet';
           }
         }
       } catch (_) {}

@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+{% block title %}<title>Snake Classic — EchoWithin</title>{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+  #mobile-reload-btn, .mobile-fab {
+    display: none !important;
+  }
+  .snake-stage-card {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    border-radius: 12px;
+  }
+  .snake-canvas-wrap {
+    width: 100%;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  #snake-canvas {
+    display: block;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(62, 34, 23, 0.12);
+    width: 100%;
+    max-width: min(480px, 100%);
+    aspect-ratio: 1;
+    touch-action: none;
+    background: #121212;
+    margin: 0 auto;
+  }
+  .snake-dpad-container {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 1rem;
+    user-select: none;
+  }
+  .snake-dpad-row {
+    display: flex;
+    gap: 0.4rem;
+    justify-content: center;
+  }
+  .snake-dpad-btn {
+    width: 64px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    font-weight: 700;
+    border-radius: 8px;
+    touch-action: manipulation;
+    cursor: pointer;
+  }
+  @media (max-width: 768px) {
+    .snake-dpad-container {
+      display: flex;
+    }
+  }
+  @media (max-width: 600px) {
+    .snake-page-wrapper {
+      padding-left: 0.25rem !important;
+      padding-right: 0.25rem !important;
+    }
+    .snake-stage-card {
+      padding: 0.6rem 0.25rem !important;
+      border-radius: 8px !important;
+    }
+    .snake-canvas-wrap, #snake-canvas {
+      max-width: 100% !important;
+      border-radius: 8px !important;
+    }
+  }
+</style>
+
+<div class="content-wrapper snake-page-wrapper" style="max-width: 800px; margin: 0 auto; padding-bottom: 2rem;">
+  <!-- Header Row -->
+  <div class="ew-header-row" style="margin-bottom: 1rem;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <h2 style="margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--text-dark-color);">Snake Classic</h2>
+        <span class="ew-badge">Solo Arcade</span>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+        Navigate the grid, collect apples, and climb the leaderboard. Adapted for mobile touch and desktop.
+      </div>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <button type="button" id="mute-toggle-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">
+        Mute Sound
+      </button>
+      <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">
+        Back to Games
+      </a>
+    </div>
+  </div>
+
+  <!-- Game Settings Bar: Difficulty & Walls -->
+  <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
+    <!-- Difficulty Presets -->
+    <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+      <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Speed:</span>
+      <button type="button" class="ew-btn ew-btn--sm snake-diff-btn" data-diff="casual" style="cursor: pointer;">Casual</button>
+      <button type="button" class="ew-btn--outline ew-btn--sm snake-diff-btn" data-diff="normal" style="cursor: pointer;">Normal</button>
+      <button type="button" class="ew-btn--outline ew-btn--sm snake-diff-btn" data-diff="turbo" style="cursor: pointer;">Turbo</button>
+    </div>
+
+    <!-- Wall Collision Toggle -->
+    <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+      <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Walls:</span>
+      <button type="button" class="ew-btn ew-btn--sm snake-wall-btn" data-wall="solid" style="cursor: pointer;">Solid</button>
+      <button type="button" class="ew-btn--outline ew-btn--sm snake-wall-btn" data-wall="wrap" style="cursor: pointer;">Wrap Around</button>
+    </div>
+  </div>
+
+  <!-- Game Arena Card -->
+  <div class="ew-card snake-stage-card">
+    <div class="snake-canvas-wrap">
+      <canvas id="snake-canvas" width="600" height="600"></canvas>
+
+      <!-- Game Over Banner -->
+      <div id="game-over-banner" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(253, 251, 247, 0.96); border: 2px solid var(--border-color); border-radius: 12px; padding: 1.5rem 2.5rem; text-align: center; box-shadow: 0 12px 36px rgba(0,0,0,0.25); z-index: 10; min-width: 240px;">
+        <h3 id="game-over-title" style="margin: 0 0 0.4rem 0; font-size: 1.4rem; color: var(--text-dark-color); font-weight: 700;">Game Over</h3>
+        <div id="final-score-text" style="font-size: 1.1rem; font-weight: 600; color: #e06a3b; margin-bottom: 0.8rem;">Score: 0</div>
+        <button type="button" id="restart-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Play Again</button>
+      </div>
+    </div>
+
+    <!-- On-Screen Tactile Virtual D-Pad for Mobile -->
+    <div class="snake-dpad-container">
+      <div class="snake-dpad-row">
+        <button type="button" id="dpad-up" class="ew-btn--outline snake-dpad-btn" aria-label="Up">Up</button>
+      </div>
+      <div class="snake-dpad-row">
+        <button type="button" id="dpad-left" class="ew-btn--outline snake-dpad-btn" aria-label="Left">Left</button>
+        <button type="button" id="dpad-down" class="ew-btn--outline snake-dpad-btn" aria-label="Down">Down</button>
+        <button type="button" id="dpad-right" class="ew-btn--outline snake-dpad-btn" aria-label="Right">Right</button>
+      </div>
+    </div>
+
+    <!-- Controls Guide -->
+    <div style="width: 100%; max-width: 480px; margin-top: 0.8rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.65rem 0.9rem; font-size: 0.8rem; color: var(--text-secondary); text-align: center;">
+      Swipe canvas, tap D-pad buttons, or use WASD / Arrow keys
+    </div>
+
+    <!-- Leaderboard Card -->
+    <div style="width: 100%; max-width: 480px; margin-top: 1.2rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.25rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
+        <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-dark-color);">
+          Leaderboard
+        </div>
+        <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
+          <button type="button" class="ew-btn ew-btn--sm snake-lb-cat" data-cat="ranked_score" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Ranked Points</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm snake-lb-cat" data-cat="high_score" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">High Score</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm snake-lb-cat" data-cat="food_eaten" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Apples</button>
+          <button type="button" id="snake-lb-refresh-btn" class="ew-btn--outline ew-btn--sm" style="font-size: 0.72rem; padding: 0.2rem 0.45rem; cursor: pointer;">Refresh</button>
+        </div>
+      </div>
+
+      <!-- Player Personal Stats Preview -->
+      <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.55rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.4rem; flex-wrap: wrap; gap: 0.4rem;">
+        <div>
+          Your Best: <strong id="my-snake-best" style="color: #e06a3b;">0 pts</strong> &bull; Apples: <strong id="my-snake-apples" style="color: #2e86ab;">0</strong>
+        </div>
+        <div id="my-snake-rank" style="font-weight: 600; color: #e06a3b;"></div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.4rem;">
+        <div style="display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap;">
+          <span style="font-size: 0.7rem; font-weight: 600; color: var(--text-secondary);">Filter:</span>
+          <button type="button" class="ew-btn ew-btn--sm snake-diff-filter" data-diff="all" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; cursor: pointer;">All</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm snake-diff-filter" data-diff="turbo" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; cursor: pointer;">Turbo</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm snake-diff-filter" data-diff="normal" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; cursor: pointer;">Normal</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm snake-diff-filter" data-diff="casual" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; cursor: pointer;">Casual</button>
+        </div>
+        <div style="display: flex; gap: 0.35rem;">
+          <button type="button" class="ew-btn ew-btn--sm snake-lb-period" data-period="weekly" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">This Week</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm snake-lb-period" data-period="daily" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">Today</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm snake-lb-period" data-period="all_time" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">All-Time</button>
+        </div>
+      </div>
+
+      <div id="snake-lb-body" style="font-size: 0.85rem; min-height: 70px;">
+        <div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Loading standings...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='snake.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
+<script nonce="{{ csp_nonce }}">
+  document.addEventListener('DOMContentLoaded', () => {
+    const muteBtn = document.getElementById('mute-toggle-btn');
+    if (muteBtn && window.__snake) {
+      muteBtn.addEventListener('click', () => {
+        const isMuted = window.__snake.toggleMute();
+        muteBtn.textContent = isMuted ? 'Unmute Sound' : 'Mute Sound';
+      });
+    }
+
+    const diffButtons = document.querySelectorAll('.snake-diff-btn');
+    const wallButtons = document.querySelectorAll('.snake-wall-btn');
+    const restartBtn = document.getElementById('restart-btn');
+
+    function updateDifficultyUI(selectedDiff) {
+      diffButtons.forEach(btn => {
+        btn.className = (btn.dataset.diff === selectedDiff)
+          ? 'ew-btn ew-btn--sm snake-diff-btn'
+          : 'ew-btn--outline ew-btn--sm snake-diff-btn';
+      });
+    }
+
+    const initialDiff = (window.__snake && typeof window.__snake.getDifficulty === 'function')
+      ? window.__snake.getDifficulty()
+      : (localStorage.getItem('ew_snake_difficulty') || 'casual');
+    updateDifficultyUI(initialDiff);
+
+    diffButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const diff = btn.dataset.diff;
+        if (window.__snake && typeof window.__snake.setDifficulty === 'function') {
+          window.__snake.setDifficulty(diff);
+        }
+        updateDifficultyUI(diff);
+      });
+    });
+
+    wallButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const wallMode = btn.dataset.wall;
+        wallButtons.forEach(b => {
+          b.className = (b === btn) ? 'ew-btn ew-btn--sm snake-wall-btn' : 'ew-btn--outline ew-btn--sm snake-wall-btn';
+        });
+        if (window.__snake && typeof window.__snake.setWallMode === 'function') {
+          window.__snake.setWallMode(wallMode);
+        }
+      });
+    });
+
+    if (restartBtn && window.__snake) {
+      restartBtn.addEventListener('click', () => window.__snake.restart());
+    }
+
+    // Leaderboard Tabs & Periods
+    let currentCat = 'ranked_score';
+    let currentPeriod = 'weekly';
+    let currentDiff = 'all';
+
+    const catButtons = document.querySelectorAll('.snake-lb-cat');
+    const periodButtons = document.querySelectorAll('.snake-lb-period');
+    const diffFilterButtons = document.querySelectorAll('.snake-diff-filter');
+    const refreshBtn = document.getElementById('snake-lb-refresh-btn');
+
+    async function loadLeaderboard() {
+      const lbBody = document.getElementById('snake-lb-body');
+      if (!lbBody) return;
+      lbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Loading standings...</div>';
+
+      try {
+        const diffParam = currentDiff !== 'all' ? `&difficulty=${currentDiff}` : '';
+        const res = await fetch(`/api/games/leaderboard?game=snake&category=${currentCat}&period=${currentPeriod}${diffParam}`);
+        if (!res.ok) throw new Error('Failed to load');
+        const data = await res.json();
+        const entries = data.entries || [];
+
+        if (entries.length === 0) {
+          lbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No scores yet for this period. Be the first to rank!</div>';
+          return;
+        }
+
+        let html = '<div style="display: flex; flex-direction: column; gap: 0.35rem;">';
+        entries.forEach((e, idx) => {
+          const rank = idx + 1;
+          const isTop = rank <= 3;
+          const badgeClass = isTop ? 'color: #e06a3b; font-weight: 700;' : 'color: var(--text-secondary);';
+          let unit = 'pts';
+          if (currentCat === 'food_eaten') unit = 'apples';
+
+          let diffTag = '';
+          if (e.metadata && e.metadata.difficulty) {
+            const d = e.metadata.difficulty.toLowerCase();
+            diffTag = `<span style="font-size: 0.68rem; padding: 0.1rem 0.35rem; border-radius: 4px; background: rgba(0,0,0,0.06); color: var(--text-secondary); margin-left: 0.4rem; text-transform: capitalize;">${d}</span>`;
+          }
+
+          html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.6rem; border-radius: 6px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color);">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="min-width: 1.5rem; ${badgeClass}">#${rank}</span>
+                <span style="font-weight: 600; color: var(--text-dark-color);">${e.username || 'Guest'}</span>
+                ${diffTag}
+              </div>
+              <div style="font-weight: 700; color: #e06a3b;">
+                ${e.score.toLocaleString()} <span style="font-size: 0.72rem; font-weight: 500; color: var(--text-secondary);">${unit}</span>
+              </div>
+            </div>
+          `;
+        });
+        html += '</div>';
+        lbBody.innerHTML = html;
+      } catch (err) {
+        lbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Unable to load standings right now.</div>';
+      }
+    }
+
+    catButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        catButtons.forEach(b => b.className = (b === btn) ? 'ew-btn ew-btn--sm snake-lb-cat' : 'ew-btn--outline ew-btn--sm snake-lb-cat');
+        currentCat = btn.dataset.cat;
+        loadLeaderboard();
+      });
+    });
+
+    periodButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        periodButtons.forEach(b => b.className = (b === btn) ? 'ew-btn ew-btn--sm snake-lb-period' : 'ew-btn--outline ew-btn--sm snake-lb-period');
+        currentPeriod = btn.dataset.period;
+        loadLeaderboard();
+      });
+    });
+
+    diffFilterButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        diffFilterButtons.forEach(b => b.className = (b === btn) ? 'ew-btn ew-btn--sm snake-diff-filter' : 'ew-btn--outline ew-btn--sm snake-diff-filter');
+        currentDiff = btn.dataset.diff;
+        loadLeaderboard();
+      });
+    });
+
+    if (refreshBtn) refreshBtn.addEventListener('click', loadLeaderboard);
+
+    loadLeaderboard();
+  });
+</script>
+{% endblock %}

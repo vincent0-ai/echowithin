@@ -9,29 +9,29 @@
     </div>
     <a href="{{ url_for('notes.personal_space') }}#games" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Back to Games</a>
   </div>
-  <form method="POST" class="ew-card" id="create-form">
+  <form method="POST" class="ew-card" id="create-form" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="ew-form-label">Title *</label>
     <input type="text" name="title" maxlength="100" required class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., Friday Game Night">
 
     <label class="ew-form-label">Game type</label>
     <select name="game_type" id="game_type" class="form-input" style="margin-bottom:0.8rem;" onchange="toggleFields()">
-      <option value="poll">Poll</option>
-      <option value="trivia">Trivia</option>
-      <option value="wyr">Would You Rather</option>
-      <option value="ttal">Two Truths and a Lie</option>
-      <option value="story">Story Chain</option>
-      <option value="caption">Caption This</option>
+      <option value="poll" {% if (selected_type or 'poll') == 'poll' %}selected{% endif %}>Poll</option>
+      <option value="trivia" {% if selected_type == 'trivia' %}selected{% endif %}>Trivia</option>
+      <option value="wyr" {% if selected_type == 'wyr' %}selected{% endif %}>Would You Rather</option>
+      <option value="ttal" {% if selected_type == 'ttal' %}selected{% endif %}>Two Truths and a Lie</option>
+      <option value="story" {% if selected_type == 'story' %}selected{% endif %}>Story Chain</option>
+      <option value="caption" {% if selected_type == 'caption' %}selected{% endif %}>Caption This</option>
     </select>
 
     <!-- Multi-question builder for Poll / Trivia -->
-    <div id="fields-multi-q" style="border-top:1px solid var(--border-color); margin:0.8rem 0; padding-top:1rem;">
+    <div id="fields-multi-q" style="{% if (selected_type or 'poll') not in ('poll', 'trivia') %}display:none;{% endif %} border-top:1px solid var(--border-color); margin:0.8rem 0; padding-top:1rem;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem; flex-wrap:wrap; gap:0.5rem;">
         <div style="font-weight:700; color:var(--text-dark-color); font-size:1.05rem;">Questions</div>
       </div>
 
       <!-- Quick-Fill from Community & Bible Trivia -->
-      <div id="trivia-gen-panel" style="display:none; background:rgba(62,34,23,0.03); border:1px solid var(--border-color); border-radius:8px; padding:1rem; margin-bottom:1rem;">
+      <div id="trivia-gen-panel" style="{% if selected_type != 'trivia' %}display:none;{% endif %} background:rgba(62,34,23,0.03); border:1px solid var(--border-color); border-radius:8px; padding:1rem; margin-bottom:1rem;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem; flex-wrap:wrap; gap:0.4rem;">
           <div style="font-weight:700; font-size:0.95rem; color:var(--text-dark-color);">
             🎲 Quick-Fill from Community &amp; Bible Trivia
@@ -85,15 +85,15 @@
 
       <input type="hidden" name="questions_json" id="questions_json">
       <div id="mq-container"></div>
-      <button type="button" onclick="addMQ()" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor:pointer; margin-top:0.5rem;">Add Question</button>
+      <button type="button" id="btn-add-mq" onclick="addMQ()" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor:pointer; margin-top:0.5rem;">+ Add Question</button>
     </div>
 
     <!-- WYR: single question + 2 options -->
-    <div id="fields-question" style="display:none;">
+    <div id="fields-question" style="{% if selected_type != 'wyr' %}display:none;{% endif %}">
       <label class="ew-form-label">Question *</label>
       <input type="text" name="question" maxlength="200" class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., One word for your week?">
     </div>
-    <div id="fields-options" style="display:none;">
+    <div id="fields-options" style="{% if selected_type != 'wyr' %}display:none;{% endif %}">
       <label class="ew-form-label">Options</label>
       <div id="opts">
         <input type="text" name="options" placeholder="Option A" class="form-input" style="margin-bottom:0.4rem;">
@@ -102,17 +102,41 @@
     </div>
 
     <!-- Story Chain fields -->
-    <div id="fields-story" style="display:none;">
+    <div id="fields-story" style="{% if selected_type != 'story' %}display:none;{% endif %}">
       <label class="ew-form-label">Starter sentence *</label>
       <textarea name="starter_sentence" maxlength="280" rows="2" class="form-input" style="margin-bottom:0.8rem;" placeholder="Once upon a time in a quiet village..."></textarea>
       <div class="ew-info-banner" style="font-size:0.8rem;">Write the first sentence. Players take turns adding sentences.</div>
     </div>
 
     <!-- Caption This fields -->
-    <div id="fields-caption" style="display:none;">
-      <label class="ew-form-label">Prompt / Scenario *</label>
-      <textarea name="prompt" maxlength="200" rows="2" class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., You walk into the office and find a surprise celebration..."></textarea>
-      <div class="ew-info-banner" style="font-size:0.8rem;">Players submit captions, then vote for their favorite.</div>
+    <div id="fields-caption" style="{% if selected_type != 'caption' %}display:none;{% endif %}">
+      <div style="background:rgba(62,34,23,0.03); border:1px solid var(--border-color); border-radius:8px; padding:1rem; margin-bottom:1rem;">
+        <label class="ew-form-label" style="font-weight:700; color:var(--text-dark-color); margin-bottom:0.3rem;">📸 Photo to Caption</label>
+        <div style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:0.75rem;">
+          Upload a photo or enter an image link. Players will submit captions for it!
+        </div>
+        
+        <div style="margin-bottom:0.6rem;">
+          <label class="ew-form-label" style="font-size:0.8rem;">Upload Photo</label>
+          <input type="file" name="caption_image" id="caption_image" accept="image/jpeg,image/png,image/webp,image/gif" class="form-input" style="font-size:0.85rem; padding:0.4rem;" onchange="previewCaptionImage(event)">
+        </div>
+
+        <div style="text-align:center; font-size:0.75rem; color:var(--text-muted); margin:0.4rem 0;">— OR —</div>
+
+        <div style="margin-bottom:0.5rem;">
+          <label class="ew-form-label" style="font-size:0.8rem;">Image URL</label>
+          <input type="url" name="caption_image_url" id="caption_image_url" class="form-input" style="font-size:0.85rem;" placeholder="https://example.com/photo.jpg" oninput="previewCaptionImageUrl(this.value)">
+        </div>
+
+        <div id="caption-preview-box" style="display:none; text-align:center; margin-top:0.75rem; padding:0.6rem; background:var(--surface-bg); border-radius:8px; border:1px dashed var(--border-color);">
+          <img id="caption-img-preview" src="" alt="Caption Preview" style="max-width:100%; max-height:220px; border-radius:6px; object-fit:contain; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.35rem;">Photo Preview</div>
+        </div>
+      </div>
+
+      <label class="ew-form-label">Prompt / Scenario</label>
+      <textarea name="prompt" maxlength="200" rows="2" class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., Wrong answers only! / What is happening here?"></textarea>
+      <div class="ew-info-banner" style="font-size:0.8rem;">Players submit funny or clever captions, then everyone votes!</div>
     </div>
 
     <!-- TTAL info -->
@@ -242,7 +266,10 @@ function renderMQ(){
   const c = document.getElementById('mq-container');
   const gt = document.getElementById('game_type').value;
   if(mqQuestions.length === 0){
-    c.innerHTML = '<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.9rem;">No questions added yet. Click "Add Question" below.</div>';
+    const msg = (gt === 'trivia')
+      ? 'No questions loaded yet. Use the Quick-Fill panel above to fetch a Bible or curated deck in 1 click, or click "+ Add Custom Question" below.'
+      : 'No questions added yet. Click "+ Add Question" below.';
+    c.innerHTML = `<div style="text-align:center; padding:1.5rem 1rem; color:var(--text-muted); font-size:0.9rem; background:rgba(62,34,23,0.02); border-radius:8px; border:1px dashed var(--border-color);">${msg}</div>`;
     return;
   }
   c.innerHTML = mqQuestions.map((q, idx) => {
@@ -336,6 +363,11 @@ function toggleFields(){
   show('fields-caption', gt === 'caption');
   show('fields-ttal', gt === 'ttal');
 
+  const addBtn = document.getElementById('btn-add-mq');
+  if(addBtn){
+    addBtn.textContent = (gt === 'trivia') ? '+ Add Custom Question' : '+ Add Question';
+  }
+
   if(isTrivia){
     const timerEl = document.getElementById('timer_seconds');
     if(timerEl && (timerEl.value === '0' || !timerEl.value)){
@@ -346,15 +378,57 @@ function toggleFields(){
   // Set required attributes
   document.querySelectorAll('[name=question]').forEach(el => el.required = gt === 'wyr');
   document.querySelectorAll('[name=starter_sentence]').forEach(el => el.required = gt === 'story');
-  document.querySelectorAll('[name=prompt]').forEach(el => el.required = gt === 'caption');
+  document.querySelectorAll('[name=prompt]').forEach(el => el.required = false); // validated conditionally on submit
 
   if(isMultiQ){
     renderMQ();
   }
 }
 
+function previewCaptionImage(event){
+  const file = event.target.files && event.target.files[0];
+  const box = document.getElementById('caption-preview-box');
+  const img = document.getElementById('caption-img-preview');
+  if(file){
+    const reader = new FileReader();
+    reader.onload = function(e){
+      img.src = e.target.result;
+      box.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+    const urlInput = document.getElementById('caption_image_url');
+    if(urlInput) urlInput.value = '';
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+function previewCaptionImageUrl(val){
+  const box = document.getElementById('caption-preview-box');
+  const img = document.getElementById('caption-img-preview');
+  const v = (val || '').trim();
+  if(v && (v.startsWith('http://') || v.startsWith('https://'))){
+    img.src = v;
+    box.style.display = 'block';
+  } else {
+    box.style.display = 'none';
+  }
+}
+
 document.getElementById('create-form').addEventListener('submit', (e) => {
   const gt = document.getElementById('game_type').value;
+  if(gt === 'caption'){
+    const promptVal = (document.querySelector('[name=prompt]').value || '').trim();
+    const fileInput = document.getElementById('caption_image');
+    const urlVal = (document.getElementById('caption_image_url') ? document.getElementById('caption_image_url').value : '').trim();
+    const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+    if(!promptVal && !hasFile && !urlVal){
+      e.preventDefault();
+      alert('Please provide a photo (upload/URL) or a scenario prompt for Caption This.');
+      return;
+    }
+  }
+
   if(['poll','trivia'].includes(gt)){
     if(mqQuestions.length === 0){ e.preventDefault(); alert('Add at least one question'); return; }
     for(let i = 0; i < mqQuestions.length; i++){
@@ -382,7 +456,10 @@ if (typeParam && document.querySelector(`#game_type option[value="${typeParam}"]
   document.getElementById('game_type').value = typeParam;
 }
 
-addMQ();
+const curGt = document.getElementById('game_type').value;
+if(curGt === 'poll') {
+  addMQ();
+}
 toggleFields();
 </script>
 {% endblock %}

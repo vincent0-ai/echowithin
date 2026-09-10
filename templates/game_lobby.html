@@ -224,8 +224,28 @@ if (typeof QRCode === 'undefined') {
             <h2 style="margin:0 0 0.5rem 0; font-size:1.45rem; font-weight:700; color:var(--text-dark-color);">
               {{ lobby.title }}
             </h2>
-            <div style="font-size:0.9rem; color:var(--text-secondary); margin-bottom:1.5rem;">
-              Join on phone/browser with PIN: <span style="font-family:monospace; font-size:1.3rem; font-weight:700; color:var(--text-dark-color); letter-spacing:2px; background:rgba(62,34,23,0.06); padding:0.2rem 0.6rem; border-radius:6px;">{{ lobby.pin }}</span>
+            <!-- Prominent Kahoot-style Join Banner -->
+            <div style="background:rgba(62,34,23,0.04); border:1px solid var(--border-color); border-radius:12px; padding:1.25rem 1.5rem; margin:0 auto 1.5rem auto; max-width:480px;">
+              <div style="font-size:0.95rem; color:var(--text-secondary); margin-bottom:0.35rem;">
+                Join on your phone or computer at:
+              </div>
+              <div style="font-size:1.35rem; font-weight:700; margin-bottom:0.6rem;">
+                <a href="{{ url_for('game.games_join', _external=True) }}" target="_blank" style="color:var(--primary-color); text-decoration:underline; font-weight:700;">{{ request.host }}/join</a>
+              </div>
+              <div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); margin-bottom:0.25rem;">
+                Game PIN:
+              </div>
+              <div style="font-family:monospace; font-size:2.4rem; font-weight:800; color:var(--text-dark-color); letter-spacing:5px; line-height:1.2; margin-bottom:0.8rem;">
+                {{ lobby.pin }}
+              </div>
+              <div style="display:flex; justify-content:center; gap:0.5rem; flex-wrap:wrap;">
+                <button type="button" onclick="navigator.clipboard.writeText('{{ lobby.pin }}'); this.textContent='PIN Copied!'; setTimeout(()=>this.textContent='Copy PIN', 1500)" class="ew-btn ew-btn--outline ew-btn--sm" style="font-size:0.8rem; cursor:pointer;">
+                  Copy PIN
+                </button>
+                <button type="button" onclick="toggleQRCode()" class="ew-btn ew-btn--outline ew-btn--sm" style="font-size:0.8rem; cursor:pointer;">
+                  Show QR Code
+                </button>
+              </div>
             </div>
 
             <!-- Host Roster vs Player Waiting -->
@@ -300,7 +320,7 @@ if (typeof QRCode === 'undefined') {
               {% else %}
                 <!-- Player Interactive Controller Button -->
                 <button type="button" 
-                  onclick="playerSubmitAnswer('{{ opt|replace("'", "\\'") }}')" 
+                  onclick="playerSubmitAnswer(this.dataset.option)" 
                   class="choice-btn"
                   id="choice-btn-{{ loop.index0 }}"
                   data-option="{{ opt }}"
@@ -560,8 +580,15 @@ if (typeof QRCode === 'undefined') {
 
     {# ─── CAPTION THIS ─── #}
     {% elif gt == 'caption' %}
-      <div class="ew-card" style="text-align:center;">
-        <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); margin-bottom:0.3rem;">The Scenario</div>
+      <div class="ew-card" style="text-align:center; padding:1.25rem;">
+        {% if lobby.image_url %}
+          <div style="margin-bottom:1rem; display:inline-block; max-width:100%; border-radius:10px; overflow:hidden; border:1px solid var(--border-color); background:var(--surface-bg); box-shadow:0 4px 14px rgba(0,0,0,0.06);">
+            <img src="{{ lobby.image_url }}" alt="Caption this photo" style="max-width:100%; max-height:360px; display:block; object-fit:contain; margin:0 auto;">
+          </div>
+        {% endif %}
+        <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); margin-bottom:0.3rem;">
+          {% if lobby.image_url %}Photo to Caption{% else %}The Scenario{% endif %}
+        </div>
         <div style="font-size:1.15rem; font-weight:600; color:var(--text-dark-color); line-height:1.5;">{{ lobby.prompt or lobby.question.label }}</div>
       </div>
       {% if lobby.phase == 'submit' %}
@@ -643,6 +670,7 @@ if (typeof QRCode === 'undefined') {
     </div>
   {% endif %}
 </div>
+<script src="https://cdn.socket.io/4.7.4/socket.io.min.js" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
 window.toggleQRCode = function(){
   const box = document.getElementById('qr-box');
@@ -694,9 +722,16 @@ window.toggleQRCode = function(){
   }
 };
 
+window.playerSubmitAnswer = window.playerSubmitAnswer || function(opt){ console.warn('Game engine initializing...', opt); };
+window.hostStartLiveGame = window.hostStartLiveGame || function(){};
+window.hostRevealLiveQuestion = window.hostRevealLiveQuestion || function(){};
+window.hostShowLeaderboard = window.hostShowLeaderboard || function(){};
+window.hostNextLiveQuestion = window.hostNextLiveQuestion || function(){};
+window.hostShowPodium = window.hostShowPodium || function(){};
+
 (function(){
   const lobbyId = "{{ lobby.lobby_id if (lobby and not expired) else '' }}";
-  if(!lobbyId || typeof io==='undefined') return;
+  if(!lobbyId) return;
 
   const isLiveTrivia = "{{ gt }}" === "trivia";
   const isHost = {{ 'true' if is_host else 'false' }};
@@ -715,6 +750,16 @@ window.toggleQRCode = function(){
     { icon: '●', bg: '#c68a35', name: 'circle' },
     { icon: '■', bg: '#3f7e52', name: 'square' }
   ];
+
+  function escapeHtml(str) {
+    if(!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
 
   function getCsrfToken() {
     const meta = document.querySelector('meta[name="csrf-token"]');
@@ -780,7 +825,225 @@ window.toggleQRCode = function(){
     }, 1000);
   }
 
-  // Window-level Host & Player actions for Live Trivia
+  function applyLiveQuestion(data) {
+    if(!data) return;
+    currentPhase = 'question';
+    currentQIdx = (data.current_q_idx != null) ? data.current_q_idx : (data.q_idx != null ? data.q_idx : 0);
+    totalQuestions = (data.total_questions != null) ? data.total_questions : (data.total_q != null ? data.total_q : 1);
+    
+    // Reset or update player answer state for this question
+    if(data.my_answered != null) {
+      playerAnswerSubmitted = !!data.my_answered;
+    } else {
+      playerAnswerSubmitted = false;
+    }
+    myLastResult = data.my_stats || null;
+
+    switchPhase('question');
+
+    const qNumEl = document.getElementById('q-stage-num');
+    if(qNumEl) qNumEl.textContent = currentQIdx + 1;
+
+    const qTotalEl = document.getElementById('q-stage-total');
+    if(qTotalEl) qTotalEl.textContent = totalQuestions;
+
+    const qLabel = (data.question && data.question.label) ? data.question.label : (data.label || '');
+    const qLabelEl = document.getElementById('live-question-label');
+    if(qLabelEl) qLabelEl.textContent = qLabel;
+
+    const lockedBanner = document.getElementById('player-locked-banner');
+    if(lockedBanner) lockedBanner.style.display = playerAnswerSubmitted ? 'block' : 'none';
+
+    const ansIn = document.getElementById('answers-in-count');
+    const initialAns = (data.answered != null) ? data.answered : (data.total_answers != null ? data.total_answers : 0);
+    if(ansIn) ansIn.textContent = `${initialAns} answered`;
+
+    const rawOptions = (data.question && data.question.options) ? data.question.options : (data.options || []);
+    const grid = document.getElementById('live-choices-grid');
+    if(grid && Array.isArray(rawOptions) && rawOptions.length > 0) {
+      grid.innerHTML = '';
+      rawOptions.forEach((opt, idx) => {
+        const sh = SHAPES[idx % 4];
+        if(isHost) {
+          const card = document.createElement('div');
+          card.className = 'choice-host-card';
+          card.style.cssText = `background:${sh.bg}; color:#ffffff; border-radius:10px; padding:1.25rem 1rem; display:flex; align-items:center; gap:0.75rem; box-shadow:0 2px 8px rgba(0,0,0,0.08);`;
+          card.innerHTML = `<span style="font-size:1.5rem; line-height:1;">${sh.icon}</span><span style="font-size:1.05rem; font-weight:600; flex:1;" class="choice-text">${escapeHtml(opt)}</span>`;
+          grid.appendChild(card);
+        } else {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'choice-btn';
+          btn.id = 'choice-btn-' + idx;
+          btn.dataset.option = opt;
+          btn.style.cssText = `background:${sh.bg}; color:#ffffff; border:none; border-radius:10px; padding:1.5rem 1rem; display:flex; align-items:center; justify-content:center; gap:0.75rem; cursor:pointer; font-size:1.05rem; font-weight:600; text-align:center; transition:transform 0.1s, opacity 0.2s; -webkit-tap-highlight-color:transparent;`;
+          if(playerAnswerSubmitted) {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'default';
+          }
+          btn.innerHTML = `<span style="font-size:1.5rem; line-height:1;">${sh.icon}</span><span class="choice-text">${escapeHtml(opt)}</span>`;
+          btn.onclick = function() { window.playerSubmitAnswer(this.dataset.option); };
+          grid.appendChild(btn);
+        }
+      });
+    }
+
+    startLiveCountdown(data.timer_seconds || timerTotalSeconds || 20);
+  }
+
+  function applyLiveReveal(data) {
+    if(questionTimer) { clearInterval(questionTimer); questionTimer = null; }
+    currentPhase = 'reveal';
+    switchPhase('reveal');
+
+    const revealLabel = document.getElementById('reveal-q-label');
+    const curLabel = document.getElementById('live-question-label');
+    if(revealLabel && curLabel) revealLabel.textContent = curLabel.textContent;
+
+    // Distribution bars
+    const distContainer = document.getElementById('reveal-distribution-bars');
+    const counts = data.counts || {};
+    if(distContainer) {
+      distContainer.innerHTML = '';
+      let totalVotes = 0;
+      Object.values(counts).forEach(v => { totalVotes += v; });
+      const options = Object.keys(counts);
+      options.forEach((opt, idx) => {
+        const sh = SHAPES[idx % 4];
+        const count = counts[opt] || 0;
+        const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+        const isCorrect = (opt === data.correct_option);
+
+        const row = document.createElement('div');
+        row.style.cssText = `background:var(--surface-bg); border:2px solid ${isCorrect ? '#3f7e52' : 'var(--border-color)'}; border-radius:8px; padding:0.6rem 0.85rem; position:relative; overflow:hidden;`;
+        row.innerHTML = `
+          <div style="position:absolute; top:0; left:0; bottom:0; width:${pct}%; background:${isCorrect ? 'rgba(63,126,82,0.15)' : 'rgba(62,34,23,0.06)'}; z-index:1; transition:width 0.6s ease;"></div>
+          <div style="position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+            <div style="display:flex; align-items:center; gap:0.5rem; font-weight:600; color:var(--text-dark-color); font-size:0.95rem;">
+              <span style="color:${sh.bg}; font-size:1.1rem; line-height:1;">${sh.icon}</span>
+              <span>${escapeHtml(opt)}</span>
+              ${isCorrect ? '<span class="ew-badge ew-badge--success" style="font-size:0.7rem; margin-left:0.3rem;">✓ Correct</span>' : ''}
+            </div>
+            <div style="font-size:0.85rem; font-weight:700; color:var(--text-dark-color);">
+              ${count} <span style="font-size:0.75rem; color:var(--text-secondary); font-weight:400;">(${pct}%)</span>
+            </div>
+          </div>
+        `;
+        distContainer.appendChild(row);
+      });
+    }
+
+    // Feedback for player
+    const fbBadge = document.getElementById('feedback-badge');
+    const fbPts = document.getElementById('feedback-points');
+    if(fbBadge && fbPts) {
+      if(isHost) {
+        fbBadge.style.display = 'none';
+        fbPts.textContent = 'Question results: Correct answer highlighted in green';
+      } else {
+        fbBadge.style.display = 'inline-block';
+        if(myLastResult && myLastResult.correct) {
+          fbBadge.textContent = '🎉 Correct!';
+          fbBadge.style.background = 'rgba(63,126,82,0.15)';
+          fbBadge.style.color = '#3f7e52';
+          let ptsText = `+${myLastResult.points_awarded || 0} pts`;
+          if(myLastResult.streak > 1) {
+            ptsText += ` • 🔥 ${myLastResult.streak} streak!`;
+          }
+          fbPts.textContent = ptsText;
+        } else if(playerAnswerSubmitted) {
+          fbBadge.textContent = '❌ Incorrect';
+          fbBadge.style.background = 'rgba(184,66,63,0.15)';
+          fbBadge.style.color = '#b8423f';
+          fbPts.textContent = '+0 pts';
+        } else {
+          fbBadge.textContent = "⏱️ Time's up!";
+          fbBadge.style.background = 'rgba(62,34,23,0.1)';
+          fbBadge.style.color = 'var(--text-secondary)';
+          fbPts.textContent = '+0 pts (no answer submitted)';
+        }
+      }
+    }
+  }
+
+  function applyLiveLeaderboard(data) {
+    if(questionTimer) { clearInterval(questionTimer); questionTimer = null; }
+    currentPhase = 'leaderboard';
+    switchPhase('leaderboard');
+    const lbList = document.getElementById('leaderboard-list');
+    const leaderboard = data.leaderboard || [];
+    if(lbList) {
+      lbList.innerHTML = '';
+      if(leaderboard.length === 0) {
+        lbList.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:1rem;">No scores yet</div>';
+      } else {
+        leaderboard.forEach((entry, idx) => {
+          const rankIcon = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : (idx === 2 ? '🥉' : `${idx + 1}`));
+          const row = document.createElement('div');
+          row.style.cssText = `display:flex; align-items:center; justify-content:space-between; padding:0.7rem 1rem; background:var(--surface-bg); border-radius:8px; border:1px solid var(--border-color); ${idx === 0 ? 'border-left:4px solid #d4a034;' : ''}`;
+          row.innerHTML = `
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+              <span style="font-weight:700; font-size:1rem; width:26px; text-align:center;">${rankIcon}</span>
+              <span style="font-weight:600; color:var(--text-dark-color);">${escapeHtml(entry.name)}</span>
+              ${entry.streak > 1 ? `<span class="ew-badge" style="background:rgba(217,83,79,0.12); color:#b8423f; font-size:0.75rem;">🔥 ${entry.streak}</span>` : ''}
+            </div>
+            <span style="font-weight:700; font-size:1rem; color:var(--primary-color);">${entry.score} pts</span>
+          `;
+          lbList.appendChild(row);
+        });
+      }
+    }
+  }
+
+  function applyLivePodium(data) {
+    if(questionTimer) { clearInterval(questionTimer); questionTimer = null; }
+    currentPhase = 'podium';
+    switchPhase('podium');
+    const p = data.podium || [];
+    if(p[0]) {
+      const elN = document.querySelector('#podium-1 .podium-name');
+      const elS = document.querySelector('#podium-1 .podium-score');
+      if(elN) elN.textContent = p[0].name;
+      if(elS) elS.textContent = p[0].score + ' pts';
+    }
+    if(p[1]) {
+      const elN = document.querySelector('#podium-2 .podium-name');
+      const elS = document.querySelector('#podium-2 .podium-score');
+      if(elN) elN.textContent = p[1].name;
+      if(elS) elS.textContent = p[1].score + ' pts';
+    }
+    if(p[2]) {
+      const elN = document.querySelector('#podium-3 .podium-name');
+      const elS = document.querySelector('#podium-3 .podium-score');
+      if(elN) elN.textContent = p[2].name;
+      if(elS) elS.textContent = p[2].score + ' pts';
+    }
+  }
+
+  function updatePresenceUI(data) {
+    if(!data || !data.players) return;
+    const el = document.getElementById('presence-list');
+    if(el) el.textContent = data.players.length + ' player' + (data.players.length !== 1 ? 's' : '') + ': ' + data.players.map(p=>p.name).join(', ');
+    const pc = document.getElementById('presence-count');
+    if(pc) pc.textContent = data.players.length;
+
+    // Live trivia lobby roster
+    const rCount = document.getElementById('roster-count');
+    if(rCount) rCount.textContent = data.players.length;
+    const rGrid = document.getElementById('roster-grid');
+    if(rGrid) {
+      if(data.players.length === 0) {
+        rGrid.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:0.75rem;">Waiting for players to join with PIN...</div>';
+      } else {
+        rGrid.innerHTML = data.players.map(p => 
+          `<span class="ew-badge" style="padding:0.4rem 0.8rem; font-size:0.85rem; background:rgba(62,34,23,0.08); color:var(--text-dark-color); border-radius:16px;">${escapeHtml(p.name)}</span>`
+        ).join('');
+      }
+    }
+  }
+
+  // Window-level Host & Player actions for Live Trivia (Accessible from HTML onclick)
   window.hostStartLiveGame = async function() {
     try {
       const res = await fetch(`/g/${lobbyId}/live/start`, {
@@ -928,222 +1191,104 @@ window.toggleQRCode = function(){
   })();
   {% endif %}
 
-  const socket = io({transports:['websocket','polling']});
-  socket.on('connect', ()=>{ socket.emit('join_game', {lobby_id: lobbyId}); });
-  
-  socket.on('game_presence_update', (data)=>{
-    const el=document.getElementById('presence-list');
-    if(el && data.players) el.textContent = data.players.length + ' player' + (data.players.length!==1?'s':'') + ': ' + data.players.map(p=>p.name).join(', ');
-    const pc=document.getElementById('presence-count');
-    if(pc && data.players) pc.textContent = data.players.length;
+  // Sockets Setup
+  if(typeof io !== 'undefined') {
+    const socket = io({transports:['websocket','polling'], reconnectionAttempts: 10});
+    socket.on('connect', ()=>{ socket.emit('join_game', {lobby_id: lobbyId}); });
+    
+    socket.on('game_presence_update', (data)=>{
+      updatePresenceUI(data);
+    });
 
-    // Live trivia lobby roster
-    const rCount = document.getElementById('roster-count');
-    if(rCount && data.players) rCount.textContent = data.players.length;
-    const rGrid = document.getElementById('roster-grid');
-    if(rGrid && data.players) {
-      if(data.players.length === 0) {
-        rGrid.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:0.75rem;">Waiting for players to join with PIN...</div>';
-      } else {
-        rGrid.innerHTML = data.players.map(p => 
-          `<span class="ew-badge" style="padding:0.4rem 0.8rem; font-size:0.85rem; background:rgba(62,34,23,0.08); color:var(--text-dark-color); border-radius:16px;">${p.name}</span>`
-        ).join('');
+    // Live Trivia Real-Time Sockets
+    socket.on('live_trivia_state', (data)=>{
+      if(data && (data.phase === 'question' || data.q_idx != null || data.current_q_idx != null)) {
+        applyLiveQuestion(data);
       }
-    }
-  });
+    });
 
-  // Live Trivia Real-Time Sockets
-  socket.on('live_trivia_state', (data)=>{
-    if(data.phase === 'question') {
-      currentPhase = 'question';
-      currentQIdx = data.current_q_idx;
-      totalQuestions = data.total_questions;
-      playerAnswerSubmitted = false;
-      myLastResult = null;
+    socket.on('live_trivia_answer_count', (data)=>{
+      const el = document.getElementById('answers-in-count');
+      const cnt = (data && (data.total_answers != null ? data.total_answers : data.answered)) || 0;
+      if(el) el.textContent = `${cnt} answered`;
+    });
 
-      switchPhase('question');
+    socket.on('live_trivia_reveal', (data)=>{
+      if(data) applyLiveReveal(data);
+    });
 
-      const qNumEl = document.getElementById('q-stage-num');
-      if(qNumEl) qNumEl.textContent = currentQIdx + 1;
-      const qLabelEl = document.getElementById('live-question-label');
-      if(qLabelEl && data.question) qLabelEl.textContent = data.question.label;
+    socket.on('live_trivia_leaderboard', (data)=>{
+      if(data) applyLiveLeaderboard(data);
+    });
 
-      const lockedBanner = document.getElementById('player-locked-banner');
-      if(lockedBanner) lockedBanner.style.display = 'none';
+    socket.on('live_trivia_podium', (data)=>{
+      if(data) applyLivePodium(data);
+    });
 
-      const ansIn = document.getElementById('answers-in-count');
-      if(ansIn) ansIn.textContent = '0 answered';
+    // Non-trivia socket events
+    socket.on('game_vote', (data)=>{
+      if(data.lobby_id!==lobbyId) return;
+      const vc=document.getElementById('vote-count');
+      if(vc) vc.textContent = data.total;
+    });
+    socket.on('game_reveal', ()=>{ if(!isLiveTrivia) location.reload(); });
+    socket.on('game_phase_change', ()=>{ if(!isLiveTrivia) location.reload(); });
+    socket.on('game_story_update', (data)=>{
+      if(data.lobby_id!==lobbyId) return;
+      location.reload();
+    });
+    socket.on('game_ttal_submit', ()=>{ location.reload(); });
+    socket.on('game_caption_submit', ()=>{ location.reload(); });
+  }
 
-      const grid = document.getElementById('live-choices-grid');
-      if(grid && data.question && data.question.options) {
-        grid.innerHTML = '';
-        data.question.options.forEach((opt, idx) => {
-          const sh = SHAPES[idx % 4];
-          if(isHost) {
-            const card = document.createElement('div');
-            card.className = 'choice-host-card';
-            card.style.cssText = `background:${sh.bg}; color:#ffffff; border-radius:10px; padding:1.25rem 1rem; display:flex; align-items:center; gap:0.75rem; box-shadow:0 2px 8px rgba(0,0,0,0.08);`;
-            card.innerHTML = `<span style="font-size:1.5rem; line-height:1;">${sh.icon}</span><span style="font-size:1.05rem; font-weight:600; flex:1;" class="choice-text">${opt}</span>`;
-            grid.appendChild(card);
-          } else {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'choice-btn';
-            btn.id = 'choice-btn-' + idx;
-            btn.dataset.option = opt;
-            btn.style.cssText = `background:${sh.bg}; color:#ffffff; border:none; border-radius:10px; padding:1.5rem 1rem; display:flex; align-items:center; justify-content:center; gap:0.75rem; cursor:pointer; font-size:1.05rem; font-weight:600; text-align:center; transition:transform 0.1s, opacity 0.2s; -webkit-tap-highlight-color:transparent;`;
-            btn.innerHTML = `<span style="font-size:1.5rem; line-height:1;">${sh.icon}</span><span class="choice-text">${opt}</span>`;
-            btn.onclick = () => window.playerSubmitAnswer(opt);
-            grid.appendChild(btn);
+  // Real-time polling fallback: ensures no player is ever left behind or stuck needing to reload!
+  if(isLiveTrivia) {
+    let pollingActive = true;
+    const pollInterval = setInterval(async () => {
+      if(!pollingActive) return;
+      if(document.hidden) return; // Save resources when tab is backgrounded
+      try {
+        const res = await fetch(`/api/game/${lobbyId}/live_state`);
+        if(!res.ok) return;
+        const state = await res.json();
+        if(!state || !state.phase) return;
+
+        // If phase changed or current question index changed:
+        if(state.phase !== currentPhase || (state.phase === 'question' && state.current_q_idx !== currentQIdx)) {
+          if(state.phase === 'question') {
+            applyLiveQuestion(state);
+          } else if(state.phase === 'reveal') {
+            applyLiveReveal(state);
+          } else if(state.phase === 'leaderboard') {
+            applyLiveLeaderboard(state);
+          } else if(state.phase === 'podium') {
+            applyLivePodium(state);
+            pollingActive = false;
+            clearInterval(pollInterval);
           }
-        });
-      }
-
-      startLiveCountdown(data.timer_seconds || 20);
-    }
-  });
-
-  socket.on('live_trivia_answer_count', (data)=>{
-    const el = document.getElementById('answers-in-count');
-    if(el) el.textContent = `${data.total_answers} answered`;
-  });
-
-  socket.on('live_trivia_reveal', (data)=>{
-    if(questionTimer) { clearInterval(questionTimer); questionTimer = null; }
-    switchPhase('reveal');
-
-    const revealLabel = document.getElementById('reveal-q-label');
-    const curLabel = document.getElementById('live-question-label');
-    if(revealLabel && curLabel) revealLabel.textContent = curLabel.textContent;
-
-    // Distribution bars
-    const distContainer = document.getElementById('reveal-distribution-bars');
-    if(distContainer && data.counts) {
-      distContainer.innerHTML = '';
-      let totalVotes = 0;
-      Object.values(data.counts).forEach(v => { totalVotes += v; });
-      const options = Object.keys(data.counts);
-      options.forEach((opt, idx) => {
-        const sh = SHAPES[idx % 4];
-        const count = data.counts[opt] || 0;
-        const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-        const isCorrect = (opt === data.correct_option);
-
-        const row = document.createElement('div');
-        row.style.cssText = `background:var(--surface-bg); border:2px solid ${isCorrect ? '#3f7e52' : 'var(--border-color)'}; border-radius:8px; padding:0.6rem 0.85rem; position:relative; overflow:hidden;`;
-        row.innerHTML = `
-          <div style="position:absolute; top:0; left:0; bottom:0; width:${pct}%; background:${isCorrect ? 'rgba(63,126,82,0.15)' : 'rgba(62,34,23,0.06)'}; z-index:1; transition:width 0.6s ease;"></div>
-          <div style="position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
-            <div style="display:flex; align-items:center; gap:0.5rem; font-weight:600; color:var(--text-dark-color); font-size:0.95rem;">
-              <span style="color:${sh.bg}; font-size:1.1rem; line-height:1;">${sh.icon}</span>
-              <span>${opt}</span>
-              ${isCorrect ? '<span class="ew-badge ew-badge--success" style="font-size:0.7rem; margin-left:0.3rem;">✓ Correct</span>' : ''}
-            </div>
-            <div style="font-size:0.85rem; font-weight:700; color:var(--text-dark-color);">
-              ${count} <span style="font-size:0.75rem; color:var(--text-secondary); font-weight:400;">(${pct}%)</span>
-            </div>
-          </div>
-        `;
-        distContainer.appendChild(row);
-      });
-    }
-
-    // Feedback for player
-    const fbBadge = document.getElementById('feedback-badge');
-    const fbPts = document.getElementById('feedback-points');
-    if(fbBadge && fbPts) {
-      if(isHost) {
-        fbBadge.style.display = 'none';
-        fbPts.textContent = 'Question results: Correct answer highlighted in green';
-      } else {
-        fbBadge.style.display = 'inline-block';
-        if(myLastResult && myLastResult.correct) {
-          fbBadge.textContent = '🎉 Correct!';
-          fbBadge.style.background = 'rgba(63,126,82,0.15)';
-          fbBadge.style.color = '#3f7e52';
-          let ptsText = `+${myLastResult.points_awarded || 0} pts`;
-          if(myLastResult.streak > 1) {
-            ptsText += ` • 🔥 ${myLastResult.streak} streak!`;
-          }
-          fbPts.textContent = ptsText;
-        } else if(playerAnswerSubmitted) {
-          fbBadge.textContent = '❌ Incorrect';
-          fbBadge.style.background = 'rgba(184,66,63,0.15)';
-          fbBadge.style.color = '#b8423f';
-          fbPts.textContent = '+0 pts';
-        } else {
-          fbBadge.textContent = "⏱️ Time's up!";
-          fbBadge.style.background = 'rgba(62,34,23,0.1)';
-          fbBadge.style.color = 'var(--text-secondary)';
-          fbPts.textContent = '+0 pts (no answer submitted)';
         }
+      } catch(e) {
+        // network silent ignore
       }
-    }
-  });
-
-  socket.on('live_trivia_leaderboard', (data)=>{
-    switchPhase('leaderboard');
-    const lbList = document.getElementById('leaderboard-list');
-    if(lbList && data.leaderboard) {
-      lbList.innerHTML = '';
-      if(data.leaderboard.length === 0) {
-        lbList.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:1rem;">No scores yet</div>';
-      } else {
-        data.leaderboard.forEach((entry, idx) => {
-          const rankIcon = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : (idx === 2 ? '🥉' : `${idx + 1}`));
-          const row = document.createElement('div');
-          row.style.cssText = `display:flex; align-items:center; justify-content:space-between; padding:0.7rem 1rem; background:var(--surface-bg); border-radius:8px; border:1px solid var(--border-color); ${idx === 0 ? 'border-left:4px solid #d4a034;' : ''}`;
-          row.innerHTML = `
-            <div style="display:flex; align-items:center; gap:0.75rem;">
-              <span style="font-weight:700; font-size:1rem; width:26px; text-align:center;">${rankIcon}</span>
-              <span style="font-weight:600; color:var(--text-dark-color);">${entry.name}</span>
-              ${entry.streak > 1 ? `<span class="ew-badge" style="background:rgba(217,83,79,0.12); color:#b8423f; font-size:0.75rem;">🔥 ${entry.streak}</span>` : ''}
-            </div>
-            <span style="font-weight:700; font-size:1rem; color:var(--primary-color);">${entry.score} pts</span>
-          `;
-          lbList.appendChild(row);
-        });
-      }
-    }
-  });
-
-  socket.on('live_trivia_podium', (data)=>{
-    switchPhase('podium');
-    const p = data.podium || [];
-    if(p[0]) {
-      const elN = document.querySelector('#podium-1 .podium-name');
-      const elS = document.querySelector('#podium-1 .podium-score');
-      if(elN) elN.textContent = p[0].name;
-      if(elS) elS.textContent = p[0].score + ' pts';
-    }
-    if(p[1]) {
-      const elN = document.querySelector('#podium-2 .podium-name');
-      const elS = document.querySelector('#podium-2 .podium-score');
-      if(elN) elN.textContent = p[1].name;
-      if(elS) elS.textContent = p[1].score + ' pts';
-    }
-    if(p[2]) {
-      const elN = document.querySelector('#podium-3 .podium-name');
-      const elS = document.querySelector('#podium-3 .podium-score');
-      if(elN) elN.textContent = p[2].name;
-      if(elS) elS.textContent = p[2].score + ' pts';
-    }
-  });
-
-  // Non-trivia socket events
-  socket.on('game_vote', (data)=>{
-    if(data.lobby_id!==lobbyId) return;
-    const vc=document.getElementById('vote-count');
-    if(vc) vc.textContent = data.total;
-  });
-  socket.on('game_reveal', ()=>{ if(!isLiveTrivia) location.reload(); });
-  socket.on('game_phase_change', ()=>{ if(!isLiveTrivia) location.reload(); });
-  socket.on('game_story_update', (data)=>{
-    if(data.lobby_id!==lobbyId) return;
-    location.reload();
-  });
-  socket.on('game_ttal_submit', ()=>{ location.reload(); });
-  socket.on('game_caption_submit', ()=>{ location.reload(); });
+    }, 2000);
+  } else {
+    // Non-trivia games polling fallback for phase changes (e.g. submit -> voting -> revealed)
+    {% if not lobby.revealed and not is_host %}
+    const pollNonTrivia = setInterval(async () => {
+      if(document.hidden) return;
+      try {
+        const res = await fetch(`/g/${lobbyId}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if(res.ok) {
+          // If the page redirected to results or changed, reload to display new phase
+          if(res.redirected && res.url && res.url.includes('/results')) {
+            location.href = res.url;
+            clearInterval(pollNonTrivia);
+          }
+        }
+      } catch(e) {}
+    }, 4000);
+    {% endif %}
+  }
 
   // If page loads already in question phase for live trivia, begin countdown
   if(isLiveTrivia && currentPhase === 'question') {

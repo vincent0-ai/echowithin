@@ -153,6 +153,7 @@ def games_list():
     return render_template('games_list.html', lobbies=lobbies, active_page='games')
 
 @bp.route('/games/join', methods=['GET', 'POST'])
+@bp.route('/join', methods=['GET', 'POST'])
 def games_join():
     import main as m
     pin = (request.args.get('pin') or (request.form.get('pin') if request.method == 'POST' else '') or '').strip()
@@ -233,6 +234,9 @@ def games_create():
     if getattr(current_user, 'is_guest', False):
         flash('Sign up to create games.', 'warning')
         return redirect(url_for('auth.login'))
+    selected_type = (request.args.get('type') or request.args.get('game_type') or 'poll').strip().lower()
+    if selected_type not in ALLOWED_GAME_TYPES:
+        selected_type = 'poll'
     if request.method == 'POST':
         title = (request.form.get('title') or '').strip()
         game_type = (request.form.get('game_type') or 'poll').strip()
@@ -396,7 +400,7 @@ def games_create():
                     'user_id': str(current_user.id),
                     'username': current_user.username,
                     'text': m.encrypt_game_data(starter, lobby_id),
-                    'added_at': now.isoformat().replace('+00:00', 'Z') + 'Z'
+                    'added_at': now.astimezone(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
                 }],
                 'turn_order': [str(current_user.id)],
                 'current_turn': 0,
@@ -407,11 +411,36 @@ def games_create():
             }
 
         elif game_type == 'caption':
-            # Caption This — host sets a prompt, players submit captions
+            # Caption This — host sets an image and/or prompt, players submit captions
             prompt = (request.form.get('prompt') or '').strip()
-            if not prompt or len(prompt) > MAX_QUESTION_LEN:
-                flash('Prompt/scenario required (max 200).', 'danger')
+            caption_image_url = (request.form.get('caption_image_url') or '').strip()
+            caption_file = request.files.get('caption_image')
+
+            image_url = None
+            image_public_id = None
+
+            if caption_file and caption_file.filename:
+                try:
+                    upload_result = m.cloudinary.uploader.upload(caption_file, folder="echowithin_games")
+                    image_url = m.optimize_cloudinary_url(upload_result.get('secure_url'))
+                    image_public_id = upload_result.get('public_id')
+                except Exception as ex:
+                    logger.warning("Cloudinary upload failed for game caption photo: %s", ex)
+
+            if not image_url and caption_image_url:
+                image_url = caption_image_url
+
+            if not prompt and not image_url:
+                flash('Please provide a photo (upload/link) or a prompt for players to caption.', 'danger')
                 return render_template('game_create.html', active_page='games')
+
+            if not prompt:
+                prompt = 'Caption this photo!'
+
+            if len(prompt) > MAX_QUESTION_LEN:
+                flash(f'Prompt/scenario too long (max {MAX_QUESTION_LEN}).', 'danger')
+                return render_template('game_create.html', active_page='games')
+
             doc = {
                 'lobby_id': lobby_id,
                 'host_id': ObjectId(current_user.id),
@@ -420,6 +449,8 @@ def games_create():
                 'game_type': 'caption',
                 'question': {'label': prompt, 'options': [], 'correct_option': None},
                 'prompt': prompt,
+                'image_url': image_url,
+                'image_public_id': image_public_id,
                 'counts': {},
                 'status': 'submit',   # submit → voting → revealed
                 'phase': 'submit',
@@ -443,7 +474,7 @@ def games_create():
         m.game_sessions_conf.insert_one(doc)
         flash('Game lobby created — share the link.', 'success')
         return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
-    return render_template('game_create.html', active_page='games')
+    return render_template('game_create.html', active_page='games', selected_type=selected_type)
 
 @bp.route('/api/game/poll/create', methods=['POST'])
 @login_required
@@ -849,6 +880,11 @@ def delete_lobby(lobby_id):
     if not _is_host(lobby) and not getattr(current_user, 'is_admin', False):
         flash('Not authorized', 'danger')
         return redirect(url_for('game.games_list'))
+    if lobby.get('image_public_id'):
+        try:
+            m.destroy_cloudinary_media(lobby['image_public_id'], resource_type='image', delivery_type='upload')
+        except Exception:
+            pass
     m.game_votes_conf.delete_many({'lobby_id': lobby_id})
     m.game_submissions_conf.delete_many({'lobby_id': lobby_id})
     m.game_sessions_conf.delete_one({'lobby_id': lobby_id})
@@ -914,9 +950,15 @@ def live_start_game(lobby_id):
         'lobby_id': lobby_id,
         'phase': 'question',
         'q_idx': 0,
+        'current_q_idx': 0,
         'total_q': len(questions),
+        'total_questions': len(questions),
         'label': q0.get('label', ''),
         'options': q0.get('options', []),
+        'question': {
+            'label': q0.get('label', ''),
+            'options': q0.get('options', [])
+        },
         'timer_seconds': lobby.get('timer_seconds', 20) or 20,
         'started_at': now.astimezone(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
     }
@@ -1040,7 +1082,8 @@ def live_submit_answer(lobby_id):
         fresh_answers = fresh.get('live_answers', {}).get(str(q_idx), {}) if fresh else {}
         m.socketio.emit('live_trivia_answer_count', {
             'q_idx': q_idx,
-            'answered': len(fresh_answers)
+            'answered': len(fresh_answers),
+            'total_answers': len(fresh_answers)
         }, room=lobby_id)
     except Exception:
         pass
@@ -1192,9 +1235,15 @@ def live_next_question(lobby_id):
             'lobby_id': lobby_id,
             'phase': 'question',
             'q_idx': next_idx,
+            'current_q_idx': next_idx,
             'total_q': len(questions),
+            'total_questions': len(questions),
             'label': q_next.get('label', ''),
             'options': q_next.get('options', []),
+            'question': {
+                'label': q_next.get('label', ''),
+                'options': q_next.get('options', [])
+            },
             'timer_seconds': lobby.get('timer_seconds', 20) or 20,
             'started_at': now.astimezone(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
         }

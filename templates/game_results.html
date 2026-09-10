@@ -118,6 +118,16 @@
   {# ─── Caption This Results ─── #}
   {% if gt == 'caption' and captions %}
   <div class="ew-card">
+    {% if lobby.image_url %}
+      <div style="text-align:center; margin-bottom:1.2rem;">
+        <img src="{{ lobby.image_url }}" alt="Captioned Photo" style="max-width:100%; max-height:360px; border-radius:8px; border:1px solid var(--border-color); object-fit:contain; box-shadow:0 4px 12px rgba(0,0,0,0.06);">
+      </div>
+    {% endif %}
+    {% if lobby.prompt %}
+      <div style="font-size:1.05rem; font-weight:600; text-align:center; color:var(--text-dark-color); margin-bottom:1rem;">
+        "{{ lobby.prompt }}"
+      </div>
+    {% endif %}
     <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);">Captions</h4>
     {% for cap in captions %}
       {% set vote_count = lobby.counts.get(cap._id|string, 0) %}

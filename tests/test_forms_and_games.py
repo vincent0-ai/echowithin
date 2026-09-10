@@ -1660,6 +1660,60 @@ class TestLiveMultiplayerTriviaAndThumbnails:
             assert 'Ping Pong' in html
             assert 'Snake Classic' in html
 
+    def test_join_route_and_pin_redirect(self, client):
+        """Verify /join routes directly to game PIN entry and redirects to lobby on valid PIN."""
+        import main as m
+        # GET /join
+        res = client.get('/join')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'Join Live Game' in html
+        assert 'name="pin"' in html
+
+        # POST /join with valid PIN
+        mock_lobby = {
+            '_id': ObjectId(),
+            'lobby_id': 'test_join_lobby',
+            'pin': '778899',
+            'deactivated': False,
+            'expires_at': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)
+        }
+        with patch.object(m.game_sessions_conf, 'find_one', return_value=mock_lobby):
+            res_post = client.post('/join', data={'pin': '778899', 'nickname': 'Bob'}, follow_redirects=False)
+            assert res_post.status_code == 302
+            assert '/g/test_join_lobby' in res_post.headers['Location']
+
+    def test_caption_game_creation_with_photo(self, auth_client):
+        """Verify Caption This game accepts image_url or uploaded file and saves it in lobby doc."""
+        import main as m
+        inserted = {}
+
+        def fake_insert(doc):
+            inserted.update(doc)
+            return MagicMock(inserted_id=ObjectId())
+
+        with patch.object(m.game_sessions_conf, 'insert_one', side_effect=fake_insert):
+            res = auth_client.post('/games/create', data={
+                'title': 'Meme Party',
+                'game_type': 'caption',
+                'caption_image_url': 'https://example.com/funny_cat.jpg',
+                'prompt': 'What did the cat see?'
+            }, follow_redirects=False)
+
+            assert res.status_code == 302
+            assert inserted.get('game_type') == 'caption'
+            assert inserted.get('image_url') == 'https://example.com/funny_cat.jpg'
+            assert inserted.get('prompt') == 'What did the cat see?'
+
+    def test_game_create_selected_type_preselection(self, auth_client):
+        """Verify visiting /games/create?type=caption preselects caption in Jinja and hides multi-q fields."""
+        res = auth_client.get('/games/create?type=caption')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert '<option value="caption" selected>' in html
+        assert 'Photo to Caption' in html
+        assert 'id="fields-multi-q" style="display:none;' in html
+
 
 
 

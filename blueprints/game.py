@@ -1150,6 +1150,9 @@ def live_reveal_question(lobby_id):
         'lobby_id': lobby_id,
         'phase': 'reveal',
         'q_idx': current_q_idx,
+        'current_q_idx': current_q_idx,
+        'total_q': len(questions),
+        'total_questions': len(questions),
         'correct_option': correct_option,
         'counts': counts_raw,
         'leaderboard': leaderboard[:5]
@@ -1186,12 +1189,16 @@ def live_show_leaderboard(lobby_id):
 
     fresh = m.game_sessions_conf.find_one({'lobby_id': lobby_id})
     leaderboard = _build_live_leaderboard(fresh.get('live_scores', {}) if fresh else {})
+    current_q_idx = int(lobby.get('current_q_idx', 0))
+    total_q = len(lobby.get('questions', []))
 
     payload = {
         'lobby_id': lobby_id,
         'phase': 'leaderboard',
-        'q_idx': int(lobby.get('current_q_idx', 0)),
-        'total_q': len(lobby.get('questions', [])),
+        'q_idx': current_q_idx,
+        'current_q_idx': current_q_idx,
+        'total_q': total_q,
+        'total_questions': total_q,
         'leaderboard': leaderboard[:10]
     }
     try:

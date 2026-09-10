@@ -44,7 +44,7 @@ if (typeof QRCode === 'undefined') {
       <div style="display:flex; justify-content:space-between; gap:0.5rem; flex-wrap:wrap; align-items:center;">
         <div>
           <h2 style="margin:0 0 0.3rem 0; color:var(--text-dark-color); font-size:1.3rem;">{{ lobby.title }}</h2>
-          <div style="font-size:0.8rem; color:var(--text-secondary);"><span class="ew-badge">{{ gt|capitalize }}</span> &bull; Host: {{ lobby.host_username }} &bull; <span id="presence-count">0</span> players &bull; <span id="vote-count">{{ total_votes }}</span> votes</div>
+          <div style="font-size:0.8rem; color:var(--text-secondary);"><span class="ew-badge">{{ gt|capitalize }}</span> &bull; Host: {{ lobby.host_username }} &bull; <span id="presence-count">0</span> players{% if gt != 'trivia' %} &bull; <span id="vote-count">{{ total_votes }}</span> votes{% endif %}</div>
         </div>
         {% if is_host %}
           <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
@@ -165,7 +165,7 @@ if (typeof QRCode === 'undefined') {
               PIN: <span style="font-family:monospace; letter-spacing:1px;" id="live-pin-display">{{ lobby.pin or 'N/A' }}</span>
             </span>
             <span style="font-size:0.85rem; color:var(--text-secondary);" id="live-round-indicator">
-              Round <strong id="live-q-num">{{ current_qi + 1 }}</strong> of {{ questions|length }}
+              Round <strong id="live-q-num">{{ current_qi + 1 }}</strong> of <span id="live-q-total">{{ questions|length }}</span>
             </span>
           </div>
 
@@ -382,7 +382,7 @@ if (typeof QRCode === 'undefined') {
             </div>
 
             {% if is_host %}
-              <div style="text-align:center;">
+              <div id="leaderboard-host-action" style="text-align:center;">
                 {% if current_qi + 1 < questions|length %}
                   <button type="button" onclick="hostNextLiveQuestion()" class="ew-btn" style="cursor:pointer; padding:0.75rem 2rem;">
                     Next Question &rarr;
@@ -653,14 +653,16 @@ if (typeof QRCode === 'undefined') {
       </div>
       {% if is_host %}
         <div class="ew-host-actions">
+          {% if gt != 'trivia' or phase == 'podium' %}
           <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Results</a>
+          {% endif %}
           {% if not lobby.deactivated %}
           <form method="POST" action="{{ url_for('game.deactivate_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this lobby? Players will no longer be able to join.')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;">Deactivate</button>
           </form>
           {% endif %}
-          <form method="POST" action="{{ url_for('game.delete_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete this game lobby and all its votes? This cannot be undone.')">
+          <form method="POST" action="{{ url_for('game.delete_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete this game lobby? This cannot be undone.')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Delete</button>
           </form>
@@ -825,11 +827,82 @@ window.hostShowPodium = window.hostShowPodium || function(){};
     }, 1000);
   }
 
+  function updateLiveTriviaHUD(data) {
+    if(!data) return;
+    if(data.current_q_idx != null) currentQIdx = Number(data.current_q_idx);
+    else if(data.q_idx != null) currentQIdx = Number(data.q_idx);
+
+    if(data.total_questions != null) totalQuestions = Number(data.total_questions);
+    else if(data.total_q != null) totalQuestions = Number(data.total_q);
+
+    const liveQNum = document.getElementById('live-q-num');
+    if(liveQNum) liveQNum.textContent = currentQIdx + 1;
+
+    const liveQTotal = document.getElementById('live-q-total');
+    if(liveQTotal) liveQTotal.textContent = totalQuestions;
+
+    const qStageNum = document.getElementById('q-stage-num');
+    if(qStageNum) qStageNum.textContent = currentQIdx + 1;
+
+    const qStageTotal = document.getElementById('q-stage-total');
+    if(qStageTotal) qStageTotal.textContent = totalQuestions;
+
+    renderHostControls(data.phase || currentPhase);
+  }
+
+  function renderHostControls(phase) {
+    if(!isHost) return;
+    const hc = document.getElementById('host-controls');
+    if(!hc) return;
+
+    if(phase === 'lobby') {
+      hc.innerHTML = `
+        <button type="button" onclick="hostStartLiveGame()" class="ew-btn ew-btn--sm" id="btn-host-start" style="cursor:pointer; font-weight:700;">
+          ▶ Start Live Game
+        </button>
+      `;
+    } else if(phase === 'question') {
+      hc.innerHTML = `
+        <button type="button" onclick="hostRevealLiveQuestion()" class="ew-btn ew-btn--sm ew-btn--outline" id="btn-host-reveal" style="cursor:pointer;">
+          Reveal Answer
+        </button>
+      `;
+    } else if(phase === 'reveal') {
+      hc.innerHTML = `
+        <button type="button" onclick="hostShowLeaderboard()" class="ew-btn ew-btn--sm" id="btn-host-lead" style="cursor:pointer;">
+          Show Leaderboard &rarr;
+        </button>
+      `;
+    } else if(phase === 'leaderboard') {
+      if(currentQIdx + 1 < totalQuestions) {
+        hc.innerHTML = `
+          <button type="button" onclick="hostNextLiveQuestion()" class="ew-btn ew-btn--sm" id="btn-host-next" style="cursor:pointer;">
+            Next Question &rarr;
+          </button>
+        `;
+      } else {
+        hc.innerHTML = `
+          <button type="button" onclick="hostShowPodium()" class="ew-btn ew-btn--sm" id="btn-host-podium" style="cursor:pointer; font-weight:700;">
+            🏆 View Finale Podium!
+          </button>
+        `;
+      }
+    } else if(phase === 'podium') {
+      hc.innerHTML = `
+        <a href="/g/${lobbyId}/results" class="ew-btn ew-btn--sm" style="text-decoration:none;">
+          Full Results Table
+        </a>
+      `;
+    }
+  }
+
   function applyLiveQuestion(data) {
     if(!data) return;
     currentPhase = 'question';
-    currentQIdx = (data.current_q_idx != null) ? data.current_q_idx : (data.q_idx != null ? data.q_idx : 0);
-    totalQuestions = (data.total_questions != null) ? data.total_questions : (data.total_q != null ? data.total_q : 1);
+    if(data.current_q_idx != null) currentQIdx = Number(data.current_q_idx);
+    else if(data.q_idx != null) currentQIdx = Number(data.q_idx);
+    if(data.total_questions != null) totalQuestions = Number(data.total_questions);
+    else if(data.total_q != null) totalQuestions = Number(data.total_q);
     
     // Reset or update player answer state for this question
     if(data.my_answered != null) {
@@ -840,12 +913,7 @@ window.hostShowPodium = window.hostShowPodium || function(){};
     myLastResult = data.my_stats || null;
 
     switchPhase('question');
-
-    const qNumEl = document.getElementById('q-stage-num');
-    if(qNumEl) qNumEl.textContent = currentQIdx + 1;
-
-    const qTotalEl = document.getElementById('q-stage-total');
-    if(qTotalEl) qTotalEl.textContent = totalQuestions;
+    updateLiveTriviaHUD(data);
 
     const qLabel = (data.question && data.question.label) ? data.question.label : (data.label || '');
     const qLabelEl = document.getElementById('live-question-label');
@@ -896,6 +964,7 @@ window.hostShowPodium = window.hostShowPodium || function(){};
     if(questionTimer) { clearInterval(questionTimer); questionTimer = null; }
     currentPhase = 'reveal';
     switchPhase('reveal');
+    updateLiveTriviaHUD(data);
 
     const revealLabel = document.getElementById('reveal-q-label');
     const curLabel = document.getElementById('live-question-label');
@@ -971,6 +1040,8 @@ window.hostShowPodium = window.hostShowPodium || function(){};
     if(questionTimer) { clearInterval(questionTimer); questionTimer = null; }
     currentPhase = 'leaderboard';
     switchPhase('leaderboard');
+    updateLiveTriviaHUD(data);
+
     const lbList = document.getElementById('leaderboard-list');
     const leaderboard = data.leaderboard || [];
     if(lbList) {
@@ -994,12 +1065,33 @@ window.hostShowPodium = window.hostShowPodium || function(){};
         });
       }
     }
+
+    // Also update the bottom host action button in leaderboard view
+    if(isHost) {
+      const lbHostAction = document.getElementById('leaderboard-host-action');
+      if(lbHostAction) {
+        if(currentQIdx + 1 < totalQuestions) {
+          lbHostAction.innerHTML = `
+            <button type="button" onclick="hostNextLiveQuestion()" class="ew-btn" style="cursor:pointer; padding:0.75rem 2rem;">
+              Next Question &rarr;
+            </button>
+          `;
+        } else {
+          lbHostAction.innerHTML = `
+            <button type="button" onclick="hostShowPodium()" class="ew-btn" style="cursor:pointer; padding:0.75rem 2rem; font-weight:700;">
+              🏆 View Finale Podium!
+            </button>
+          `;
+        }
+      }
+    }
   }
 
   function applyLivePodium(data) {
     if(questionTimer) { clearInterval(questionTimer); questionTimer = null; }
     currentPhase = 'podium';
     switchPhase('podium');
+    updateLiveTriviaHUD(data);
     const p = data.podium || [];
     if(p[0]) {
       const elN = document.querySelector('#podium-1 .podium-name');
@@ -1254,7 +1346,7 @@ window.hostShowPodium = window.hostShowPodium || function(){};
         if(!state || !state.phase) return;
 
         // If phase changed or current question index changed:
-        if(state.phase !== currentPhase || (state.phase === 'question' && state.current_q_idx !== currentQIdx)) {
+        if(state.phase !== currentPhase || (state.current_q_idx != null && Number(state.current_q_idx) !== currentQIdx)) {
           if(state.phase === 'question') {
             applyLiveQuestion(state);
           } else if(state.phase === 'reveal') {
@@ -1288,6 +1380,11 @@ window.hostShowPodium = window.hostShowPodium || function(){};
       } catch(e) {}
     }, 4000);
     {% endif %}
+  }
+
+  // Initialize live trivia HUD and controls
+  if(isLiveTrivia) {
+    updateLiveTriviaHUD({ phase: currentPhase, current_q_idx: currentQIdx, total_questions: totalQuestions });
   }
 
   // If page loads already in question phase for live trivia, begin countdown

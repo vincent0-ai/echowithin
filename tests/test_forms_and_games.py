@@ -1605,6 +1605,8 @@ class TestLiveMultiplayerTriviaAndThumbnails:
             assert data_reveal['correct_option'] == 'Mars'
             assert data_reveal['counts']['Mars'] == 1
             assert data_reveal['counts']['Venus'] == 1
+            assert data_reveal['state']['current_q_idx'] == 0
+            assert data_reveal['state']['total_questions'] == 2
 
         # Test host transitions to leaderboard
         mock_lobby['live_scores'] = {
@@ -1623,6 +1625,8 @@ class TestLiveMultiplayerTriviaAndThumbnails:
             assert data_lb['ok'] is True
             assert len(data_lb['leaderboard']) == 2
             assert data_lb['leaderboard'][0]['name'] == 'Alice'
+            assert data_lb['state']['current_q_idx'] == 0
+            assert data_lb['state']['total_questions'] == 2
 
         # Test podium finale
         with patch.object(m.game_sessions_conf, 'find_one', return_value=mock_lobby), \
@@ -1637,6 +1641,17 @@ class TestLiveMultiplayerTriviaAndThumbnails:
             assert data_pod['ok'] is True
             assert len(data_pod['podium']) >= 1
             assert data_pod['podium'][0]['name'] == 'Alice'
+
+        # Test lobby HTML does not render legacy "votes" for trivia and includes live HUD IDs
+        with patch.object(m.game_sessions_conf, 'find_one', return_value=mock_lobby), \
+             patch('blueprints.game._is_host', return_value=True), \
+             patch('blueprints.game._get_player_identity', return_value=('host_user_id', 'Host', True)):
+            res_page = auth_client.get(f'/g/{lobby_id}')
+            assert res_page.status_code == 200
+            html_page = res_page.get_data(as_text=True)
+            assert 'votes</div>' not in html_page
+            assert 'id="live-q-total"' in html_page
+            assert 'id="leaderboard-host-action"' in html_page
 
     def test_games_list_thumbnails_and_pin_input(self, auth_client):
         import main as m

@@ -2266,7 +2266,7 @@
             </div>
 
             <!-- Challenge / Games Section -->
-            <div class="bond-expand-section" id="challenge-{{ bond.id }}" style="display:none; padding: 1rem 0;">
+            <div class="bond-expand-section" id="challenge-{{ bond.id }}">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; flex-wrap: wrap; gap: 0.5rem;">
                     <div>
                         <strong style="font-size: 0.95rem; color: var(--primary-dark-color);">Challenge {{ bond.partner_username }}</strong>
@@ -5990,7 +5990,7 @@
     function loadBondH2H(bondId) {
         var summaryEl = document.getElementById('h2h-summary-' + bondId);
         var tableEl = document.getElementById('h2h-table-' + bondId);
-        fetch('/api/bonds/' + encodeURIComponent(bondId) + '/h2h')
+        echoFetch('/api/bonds/' + encodeURIComponent(bondId) + '/h2h')
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (!data || !data.totals) return;
@@ -6036,7 +6036,7 @@
     function sendBondChallenge(bondId, game) {
         var btn = (typeof event !== 'undefined' && event) ? event.currentTarget : null;
         if (btn) btn.disabled = true;
-        fetch('/api/bonds/' + encodeURIComponent(bondId) + '/challenge', {
+        echoFetch('/api/bonds/' + encodeURIComponent(bondId) + '/challenge', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ game: game })

@@ -74,12 +74,12 @@ def subscribe_push():
     if not m.VAPID_PUBLIC_KEY or not m.VAPID_PRIVATE_KEY:
         return jsonify({'error': 'Push notifications not configured'}), 503
     if not m.is_same_origin_request():
-        current_app.logger.warning(f"Blocked cross-origin push subscribe attempt for user {current_user.username}")
+        current_app.logger.warning(f"Blocked cross-origin push subscribe attempt for user {current_user.id}")
         return jsonify({'error': 'Forbidden'}), 403
     try:
         data = request.get_json(silent=True)
     except (OSError, Exception) as e:
-        current_app.logger.warning(f"Failed to read push subscribe request body for user {current_user.username}: {e}")
+        current_app.logger.warning(f"Failed to read push subscribe request body for user {current_user.id}: {e}")
         return jsonify({'error': 'Invalid request body'}), 400
     if not data or not data.get('endpoint') or not data.get('keys'):
         return jsonify({'error': 'Invalid subscription data'}), 400
@@ -93,7 +93,7 @@ def subscribe_push():
             revoked = m.revoked_push_endpoints_conf.find_one({'endpoint': new_endpoint})
             if revoked:
                 current_app.logger.warning(
-                    f"Blocked subscribe attempt for revoked endpoint (user: {current_user.username}, reason: {revoked.get('reason')})"
+                    f"Blocked subscribe attempt for revoked endpoint (user: {current_user.id}, reason: {revoked.get('reason')})"
                 )
                 return jsonify({
                     'error': 'Subscription endpoint has been revoked by push service',
@@ -105,7 +105,7 @@ def subscribe_push():
             'endpoint': {'$ne': new_endpoint}
         })
         if delete_result.deleted_count > 0:
-            current_app.logger.info(f"Cleaned up {delete_result.deleted_count} old push subscription(s) for user {current_user.username}")
+            current_app.logger.info(f"Cleaned up {delete_result.deleted_count} old push subscription(s) for user {current_user.id}")
         now = datetime.datetime.now(datetime.timezone.utc)
         m.push_subscriptions_conf.update_one(
             {'user_id': user_id, 'endpoint': new_endpoint},
@@ -123,7 +123,7 @@ def subscribe_push():
             },
             upsert=True
         )
-        current_app.logger.info(f"Push subscription saved for user {current_user.username}")
+        current_app.logger.info(f"Push subscription saved for user {current_user.id}")
         return jsonify({'success': True, 'message': 'Subscribed to push notifications'})
     except Exception as e:
         current_app.logger.error(f"Failed to save push subscription: {e}")
@@ -137,12 +137,12 @@ def subscribe_push():
 def unsubscribe_push():
     import main as m
     if not m.is_same_origin_request():
-        current_app.logger.warning(f"Blocked cross-origin push unsubscribe attempt for user {current_user.username}")
+        current_app.logger.warning(f"Blocked cross-origin push unsubscribe attempt for user {current_user.id}")
         return jsonify({'error': 'Forbidden'}), 403
     try:
         data = request.get_json(silent=True)
     except (OSError, Exception) as e:
-        current_app.logger.warning(f"Failed to read push unsubscribe request body for user {current_user.username}: {e}")
+        current_app.logger.warning(f"Failed to read push unsubscribe request body for user {current_user.id}: {e}")
         return jsonify({'error': 'Invalid request body'}), 400
     if not data or not data.get('endpoint'):
         return jsonify({'error': 'Invalid request'}), 400
@@ -152,7 +152,7 @@ def unsubscribe_push():
             'endpoint': data['endpoint']
         })
         if result.deleted_count > 0:
-            current_app.logger.info(f"Push subscription removed for user {current_user.username}")
+            current_app.logger.info(f"Push subscription removed for user {current_user.id}")
             return jsonify({'success': True, 'message': 'Unsubscribed from push notifications'})
         else:
             return jsonify({'success': True, 'message': 'Subscription not found'})

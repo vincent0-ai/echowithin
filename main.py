@@ -1885,7 +1885,7 @@ def handle_join_note(data=None, *args, **kwargs):
             
         # PRIVACY: share_id IS the secret link — never log it in plaintext.
         share_fp = hashlib.sha256(str(share_id).encode('utf-8')).hexdigest()[:10]
-        app.logger.info(f"User {user_name} joined note room: fp={share_fp}")
+        app.logger.info(f"User {user_id} joined note room: fp={share_fp}")
 
 @socketio.on('leave_note')
 @authenticated_only
@@ -3677,8 +3677,8 @@ def handle_join_inbox(data=None, *args, **kwargs):
     user_room = f"user_{current_user.id}"
     join_room(user_room)
     # PRIVACY: user_room embeds the user's ObjectId. Keep this at DEBUG to avoid
-    # leaking PII (username + internal id mapping) in production logs.
-    app.logger.debug(f"User {current_user.username} joined private inbox room")
+    # leaking PII in production logs.
+    app.logger.debug(f"User {current_user.id} joined private inbox room")
 
 
 

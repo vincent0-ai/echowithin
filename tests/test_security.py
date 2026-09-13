@@ -218,3 +218,14 @@ class TestAuditLogBackup:
                 assert str(call_arg['user_id']) == user_id
                 assert call_arg['deleted_at'].tzinfo == datetime.timezone.utc
 
+
+def test_mask_email():
+    from security import mask_email
+    assert mask_email("user@example.com") == "u***r@example.com"
+    assert mask_email("ab@domain.com") == "a***@domain.com"
+    assert mask_email("a@domain.com") == "a***@domain.com"
+    assert mask_email("") == "***"
+    assert mask_email(None) == "***"
+    assert mask_email("invalid-email") == "***"
+
+

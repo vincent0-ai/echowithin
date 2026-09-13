@@ -20,6 +20,7 @@ from config import (get_env_variable, ENGAGEMENT_WEIGHTS,
     VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY, FIREBASE_AVAILABLE)
 from utils import (_is_ios_web_push_subscription,
     _remove_stale_push_subscription, _get_user_badge_count)
+from security import mask_email
 import database
 
 messaging = None
@@ -192,13 +193,13 @@ def send_code(email, gen_code=None, retries=3, delay=2):
             msg.html = render_template("verify.html", code=gen_code)
             msg.body = f"Your EchoWithin verification code is: {gen_code}\n\nIf you didn't request this, please ignore this email."
             _get_mail().send(msg)
-            _get_app().logger.info(f"Verification email sent to {email}.")
+            _get_app().logger.info(f"Verification email sent to {mask_email(email)}.")
             return True
         except Exception as e:
-            _get_app().logger.error(f"Attempt {attempt+1} failed to send email to {email}: {e}")
+            _get_app().logger.error(f"Attempt {attempt+1} failed to send email to {mask_email(email)}: {e}")
             time.sleep(delay)
     else:
-        _get_app().logger.error(f"Failed to send verification email to {email} after {retries} attempts.")
+        _get_app().logger.error(f"Failed to send verification email to {mask_email(email)} after {retries} attempts.")
 
 def send_account_deletion_code(email, gen_code=None, retries=3, delay=2):
     for attempt in range(retries):
@@ -215,10 +216,10 @@ def send_account_deletion_code(email, gen_code=None, retries=3, delay=2):
                 "If you did not request account deletion, please change your password immediately."
             )
             _get_mail().send(msg)
-            _get_app().logger.info(f"Account deletion verification code sent to {email}.")
+            _get_app().logger.info(f"Account deletion verification code sent to {mask_email(email)}.")
             return True
         except Exception as e:
-            _get_app().logger.error(f"Attempt {attempt+1} failed to send deletion code to {email}: {e}")
+            _get_app().logger.error(f"Attempt {attempt+1} failed to send deletion code to {mask_email(email)}: {e}")
             time.sleep(delay)
     return False
 
@@ -226,7 +227,7 @@ def send_reset_code(email, reset_token=None, retries=3, delay=2):
     reset_url = ""
     try:
         reset_url = url_for('auth.reset_password', token=reset_token, _external=True)
-        _get_app().logger.debug(f"Generated password reset link for {email}")
+        _get_app().logger.debug(f"Generated password reset link for {mask_email(email)}")
     except Exception:
         pass
     for attempt in range(retries):
@@ -251,13 +252,13 @@ If you didn't request this, please ignore this email.
 This link will expire in 1 hour.
 """
             _get_mail().send(msg)
-            _get_app().logger.info(f"Password reset email sent to {email}")
+            _get_app().logger.info(f"Password reset email sent to {mask_email(email)}")
             return True
         except Exception as e:
-            _get_app().logger.error(f"Attempt {attempt+1} failed to send reset email to {email}: {e}", exc_info=True)
+            _get_app().logger.error(f"Attempt {attempt+1} failed to send reset email to {mask_email(email)}: {e}", exc_info=True)
             time.sleep(delay)
     else:
-        _get_app().logger.error(f"Failed to send password reset email to {email} after {retries} attempts.")
+        _get_app().logger.error(f"Failed to send password reset email to {mask_email(email)} after {retries} attempts.")
 
 
 @rq.job
@@ -1010,7 +1011,7 @@ def send_log_email_job():
             )
 
             _get_mail().send(msg)
-            _get_app().logger.info(f"Log file email sent to {developer_email}.")
+            _get_app().logger.info(f"Log file email sent to {mask_email(developer_email)}.")
             open(log_file_path, 'w').close()
     except Exception as e:
         _get_app().logger.error(f"Failed to send log file email: {e}", exc_info=True)

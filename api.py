@@ -457,7 +457,7 @@ def api_create_note():
     raw_len = len(content)
     content = content[:max_chars]
     if raw_len > max_chars:
-        m.app.logger.warning(f"API note truncated for user {current_user.username} (tier={current_user.account_tier}): {raw_len} -> {max_chars} chars")
+        m.app.logger.warning(f"API note truncated for user {current_user.id} (tier={current_user.account_tier}): {raw_len} -> {max_chars} chars")
     encrypted_content = m.encrypt_note(content, user_id=current_user.id)
     
     result = m.personal_posts_conf.insert_one({
@@ -501,7 +501,7 @@ def api_edit_note(note_id):
     raw_len = len(content)
     content = content[:max_chars]
     if raw_len > max_chars:
-        m.app.logger.warning(f"API edit truncated for user {current_user.username} (tier={current_user.account_tier}): {raw_len} -> {max_chars} chars")
+        m.app.logger.warning(f"API edit truncated for user {current_user.id} (tier={current_user.account_tier}): {raw_len} -> {max_chars} chars")
 
     # Snapshot for version control
     if note.get('content'):

@@ -82,6 +82,19 @@ def parse_iso_utc(value):
         return None
 
 
+def mask_email(email: str) -> str:
+    """Mask email address for privacy-safe logging and display (e.g. j***e@example.com)."""
+    if not email or not isinstance(email, str) or '@' not in email:
+        return '***'
+    parts = email.split('@', 1)
+    name, domain = parts[0], parts[1]
+    if len(name) <= 2:
+        masked_name = (name[0] + '***') if name else '***'
+    else:
+        masked_name = name[0] + '***' + name[-1]
+    return f"{masked_name}@{domain}"
+
+
 def build_unified_diff_text(original_text, updated_text, context=3, max_lines=500):
     """Build a compact unified diff string for previewing note changes."""
     old_lines = (original_text or '').splitlines()

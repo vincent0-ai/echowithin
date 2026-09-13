@@ -679,7 +679,7 @@ def mobile_auth():
                 warm_user_fernet(str(user['_id']))  # Pre-derive Fernet key for notes
                 _record_login_session(str(user['_id']), 'mobile_app')
                 _app_token = create_app_token(user['_id'])
-                current_app.logger.info(f"Successfully bridged mobile session for user {user['username']} via OTLT.")
+                current_app.logger.info(f"Successfully bridged mobile session for user {user['_id']} via OTLT.")
                 flash(f"Welcome back to the app, {user['username']}!", "success")
                 resp = redirect(url_for('pages.home'))
                 resp.set_cookie('x_app_token', _app_token, max_age=90*24*3600, httponly=True, secure=True, samesite='Lax')

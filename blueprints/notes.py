@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, math, hashlib, hmac, secrets, requests
-from security import limits, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip, _bf_hash_for_log
+from security import limits, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip, _bf_hash_for_log, mask_email
 from config import get_env_variable
 try:
     from jigsawstack import JigsawStack
@@ -742,7 +742,7 @@ def create_personal_post():
         raw_content = content.strip()
         content = raw_content[:max_chars]
         if len(raw_content) > max_chars:
-            current_app.logger.warning(f"Note content truncated for user {current_user.username} (tier={current_user.account_tier}): {len(raw_content)} -> {max_chars} chars")
+            current_app.logger.warning(f"Note content truncated for user {current_user.id} (tier={current_user.account_tier}): {len(raw_content)} -> {max_chars} chars")
         # Encrypt the note content before storing
         encrypted_content = m.encrypt_note(content, user_id=current_user.id)
         raw_reference = request.form.get('reference', '').strip()[:200]
@@ -791,7 +791,7 @@ def create_personal_post_json():
     raw_len = len(content)
     content = content[:max_chars]
     if raw_len > max_chars:
-        current_app.logger.warning(f"Note content truncated for user {current_user.username} (tier={current_user.account_tier}): {raw_len} -> {max_chars} chars")
+        current_app.logger.warning(f"Note content truncated for user {current_user.id} (tier={current_user.account_tier}): {raw_len} -> {max_chars} chars")
     encrypted_content = m.encrypt_note(content, user_id=current_user.id)
     raw_reference = data.get('reference', '').strip()[:200]
     raw_tags = [t.strip() for t in data.get('tags', '').split(',') if t.strip()] if isinstance(data.get('tags'), str) else (data.get('tags') or [])
@@ -1062,7 +1062,7 @@ def edit_personal_post(post_id):
         raw_len = len(content)
         content = content[:max_chars]
         if raw_len > max_chars:
-            current_app.logger.warning(f"Edit truncated for user {current_user.username} (tier={current_user.account_tier}): {raw_len} -> {max_chars} chars")
+            current_app.logger.warning(f"Edit truncated for user {current_user.id} (tier={current_user.account_tier}): {raw_len} -> {max_chars} chars")
         obj_id = m.safe_object_id(post_id)
         if not obj_id:
             return jsonify({'error': 'Invalid note ID'}), 400
@@ -1754,13 +1754,7 @@ def app_lock_forgot():
         current_app.logger.error(f"Failed to send PIN reset email to masked account: {e}")
         return jsonify({'error': 'Failed to send verification email. Please try again.'}), 500
 
-    # Mask email for display (e.g., u***r@example.com)
-    parts = email.split('@')
-    if len(parts[0]) > 2:
-        masked = parts[0][0] + '***' + parts[0][-1] + '@' + parts[1]
-    else:
-        masked = parts[0][0] + '***@' + parts[1]
-
+    masked = mask_email(email)
     return jsonify({'success': True, 'masked_email': masked, 'message': 'Verification code sent to your email.'})
 
 

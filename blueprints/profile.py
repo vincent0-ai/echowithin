@@ -179,7 +179,7 @@ def profile_settings(username):
                     update_data['profile_image_url'] = upload_result.get('secure_url')
                     update_data['profile_image_public_id'] = upload_result.get('public_id')
                 except Exception as e:
-                    current_app.logger.error(f"Cloudinary avatar upload failed for user {username}: {e}")
+                    current_app.logger.error(f"Cloudinary avatar upload failed for user {user['_id']}: {e}")
                     flash("There was an error uploading your profile picture.", "danger")
             else:
                 flash("Invalid image format. Please use png, jpg, jpeg, or gif.", "danger")
@@ -199,7 +199,7 @@ def profile_settings(username):
                         login_user(m.User(fresh_user), remember=True)
                 flash('Settings updated successfully!', 'success')
             except Exception as e:
-                current_app.logger.error(f"Failed to update settings for {username}: {e}")
+                current_app.logger.error(f"Failed to update settings for user {user['_id']}: {e}")
                 flash('Failed to update settings. Please try again later.', 'danger')
         redirect_username = update_data.get('username', username)
         return redirect(url_for('profile.profile_settings', username=redirect_username))

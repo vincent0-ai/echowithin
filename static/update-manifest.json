@@ -1,7 +1,7 @@
 {
-  "versionCode": 40,
-  "versionName": "1.10.6",
+  "versionCode": 41,
+  "versionName": "1.10.7",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.10.6 \u26a1 Sync Fix:\n\u2022 Fixed sync showing false success when offline/server unreachable\n\u2022 Notes created/edited offline now always sync when connection is restored\n\u2022 Auto-sync after note operations respects 5-min cooldown (manual Sync Now still bypasses)\n\u2022 Pin now works instantly offline for local notes (no API timeout delay)",
-  "sha256": "E425E6281D53E10C3D56423125AC770310AEC2C091591E2E6B222D24DA67E2DF"
+  "changelog": "v1.10.7 Performance, Timezone & Games Update:\n• Fixed scrolling stutter and lag on notes list by replacing regex stripping with single-pass snippet parsing and removing animateItem\n• Instant note opening: immediate local SQLite lookup and native Compose markdown rendering for instant display without WebView blocking\n• Fixed time-unaware note display with timezone-aware local time conversion (relative & full datetime)\n• Added note creation date and last updated date display\n• Added Games & Arcade feature: interactive Tic-Tac-Toe (AI & 2P), Connect Four, Snake, plus web room launcher with PIN join",
+  "sha256": "E289FAC1BAC11AACD9AD87A72172B8DB1675F14B58FF75C8DFDD2AB99C0844CA"
 }

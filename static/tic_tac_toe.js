@@ -687,9 +687,11 @@
     if (typeof io === 'undefined') return;
 
     state.socket = io({ transports: ['websocket', 'polling'] });
+    window._gameSocket = state.socket;
 
     state.socket.on('ttt_room_joined', data => {
       state.roomId = data.room_id;
+      window._gameRoomId = data.room_id;
       state.isHost = data.is_host;
       state.mySymbol = data.symbol;
       state.opponentJoined = !!data.guest_name;
@@ -733,6 +735,7 @@
     state.socket.on('ttt_match_found', data => {
       state.isSearching = false;
       state.roomId = data.room_id;
+      window._gameRoomId = data.room_id;
       state.isHost = data.is_host;
       state.mySymbol = data.symbol;
       state.opponentJoined = true;

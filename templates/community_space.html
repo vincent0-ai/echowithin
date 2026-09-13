@@ -1008,6 +1008,19 @@
         {% endfor %}
     </div>
     {% endif %}
+
+    <!-- Community Tournaments -->
+    <div style="margin-top:1.5rem;" id="tournaments-section">
+        <div class="section-label" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Tournaments</span>
+            {% if is_admin %}
+            <button type="button" onclick="document.getElementById('createTournamentModal').style.display='flex'" style="background:none;border:1px solid #ddd;padding:0.15rem 0.5rem;border-radius:4px;font-size:0.7rem;cursor:pointer;color:#555;">+ New Tournament</button>
+            {% endif %}
+        </div>
+        <div id="tournaments-container">
+            <div style="text-align:center;padding:1rem;color:#aaa;font-size:0.85rem;">Loading tournaments...</div>
+        </div>
+    </div>
 </div>
 
 <!-- Toast -->
@@ -1566,6 +1579,48 @@
     <img id="expandImage" src="" alt="">
 </div>
 
+<!-- Create Tournament Modal -->
+{% if is_admin %}
+<div id="createTournamentModal" style="display:none;position:fixed;z-index:1000;left:0;top:0;right:0;bottom:0;width:100%;height:100%;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;backdrop-filter:blur(3px);box-sizing:border-box;padding:16px;" onclick="if(event.target===this)this.style.display='none'">
+    <div style="background:#fff;padding:1.5rem;border-radius:12px;width:min(90%,420px);box-shadow:0 10px 30px rgba(0,0,0,0.2);position:relative;max-height:90vh;overflow-y:auto;box-sizing:border-box;margin:auto;">
+        <span onclick="document.getElementById('createTournamentModal').style.display='none'" style="position:absolute;top:0.75rem;right:1rem;font-size:1.3rem;color:#aaa;cursor:pointer;">&times;</span>
+        <h3 style="margin:0 0 1rem 0;color:#3e2217;font-size:1.15rem;">Create Community Tournament</h3>
+        <form id="createTournamentForm" onsubmit="handleCreateTournament(event)">
+            <div style="margin-bottom:0.75rem;">
+                <label style="display:block;font-size:0.8rem;font-weight:600;margin-bottom:0.25rem;color:#555;">Tournament Title</label>
+                <input type="text" id="tourn-title" placeholder="e.g. Weekly Connect Four Championship" maxlength="100" style="width:100%;padding:0.5rem;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;box-sizing:border-box;">
+            </div>
+            <div style="margin-bottom:0.75rem;">
+                <label style="display:block;font-size:0.8rem;font-weight:600;margin-bottom:0.25rem;color:#555;">Game</label>
+                <select id="tourn-game" style="width:100%;padding:0.5rem;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;box-sizing:border-box;">
+                    <option value="tic_tac_toe">Tic-Tac-Toe</option>
+                    <option value="connect_four">Connect Four</option>
+                    <option value="dots_and_boxes">Dots &amp; Boxes</option>
+                    <option value="ping_pong">Ping Pong</option>
+                    <option value="slime_volleyball">Slime Volleyball</option>
+                </select>
+            </div>
+            <div style="display:flex;gap:0.75rem;margin-bottom:1rem;">
+                <div style="flex:1;">
+                    <label style="display:block;font-size:0.8rem;font-weight:600;margin-bottom:0.25rem;color:#555;">Max Players</label>
+                    <select id="tourn-max-players" style="width:100%;padding:0.5rem;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;box-sizing:border-box;">
+                        <option value="4">4 Players</option>
+                        <option value="8">8 Players</option>
+                        <option value="16" selected>16 Players</option>
+                        <option value="32">32 Players</option>
+                    </select>
+                </div>
+                <div style="flex:1;">
+                    <label style="display:block;font-size:0.8rem;font-weight:600;margin-bottom:0.25rem;color:#555;">Sign-Up Hours</label>
+                    <input type="number" id="tourn-reg-hours" value="48" min="1" max="168" style="width:100%;padding:0.5rem;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;box-sizing:border-box;">
+                </div>
+            </div>
+            <button type="submit" id="btn-submit-tourn" style="width:100%;background:#3e2217;color:white;border:none;padding:0.6rem;border-radius:6px;font-weight:600;cursor:pointer;">Create Tournament</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 <!-- Report Community Modal -->
 {% if not is_admin %}
 <div id="reportModal" style="display:none;position:fixed;z-index:1000;left:0;top:0;right:0;bottom:0;width:100%;width:100vw;width:100dvw;height:100%;height:100vh;height:100dvh;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;backdrop-filter:blur(3px);box-sizing:border-box;padding:env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px) env(safe-area-inset-bottom, 16px) env(safe-area-inset-left, 16px);" onclick="if(event.target===this)this.style.display='none'">
@@ -1678,5 +1733,231 @@
     }
 </script>
 {% endif %}
+
+<script>
+(function() {
+    const communityId = '{{ community._id }}';
+    const currentUserId = '{{ current_user.id if current_user.is_authenticated else "" }}';
+    const isAdmin = {{ 'true' if is_admin else 'false' }};
+    const isMember = {{ 'true' if is_member else 'false' }};
+
+    function getCsrf() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+    }
+
+    function renderBracket(tourn) {
+        if (!tourn.bracket || tourn.bracket.length === 0) return '';
+        const totalRounds = tourn.total_rounds || 1;
+        const gameRoutes = {
+            'tic_tac_toe': '/games/tic-tac-toe',
+            'connect_four': '/games/connect-four',
+            'dots_and_boxes': '/games/dots-and-boxes',
+            'ping_pong': '/games/ping-pong',
+            'slime_volleyball': '/games/slime-volleyball',
+        };
+        const gameRoute = gameRoutes[tourn.game] || '/games';
+
+        let html = '<div style="display:flex;gap:1rem;overflow-x:auto;padding:0.75rem 0;align-items:flex-start;">';
+        for (let r = 1; r <= totalRounds; r++) {
+            const roundMatches = tourn.bracket.filter(m => m.round === r);
+            const roundLabel = r === totalRounds ? 'Finals' : (r === totalRounds - 1 ? 'Semifinals' : 'Round ' + r);
+            html += '<div style="flex:1;min-width:170px;display:flex;flex-direction:column;gap:0.6rem;">' +
+                '<div style="font-size:0.72rem;font-weight:700;color:#888;text-transform:uppercase;text-align:center;padding-bottom:0.25rem;border-bottom:1px solid #eee;">' + roundLabel + '</div>';
+            roundMatches.forEach(m => {
+                const isUserInMatch = (m.player_a === currentUserId || m.player_b === currentUserId);
+                const isMatchReady = (m.player_a && m.player_b && m.status !== 'completed' && m.status !== 'bye');
+                const aWon = m.winner_id && m.winner_id === m.player_a;
+                const bWon = m.winner_id && m.winner_id === m.player_b;
+
+                html += '<div style="background:#fafafa;border:1px solid ' + (isUserInMatch && isMatchReady ? '#3e2217' : '#e5e5e5') + ';border-radius:6px;padding:0.5rem;font-size:0.78rem;">' +
+                    '<div style="display:flex;justify-content:space-between;padding:0.15rem 0;' + (aWon ? 'font-weight:700;color:#15803d;' : '') + '">' +
+                        '<span>' + (m.player_a_seed ? '#' + m.player_a_seed + ' ' : '') + (m.player_a_name || (m.status === 'bye' ? 'BYE' : 'TBD')) + '</span>' +
+                        (aWon ? '<span>&#10003;</span>' : '') +
+                    '</div>' +
+                    '<div style="display:flex;justify-content:space-between;padding:0.15rem 0;border-top:1px dashed #eee;' + (bWon ? 'font-weight:700;color:#15803d;' : '') + '">' +
+                        '<span>' + (m.player_b_seed ? '#' + m.player_b_seed + ' ' : '') + (m.player_b_name || (m.status === 'bye' ? 'BYE' : 'TBD')) + '</span>' +
+                        (bWon ? '<span>&#10003;</span>' : '') +
+                    '</div>';
+
+                if (isUserInMatch && isMatchReady) {
+                    const roomCode = 'tourn_' + tourn.id.slice(-6) + '_r' + m.round + '_m' + m.match_index;
+                    const playUrl = gameRoute + '?room=' + encodeURIComponent(roomCode) + '&tournament_id=' + encodeURIComponent(tourn.id);
+                    html += '<div style="margin-top:0.4rem;text-align:center;">' +
+                        '<a href="' + playUrl + '" style="display:inline-block;background:#3e2217;color:white;text-decoration:none;padding:0.25rem 0.6rem;border-radius:4px;font-size:0.75rem;font-weight:600;">Play Match</a>' +
+                    '</div>';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+        }
+        html += '</div>';
+        return html;
+    }
+
+    function loadTournaments() {
+        const container = document.getElementById('tournaments-container');
+        if (!container) return;
+        fetch('/api/community/' + encodeURIComponent(communityId) + '/tournaments')
+            .then(r => r.json())
+            .then(data => {
+                const list = data.tournaments || [];
+                if (list.length === 0) {
+                    container.innerHTML = '<div style="background:white;border:1px solid #eee;border-radius:8px;padding:1.5rem;text-align:center;color:#888;font-size:0.85rem;">No tournaments yet. ' + (isAdmin ? 'Click "+ New Tournament" to host one!' : 'Check back later!') + '</div>';
+                    return;
+                }
+
+                container.innerHTML = list.map(t => {
+                    const isRegistered = (t.participants || []).some(p => p.user_id === currentUserId);
+                    let statusBadge = '';
+                    if (t.status === 'registration') {
+                        statusBadge = '<span style="background:#fef3c7;color:#92400e;padding:0.2rem 0.5rem;border-radius:4px;font-size:0.72rem;font-weight:600;">Registration Open</span>';
+                    } else if (t.status === 'in_progress') {
+                        statusBadge = '<span style="background:#dcfce7;color:#166534;padding:0.2rem 0.5rem;border-radius:4px;font-size:0.72rem;font-weight:600;">In Progress &bull; Round ' + t.current_round + ' of ' + t.total_rounds + '</span>';
+                    } else if (t.status === 'completed') {
+                        statusBadge = '<span style="background:#e0f2fe;color:#075985;padding:0.2rem 0.5rem;border-radius:4px;font-size:0.72rem;font-weight:600;">Completed</span>';
+                    } else {
+                        statusBadge = '<span style="background:#f3f4f6;color:#6b7280;padding:0.2rem 0.5rem;border-radius:4px;font-size:0.72rem;">Cancelled</span>';
+                    }
+
+                    let actionsHtml = '';
+                    if (t.status === 'registration') {
+                        if (isMember && !isRegistered) {
+                            actionsHtml += '<button onclick="window.__registerTourn(\'' + t.id + '\')" style="background:#3e2217;color:white;border:none;padding:0.35rem 0.75rem;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;">Join Tournament</button>';
+                        } else if (isRegistered) {
+                            actionsHtml += '<span style="font-size:0.78rem;color:#15803d;font-weight:600;">&#10003; You are registered</span>';
+                        }
+                        if (isAdmin) {
+                            actionsHtml += ' <button onclick="window.__startTourn(\'' + t.id + '\')" style="background:#15803d;color:white;border:none;padding:0.35rem 0.75rem;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;margin-left:0.4rem;" ' + (t.participant_count < 2 ? 'disabled title="Need at least 2 players"' : '') + '>Start Tournament</button>';
+                            actionsHtml += ' <button onclick="window.__cancelTourn(\'' + t.id + '\')" style="background:none;border:1px solid #ddd;color:#888;padding:0.35rem 0.55rem;border-radius:6px;font-size:0.78rem;cursor:pointer;margin-left:0.4rem;">Cancel</button>';
+                        }
+                    } else if (t.status === 'in_progress' && isAdmin) {
+                        actionsHtml += '<button onclick="window.__cancelTourn(\'' + t.id + '\')" style="background:none;border:1px solid #ddd;color:#888;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.72rem;cursor:pointer;">Cancel Tournament</button>';
+                    }
+
+                    let rosterHtml = '';
+                    if (t.status === 'registration' && t.participants && t.participants.length > 0) {
+                        rosterHtml = '<div style="margin-top:0.6rem;display:flex;gap:0.3rem;flex-wrap:wrap;">' +
+                            t.participants.map(p => '<span style="background:#f5f5f5;border:1px solid #e5e5e5;padding:0.15rem 0.45rem;border-radius:4px;font-size:0.75rem;color:#555;">' + (p.username || 'Player') + '</span>').join('') +
+                        '</div>';
+                    }
+
+                    return '<div style="background:white;border:1px solid #eee;border-radius:8px;padding:1rem;margin-bottom:0.75rem;">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.4rem;">' +
+                            '<div>' +
+                                '<strong style="font-size:0.95rem;color:#3e2217;">' + t.title + '</strong>' +
+                                '<span style="margin-left:0.5rem;font-size:0.75rem;color:#666;background:#f5f5f5;padding:0.15rem 0.45rem;border-radius:4px;">' + (t.game_label || t.game) + '</span>' +
+                            '</div>' +
+                            '<div>' + statusBadge + '</div>' +
+                        '</div>' +
+                        '<div style="font-size:0.78rem;color:#888;margin-bottom:0.6rem;">' +
+                            t.participant_count + ' / ' + t.max_players + ' players registered' +
+                        '</div>' +
+                        (actionsHtml ? '<div style="margin-bottom:0.6rem;">' + actionsHtml + '</div>' : '') +
+                        rosterHtml +
+                        (t.status === 'in_progress' || t.status === 'completed' ? renderBracket(t) : '') +
+                    '</div>';
+                }).join('');
+            })
+            .catch(err => {
+                container.innerHTML = '<div style="text-align:center;padding:0.8rem;color:#c62828;font-size:0.82rem;">Failed to load tournaments.</div>';
+            });
+    }
+
+    window.__registerTourn = function(tId) {
+        fetch('/api/tournament/' + encodeURIComponent(tId) + '/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                if (typeof showToast === 'function') showToast(data.error);
+                else alert(data.error);
+            } else {
+                if (typeof showToast === 'function') showToast('Registered for tournament!');
+                loadTournaments();
+            }
+        })
+        .catch(err => alert('Registration failed.'));
+    };
+
+    window.__startTourn = function(tId) {
+        if (!confirm('Start this tournament? Seeding and bracket will be generated.')) return;
+        fetch('/api/tournament/' + encodeURIComponent(tId) + '/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                if (typeof showToast === 'function') showToast(data.error);
+                else alert(data.error);
+            } else {
+                if (typeof showToast === 'function') showToast('Tournament started!');
+                loadTournaments();
+            }
+        })
+        .catch(err => alert('Failed to start tournament.'));
+    };
+
+    window.__cancelTourn = function(tId) {
+        if (!confirm('Cancel this tournament?')) return;
+        fetch('/api/tournament/' + encodeURIComponent(tId) + '/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                if (typeof showToast === 'function') showToast(data.error);
+                else alert(data.error);
+            } else {
+                if (typeof showToast === 'function') showToast('Tournament cancelled.');
+                loadTournaments();
+            }
+        })
+        .catch(err => alert('Failed to cancel tournament.'));
+    };
+
+    window.handleCreateTournament = function(e) {
+        e.preventDefault();
+        const title = document.getElementById('tourn-title').value.trim();
+        const game = document.getElementById('tourn-game').value;
+        const maxPlayers = parseInt(document.getElementById('tourn-max-players').value, 10);
+        const regHours = parseInt(document.getElementById('tourn-reg-hours').value, 10);
+        const btn = document.getElementById('btn-submit-tourn');
+        btn.disabled = true;
+
+        fetch('/api/community/' + encodeURIComponent(communityId) + '/tournament/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+            body: JSON.stringify({
+                title: title,
+                game: game,
+                max_players: maxPlayers,
+                registration_hours: regHours
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            if (data.error) {
+                if (typeof showToast === 'function') showToast(data.error);
+                else alert(data.error);
+            } else {
+                document.getElementById('createTournamentModal').style.display = 'none';
+                if (typeof showToast === 'function') showToast('Tournament created!');
+                loadTournaments();
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            alert('Failed to create tournament.');
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', loadTournaments);
+})();
+</script>
 
 {% endblock %}

@@ -1908,6 +1908,10 @@
                     onclick="toggleSection('pulses-{{ bond.id }}', this); loadPulses('{{ bond.id }}')">
                     Pulses{% if bond.unread_sections.get('pulses') %}<span class="section-badge" id="badge-pulses-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-pulses-{{ bond.id }}" style="display:none;"></span>{% endif %}
                 </button>
+                <button class="btn btn-bond-primary btn-bond-section"
+                    onclick="toggleSection('challenge-{{ bond.id }}', this); loadBondH2H('{{ bond.id }}')">
+                    Challenge
+                </button>
                 <button class="btn btn-bond-danger" data-bond-id="{{ bond.id }}" data-partner="{{ bond.partner_username }}" onclick="breakBond(this.dataset.bondId, this.dataset.partner)">
                     End Bond
                 </button>
@@ -2257,6 +2261,50 @@
                     </div>
                     <div id="timeline-load-more-{{ bond.id }}" style="display:none;text-align:center;margin-top:0.5rem;">
                         <button class="btn btn-bond-secondary" style="font-size:0.78rem;padding:0.3rem 0.8rem;">Load more</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Challenge / Games Section -->
+            <div class="bond-expand-section" id="challenge-{{ bond.id }}" style="display:none; padding: 1rem 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <div>
+                        <strong style="font-size: 0.95rem; color: var(--primary-dark-color);">Challenge {{ bond.partner_username }}</strong>
+                        <div style="font-size: 0.78rem; color: var(--text-secondary);">Pick a game to start a 1v1 match</div>
+                    </div>
+                    <div id="h2h-summary-{{ bond.id }}" style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); background: var(--surface-bg); padding: 0.3rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color);">
+                        Loading records...
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
+                    <button type="button" class="btn btn-bond-outline" style="text-align: center; padding: 0.6rem 0.4rem;" onclick="sendBondChallenge('{{ bond.id }}', 'tic_tac_toe')">
+                        <div style="font-weight: 600; font-size: 0.85rem;">Tic-Tac-Toe</div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary);" id="h2h-pill-tic_tac_toe-{{ bond.id }}">Challenge</div>
+                    </button>
+                    <button type="button" class="btn btn-bond-outline" style="text-align: center; padding: 0.6rem 0.4rem;" onclick="sendBondChallenge('{{ bond.id }}', 'connect_four')">
+                        <div style="font-weight: 600; font-size: 0.85rem;">Connect Four</div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary);" id="h2h-pill-connect_four-{{ bond.id }}">Challenge</div>
+                    </button>
+                    <button type="button" class="btn btn-bond-outline" style="text-align: center; padding: 0.6rem 0.4rem;" onclick="sendBondChallenge('{{ bond.id }}', 'dots_and_boxes')">
+                        <div style="font-weight: 600; font-size: 0.85rem;">Dots &amp; Boxes</div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary);" id="h2h-pill-dots_and_boxes-{{ bond.id }}">Challenge</div>
+                    </button>
+                    <button type="button" class="btn btn-bond-outline" style="text-align: center; padding: 0.6rem 0.4rem;" onclick="sendBondChallenge('{{ bond.id }}', 'ping_pong')">
+                        <div style="font-weight: 600; font-size: 0.85rem;">Ping Pong</div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary);" id="h2h-pill-ping_pong-{{ bond.id }}">Challenge</div>
+                    </button>
+                    <button type="button" class="btn btn-bond-outline" style="text-align: center; padding: 0.6rem 0.4rem;" onclick="sendBondChallenge('{{ bond.id }}', 'slime_volleyball')">
+                        <div style="font-weight: 600; font-size: 0.85rem;">Slime Volleyball</div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary);" id="h2h-pill-slime_volleyball-{{ bond.id }}">Challenge</div>
+                    </button>
+                </div>
+
+                <!-- Detailed H2H History Table -->
+                <div style="background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;">Head-to-Head History</div>
+                    <div id="h2h-table-{{ bond.id }}" style="font-size: 0.82rem; color: var(--text-secondary);">
+                        No matches played yet. Challenge your partner above!
                     </div>
                 </div>
             </div>
@@ -5929,6 +5977,116 @@
         socket.on('bond_unread_update', function(data) {
             var badge = document.getElementById('badge-' + data.section + '-' + data.bond_id);
             if (badge) badge.style.display = '';
+        });
+
+        socket.on('bond_game_challenge', function(data) {
+            if (data && data.challenger_name && data.game_label) {
+                showBondChallengePrompt(data);
+            }
+        });
+    }
+
+    // --- Bond Game Challenges & Head-to-Head ---
+    function loadBondH2H(bondId) {
+        var summaryEl = document.getElementById('h2h-summary-' + bondId);
+        var tableEl = document.getElementById('h2h-table-' + bondId);
+        fetch('/api/bonds/' + encodeURIComponent(bondId) + '/h2h')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data || !data.totals) return;
+                var t = data.totals;
+                var partner = data.partner_name || 'Partner';
+                if (summaryEl) {
+                    if (t.total > 0) {
+                        summaryEl.textContent = 'You ' + t.my_wins + ' — ' + t.partner_wins + ' ' + partner + (t.draws > 0 ? ' (' + t.draws + ' draws)' : '');
+                    } else {
+                        summaryEl.textContent = 'No matches yet';
+                    }
+                }
+
+                if (Array.isArray(data.games)) {
+                    data.games.forEach(function(g) {
+                        var pill = document.getElementById('h2h-pill-' + g.game + '-' + bondId);
+                        if (pill) {
+                            pill.textContent = g.my_wins + 'W - ' + g.partner_wins + 'L' + (g.draws ? ' (' + g.draws + 'D)' : '');
+                            pill.style.color = g.my_wins > g.partner_wins ? 'var(--success-color, #22c55e)' : 'var(--text-secondary)';
+                        }
+                    });
+
+                    if (tableEl) {
+                        if (data.games.length === 0) {
+                            tableEl.innerHTML = '<div style="text-align:center;padding:0.5rem;color:var(--text-secondary);">No games played yet. Challenge your partner above to start a match!</div>';
+                        } else {
+                            var rows = data.games.map(function(g) {
+                                return '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0;border-bottom:1px solid var(--border-color);">' +
+                                    '<span style="font-weight:600;">' + (g.game_label || g.game) + '</span>' +
+                                    '<span style="font-weight:700;">' + g.my_wins + 'W · ' + g.partner_wins + 'L' + (g.draws ? ' · ' + g.draws + 'D' : '') + '</span>' +
+                                '</div>';
+                            }).join('');
+                            tableEl.innerHTML = rows;
+                        }
+                    }
+                }
+            })
+            .catch(function(err) {
+                if (summaryEl) summaryEl.textContent = 'Error loading records';
+            });
+    }
+
+    function sendBondChallenge(bondId, game) {
+        var btn = (typeof event !== 'undefined' && event) ? event.currentTarget : null;
+        if (btn) btn.disabled = true;
+        fetch('/api/bonds/' + encodeURIComponent(bondId) + '/challenge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game: game })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (btn) btn.disabled = false;
+            if (data.error) {
+                if (window.showCustomToast) showCustomToast(data.error, 'error');
+                else alert(data.error);
+                return;
+            }
+            if (data.game_url) {
+                if (window.showCustomToast) showCustomToast('Challenge sent! Opening game room...', 'success');
+                setTimeout(function() {
+                    window.location.href = data.game_url;
+                }, 400);
+            }
+        })
+        .catch(function(err) {
+            if (btn) btn.disabled = false;
+            alert('Failed to send challenge. Please try again.');
+        });
+    }
+
+    function showBondChallengePrompt(data) {
+        var existing = document.getElementById('bond-incoming-challenge-modal');
+        if (existing) existing.remove();
+
+        var modal = document.createElement('div');
+        modal.id = 'bond-incoming-challenge-modal';
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:99999;padding:1rem;';
+        modal.innerHTML = '<div style="background:var(--surface-bg,#fff);border:1px solid var(--border-color);border-radius:12px;max-width:380px;width:100%;padding:1.5rem;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.3);">' +
+            '<h3 style="margin:0 0 0.5rem 0;color:var(--text-dark-color);font-size:1.2rem;">Game Challenge!</h3>' +
+            '<p style="margin:0 0 1.25rem 0;color:var(--text-secondary);font-size:0.9rem;"><strong>' + (data.challenger_name || 'Your partner') + '</strong> challenged you to a game of <strong>' + (data.game_label || data.game) + '</strong>!</p>' +
+            '<div style="display:flex;gap:0.75rem;justify-content:center;">' +
+                '<button type="button" id="btn-decline-challenge" class="btn btn-bond-outline" style="flex:1;padding:0.6rem;cursor:pointer;">Decline</button>' +
+                '<button type="button" id="btn-accept-challenge" class="btn btn-bond-primary" style="flex:1;padding:0.6rem;font-weight:700;cursor:pointer;">Accept &amp; Play</button>' +
+            '</div>' +
+        '</div>';
+        document.body.appendChild(modal);
+
+        document.getElementById('btn-decline-challenge').addEventListener('click', function() {
+            modal.remove();
+        });
+        document.getElementById('btn-accept-challenge').addEventListener('click', function() {
+            modal.remove();
+            if (data.game_url) {
+                window.location.href = data.game_url;
+            }
         });
     }
 

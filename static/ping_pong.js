@@ -898,10 +898,12 @@
     if (typeof io === 'undefined') return;
 
     state.socket = io();
+    window._gameSocket = state.socket;
 
     state.socket.on('pong_room_joined', (data) => {
       data = data || {};
       state.roomId = data.room_id;
+      window._gameRoomId = data.room_id;
       state.isHost = data.is_host;
       state.playerIndex = data.player;
       state.opponentName = data.is_host ? (data.guest_name || 'Opponent') : (data.host_name || 'Host');
@@ -1004,6 +1006,7 @@
 
     state.socket.on('pong_match_found', (data) => {
       state.roomId = data.room_id;
+      window._gameRoomId = data.room_id;
       state.isHost = data.is_host;
       state.playerIndex = data.player;
       state.opponentName = data.is_host ? data.guest_name : data.host_name;
@@ -1351,6 +1354,15 @@
       }
     }
   });
+
+  // Check URL room param
+  const pongUrlRoom = new URLSearchParams(window.location.search).get('room');
+  if (pongUrlRoom) {
+    initSocket();
+    if (state.socket) {
+      state.socket.emit('join_pong_room', { room_id: pongUrlRoom });
+    }
+  }
 
   // Start loop & stats UI
   updateStatsUI();

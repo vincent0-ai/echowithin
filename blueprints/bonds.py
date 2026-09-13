@@ -6935,3 +6935,142 @@ def api_process_calendar_reminders():
     return jsonify({'success': True, 'reminders_dispatched': dispatched})
 
 
+# --- Bond Game Challenges & Head-to-Head Records ---
+
+BOND_GAME_LABELS = {
+    'tic_tac_toe': 'Tic-Tac-Toe',
+    'connect_four': 'Connect Four',
+    'dots_and_boxes': 'Dots & Boxes',
+    'ping_pong': 'Ping Pong',
+    'slime_volleyball': 'Slime Volleyball',
+}
+
+
+@bp.route('/api/bonds/<bond_id>/challenge', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_bond_challenge(bond_id):
+    """Send a game challenge to bond partner."""
+    import main as m
+    user_id_str = current_user.id if isinstance(current_user.id, str) else str(current_user.id)
+
+    bond_doc = m.bonds_conf.find_one({'_id': safe_object_id(bond_id)})
+    if not bond_doc:
+        return jsonify({'error': 'Bond not found'}), 404
+
+    ua = str(bond_doc.get('user_a_id', ''))
+    ub = str(bond_doc.get('user_b_id', ''))
+    if user_id_str not in (ua, ub):
+        return jsonify({'error': 'Not a member of this bond'}), 403
+
+    partner_id = ub if user_id_str == ua else ua
+
+    data = request.get_json(silent=True) or {}
+    game = (data.get('game') or '').strip()
+    if game not in BOND_GAME_LABELS:
+        return jsonify({'error': 'Invalid game type'}), 400
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+
+    game_routes = {
+        'tic_tac_toe': '/games/tic-tac-toe',
+        'connect_four': '/games/connect-four',
+        'dots_and_boxes': '/games/dots-and-boxes',
+        'ping_pong': '/games/ping-pong',
+        'slime_volleyball': '/games/slime-volleyball',
+    }
+    room_id = f"bond_{game[:3]}_{str(bond_id)[-6:]}"
+    game_url = f"{game_routes.get(game, '/games')}?room={room_id}&bond_id={bond_id}"
+
+    # Emit real-time challenge to partner
+    partner_room = f"user_{partner_id}"
+    m.socketio.emit('bond_game_challenge', {
+        'bond_id': bond_id,
+        'game': game,
+        'game_label': BOND_GAME_LABELS[game],
+        'game_url': game_url,
+        'room_id': room_id,
+        'challenger_id': user_id_str,
+        'challenger_name': current_user.username,
+        'created_at': now_utc.isoformat().replace('+00:00', 'Z')
+    }, room=partner_room)
+
+    # Push notification
+    try:
+        m.send_push_notification_to_user(
+            partner_id,
+            title=f"{current_user.username} challenged you!",
+            body=f"Play {BOND_GAME_LABELS[game]} in your bond space",
+            url=game_url,
+            tag=f"bond-challenge-{bond_id}",
+            category='games'
+        )
+    except Exception:
+        pass
+
+    return jsonify({'success': True, 'game': game, 'room_id': room_id, 'game_url': game_url})
+
+
+@bp.route('/api/bonds/<bond_id>/h2h', methods=['GET'])
+@login_required
+def api_bond_h2h(bond_id):
+    """Get head-to-head records for a bond across all games."""
+    import main as m
+    user_id_str = current_user.id if isinstance(current_user.id, str) else str(current_user.id)
+
+    bond_doc = m.bonds_conf.find_one({'_id': safe_object_id(bond_id)})
+    if not bond_doc:
+        return jsonify({'error': 'Bond not found'}), 404
+
+    ua = str(bond_doc.get('user_a_id', ''))
+    ub = str(bond_doc.get('user_b_id', ''))
+    if user_id_str not in (ua, ub):
+        return jsonify({'error': 'Not a member of this bond'}), 403
+
+    partner_id = ub if user_id_str == ua else ua
+    partner = m.users_conf.find_one({'_id': safe_object_id(partner_id)})
+    partner_name = partner.get('username', 'Partner') if partner else 'Partner'
+
+    records = list(m.bond_h2h_records_conf.find({'bond_id': safe_object_id(bond_id)}))
+
+    h2h_data = []
+    totals = {'my_wins': 0, 'partner_wins': 0, 'draws': 0, 'total': 0}
+
+    for rec in records:
+        ra = str(rec.get('user_a_id', ''))
+        rb = str(rec.get('user_b_id', ''))
+        if user_id_str == ra:
+            my_wins = rec.get('user_a_wins', 0)
+            their_wins = rec.get('user_b_wins', 0)
+        else:
+            my_wins = rec.get('user_b_wins', 0)
+            their_wins = rec.get('user_a_wins', 0)
+
+        draws = rec.get('draws', 0)
+        total = rec.get('total_matches', 0)
+
+        totals['my_wins'] += my_wins
+        totals['partner_wins'] += their_wins
+        totals['draws'] += draws
+        totals['total'] += total
+
+        last_played = rec.get('last_played_at')
+        if last_played and last_played.tzinfo is None:
+            last_played = last_played.replace(tzinfo=datetime.timezone.utc)
+
+        h2h_data.append({
+            'game': rec.get('game'),
+            'game_label': BOND_GAME_LABELS.get(rec.get('game'), rec.get('game')),
+            'my_wins': my_wins,
+            'partner_wins': their_wins,
+            'draws': draws,
+            'total_matches': total,
+            'last_played_at': last_played.isoformat().replace('+00:00', 'Z') if last_played else None,
+        })
+
+    return jsonify({
+        'bond_id': bond_id,
+        'partner_name': partner_name,
+        'games': h2h_data,
+        'totals': totals
+    })

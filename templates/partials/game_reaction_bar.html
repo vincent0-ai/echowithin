@@ -1,0 +1,103 @@
+<!-- Game Reaction Bar — include in any 1v1 game template -->
+<!-- Requires: socket.io already loaded, `gameRoomId` variable set in JS scope -->
+<div id="game-reaction-bar" style="display:none; margin: 0.75rem auto; max-width: 360px;">
+  <div style="display: flex; justify-content: center; gap: 0.4rem; flex-wrap: wrap;">
+    <button type="button" class="game-react-btn" data-emoji="👏" style="font-size:1.3rem;background:none;border:1px solid var(--border-color);border-radius:6px;padding:0.25rem 0.5rem;cursor:pointer;transition:transform 0.15s ease;" title="Clap">👏</button>
+    <button type="button" class="game-react-btn" data-emoji="🔥" style="font-size:1.3rem;background:none;border:1px solid var(--border-color);border-radius:6px;padding:0.25rem 0.5rem;cursor:pointer;transition:transform 0.15s ease;" title="Fire">🔥</button>
+    <button type="button" class="game-react-btn" data-emoji="😱" style="font-size:1.3rem;background:none;border:1px solid var(--border-color);border-radius:6px;padding:0.25rem 0.5rem;cursor:pointer;transition:transform 0.15s ease;" title="Shocked">😱</button>
+    <button type="button" class="game-react-btn" data-emoji="😂" style="font-size:1.3rem;background:none;border:1px solid var(--border-color);border-radius:6px;padding:0.25rem 0.5rem;cursor:pointer;transition:transform 0.15s ease;" title="Laughing">😂</button>
+    <button type="button" class="game-react-btn" data-emoji="💀" style="font-size:1.3rem;background:none;border:1px solid var(--border-color);border-radius:6px;padding:0.25rem 0.5rem;cursor:pointer;transition:transform 0.15s ease;" title="Dead">💀</button>
+    <button type="button" class="game-react-btn" data-emoji="🎯" style="font-size:1.3rem;background:none;border:1px solid var(--border-color);border-radius:6px;padding:0.25rem 0.5rem;cursor:pointer;transition:transform 0.15s ease;" title="Bullseye">🎯</button>
+    <button type="button" class="game-react-btn" data-emoji="gg" style="font-size:0.85rem;font-weight:700;background:none;border:1px solid var(--border-color);border-radius:6px;padding:0.25rem 0.6rem;cursor:pointer;transition:transform 0.15s ease;color:var(--text-dark-color);" title="Good Game">GG</button>
+  </div>
+  <!-- Floating reaction display -->
+  <div id="reaction-display" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:9999;"></div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+(function() {
+  function getSocket() {
+    return window._gameSocket || (window.state && window.state.socket) || (window.GameState && window.GameState.socket) || null;
+  }
+  function getRoomId() {
+    return window._gameRoomId || (window.state && window.state.roomId) || (window.GameState && window.GameState.roomId) || null;
+  }
+
+  function initReactionBar() {
+    const bar = document.getElementById('game-reaction-bar');
+    const display = document.getElementById('reaction-display');
+    if (!bar) return;
+
+    const btns = bar.querySelectorAll('.game-react-btn');
+    let lastSend = 0;
+
+    btns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const emoji = btn.dataset.emoji;
+        const sock = getSocket();
+        const roomId = getRoomId();
+        if (!sock || !roomId) return;
+        const now = Date.now();
+        if (now - lastSend < 2000) return;  // rate limit client-side
+        lastSend = now;
+        sock.emit('game_reaction', { room_id: roomId, emoji: emoji });
+        _showReaction(emoji, 'You');
+        btn.style.transform = 'scale(1.25)';
+        setTimeout(() => { btn.style.transform = 'scale(1)'; }, 200);
+      });
+    });
+
+    let listeningSocket = null;
+    function _attachListener(sock) {
+      if (!sock || listeningSocket === sock) return;
+      listeningSocket = sock;
+      sock.on('game_reaction', (data) => {
+        if (data && data.emoji) {
+          _showReaction(data.emoji, data.sender_name || 'Opponent');
+        }
+      });
+    }
+
+    function _showReaction(emoji, sender) {
+      if (!display) return;
+      const el = document.createElement('div');
+      el.style.cssText = 'font-size:2.4rem;animation:reactionPop 1.3s ease-out forwards;text-align:center;user-select:none;';
+      el.textContent = emoji === 'gg' ? 'GG' : emoji;
+      if (sender) {
+        const label = document.createElement('div');
+        label.style.cssText = 'font-size:0.75rem;color:var(--text-secondary,#888);margin-top:-0.2rem;font-weight:600;';
+        label.textContent = sender;
+        el.appendChild(label);
+      }
+      display.appendChild(el);
+      setTimeout(() => el.remove(), 1300);
+    }
+
+    // Check periodically for socket + room to show/hide bar
+    setInterval(() => {
+      const sock = getSocket();
+      const roomId = getRoomId();
+      if (sock && roomId) {
+        _attachListener(sock);
+        if (bar.style.display !== 'block') {
+          bar.style.display = 'block';
+        }
+      }
+    }, 400);
+  }
+
+  // Inject animation keyframe
+  if (!document.getElementById('reaction-pop-style')) {
+    const style = document.createElement('style');
+    style.id = 'reaction-pop-style';
+    style.textContent = '@keyframes reactionPop { 0% { opacity:0; transform:scale(0.3) translateY(20px); } 20% { opacity:1; transform:scale(1.15) translateY(0); } 100% { opacity:0; transform:scale(0.85) translateY(-55px); } }';
+    document.head.appendChild(style);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initReactionBar);
+  } else {
+    initReactionBar();
+  }
+})();
+</script>

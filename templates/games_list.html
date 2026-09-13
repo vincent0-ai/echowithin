@@ -737,6 +737,58 @@
       </div>
     {% endif %}
   </section>
+
+  <!-- SECTION: My Stats & Rankings (only for authenticated users) -->
+  {% if current_user.is_authenticated %}
+  <section id="section-stats" style="margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+      <div>
+        <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">
+          My Stats &amp; Rankings
+        </h3>
+        <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.15rem;">
+          Your performance across 1v1 competitive games.
+        </div>
+      </div>
+    </div>
+
+    <!-- Per-Game Stats Cards -->
+    <div id="stats-cards-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem;">
+      <div class="ew-card" style="padding: 1.5rem; text-align: center; color: var(--text-secondary); font-size: 0.9rem;">
+        Loading stats...
+      </div>
+    </div>
+
+    <!-- Recent Matches -->
+    <div style="margin-bottom: 0.75rem;">
+      <h4 style="margin: 0 0 0.5rem 0; font-size: 1.0rem; font-weight: 600; color: var(--text-dark-color);">Recent Matches</h4>
+    </div>
+    <div id="match-history-container">
+      <div class="ew-card" style="padding: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.9rem;">
+        Loading match history...
+      </div>
+    </div>
+
+    <!-- ELO Leaderboard Toggle -->
+    <div style="margin-top: 1.25rem;">
+      <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap;">
+        <h4 style="margin: 0; font-size: 1.0rem; font-weight: 600; color: var(--text-dark-color);">ELO Leaderboard</h4>
+        <select id="elo-game-select" class="form-input" style="padding: 0.3rem 0.5rem; font-size: 0.85rem; width: auto;">
+          <option value="tic_tac_toe">Tic-Tac-Toe</option>
+          <option value="connect_four">Connect Four</option>
+          <option value="dots_and_boxes">Dots &amp; Boxes</option>
+          <option value="ping_pong">Ping Pong</option>
+          <option value="slime_volleyball">Slime Volleyball</option>
+        </select>
+      </div>
+      <div id="elo-leaderboard-container">
+        <div class="ew-card" style="padding: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.9rem;">
+          Select a game to view rankings.
+        </div>
+      </div>
+    </div>
+  </section>
+  {% endif %}
 </div>
 
 <script nonce="{{ csp_nonce }}">
@@ -878,6 +930,107 @@
         }
       } catch (_) {}
     })();
+
+    // --- My Stats & Rankings ---
+    const statsContainer = document.getElementById('stats-cards-container');
+    const matchContainer = document.getElementById('match-history-container');
+    const eloSelect = document.getElementById('elo-game-select');
+    const eloContainer = document.getElementById('elo-leaderboard-container');
+
+    const tierColors = {
+      'Diamond': '#b9f2ff', 'Platinum': '#e5e4e2', 'Gold': '#ffd700',
+      'Silver': '#c0c0c0', 'Bronze': '#cd7f32'
+    };
+
+    if (statsContainer) {
+      (async () => {
+        try {
+          const res = await fetch('/api/games/stats/all');
+          const data = await res.json();
+          if (!data.stats || data.stats.length === 0) {
+            statsContainer.innerHTML = '<div class="ew-card" style="padding:1.5rem;text-align:center;color:var(--text-secondary);font-size:0.9rem;">No competitive matches played yet. Play a 1v1 game to start tracking!</div>';
+            return;
+          }
+          statsContainer.innerHTML = data.stats.map(s => `
+            <div class="ew-card" style="padding:1rem;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
+                <strong style="font-size:0.95rem;color:var(--text-dark-color);">${s.game_label}</strong>
+                <span style="font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:4px;background:${tierColors[s.elo_tier] || '#cd7f32'};color:#222;font-weight:600;">${s.elo_tier} (${s.elo})</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.4rem;font-size:0.82rem;color:var(--text-secondary);">
+                <div>W: <strong style="color:var(--success-color,#4caf50);">${s.wins}</strong></div>
+                <div>L: <strong style="color:var(--danger-color,#f44336);">${s.losses}</strong></div>
+                <div>D: <strong>${s.draws}</strong></div>
+                <div>Win%: <strong>${(s.win_rate * 100).toFixed(1)}%</strong></div>
+                <div>Streak: <strong>${s.current_streak > 0 ? '+' + s.current_streak : s.current_streak}</strong></div>
+                <div>Best: <strong>${s.best_streak}</strong></div>
+              </div>
+            </div>
+          `).join('');
+        } catch (_) {
+          statsContainer.innerHTML = '<div class="ew-card" style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.9rem;">Could not load stats.</div>';
+        }
+      })();
+    }
+
+    if (matchContainer) {
+      (async () => {
+        try {
+          const res = await fetch('/api/games/match-history?limit=10');
+          const data = await res.json();
+          if (!data.matches || data.matches.length === 0) {
+            matchContainer.innerHTML = '<div class="ew-card" style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.9rem;">No matches yet.</div>';
+            return;
+          }
+          matchContainer.innerHTML = '<div class="ew-card" style="padding:0;overflow:hidden;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="background:var(--bg-secondary);"><th style="padding:0.5rem 0.75rem;text-align:left;font-weight:600;color:var(--text-dark-color);">Game</th><th style="padding:0.5rem 0.75rem;text-align:left;">Opponent</th><th style="padding:0.5rem 0.75rem;text-align:center;">Result</th><th style="padding:0.5rem 0.75rem;text-align:center;">ELO</th><th style="padding:0.5rem 0.75rem;text-align:right;">When</th></tr></thead><tbody>' +
+            data.matches.map(m => {
+              const rc = m.result === 'win' ? 'var(--success-color,#4caf50)' : m.result === 'loss' ? 'var(--danger-color,#f44336)' : 'var(--text-secondary)';
+              const eloStr = m.elo_change > 0 ? `<span style="color:var(--success-color,#4caf50);">+${m.elo_change}</span>` : m.elo_change < 0 ? `<span style="color:var(--danger-color,#f44336);">${m.elo_change}</span>` : '<span>0</span>';
+              const ago = m.created_at ? _timeAgo(m.created_at) : '';
+              return `<tr style="border-top:1px solid var(--border-color);"><td style="padding:0.45rem 0.75rem;">${m.game_label}</td><td style="padding:0.45rem 0.75rem;">${m.opponent || '—'}</td><td style="padding:0.45rem 0.75rem;text-align:center;"><span style="font-weight:600;color:${rc};text-transform:uppercase;font-size:0.8rem;">${m.result}</span></td><td style="padding:0.45rem 0.75rem;text-align:center;">${eloStr}</td><td style="padding:0.45rem 0.75rem;text-align:right;color:var(--text-secondary);font-size:0.8rem;">${ago}</td></tr>`;
+            }).join('') +
+            '</tbody></table></div>';
+        } catch (_) {
+          matchContainer.innerHTML = '<div class="ew-card" style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.9rem;">Could not load history.</div>';
+        }
+      })();
+    }
+
+    function _timeAgo(iso) {
+      const d = new Date(iso);
+      const now = new Date();
+      const diff = Math.floor((now - d) / 1000);
+      if (diff < 60) return 'just now';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      return Math.floor(diff / 86400) + 'd ago';
+    }
+
+    if (eloSelect && eloContainer) {
+      async function loadEloBoard() {
+        const game = eloSelect.value;
+        eloContainer.innerHTML = '<div class="ew-card" style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.9rem;">Loading...</div>';
+        try {
+          const res = await fetch(`/api/games/elo-leaderboard?game=${game}&limit=10`);
+          const data = await res.json();
+          if (!data.entries || data.entries.length === 0) {
+            eloContainer.innerHTML = '<div class="ew-card" style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.9rem;">No ranked players yet. Play 5+ matches to qualify!</div>';
+            return;
+          }
+          let userRow = '';
+          if (data.user_rank) {
+            userRow = `<div style="margin-top:0.5rem;padding:0.5rem 0.75rem;background:var(--bg-secondary);border-radius:6px;font-size:0.85rem;color:var(--text-dark-color);"><strong>Your Rank:</strong> #${data.user_rank.rank} — ${data.user_rank.elo} ELO (${data.user_rank.elo_tier})</div>`;
+          }
+          eloContainer.innerHTML = '<div class="ew-card" style="padding:0;overflow:hidden;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="background:var(--bg-secondary);"><th style="padding:0.5rem 0.75rem;text-align:center;width:40px;">#</th><th style="padding:0.5rem 0.75rem;text-align:left;">Player</th><th style="padding:0.5rem 0.75rem;text-align:center;">ELO</th><th style="padding:0.5rem 0.75rem;text-align:center;">Tier</th><th style="padding:0.5rem 0.75rem;text-align:center;">W/L</th><th style="padding:0.5rem 0.75rem;text-align:center;">Win%</th></tr></thead><tbody>' +
+            data.entries.map(e => `<tr style="border-top:1px solid var(--border-color);"><td style="padding:0.45rem 0.75rem;text-align:center;font-weight:700;">${e.rank}</td><td style="padding:0.45rem 0.75rem;">${e.username}</td><td style="padding:0.45rem 0.75rem;text-align:center;font-weight:600;">${e.elo}</td><td style="padding:0.45rem 0.75rem;text-align:center;"><span style="font-size:0.75rem;padding:0.1rem 0.4rem;border-radius:4px;background:${tierColors[e.elo_tier] || '#cd7f32'};color:#222;font-weight:600;">${e.elo_tier}</span></td><td style="padding:0.45rem 0.75rem;text-align:center;">${e.wins}/${e.losses}</td><td style="padding:0.45rem 0.75rem;text-align:center;">${(e.win_rate * 100).toFixed(1)}%</td></tr>`).join('') +
+            '</tbody></table></div>' + userRow;
+        } catch (_) {
+          eloContainer.innerHTML = '<div class="ew-card" style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.9rem;">Could not load leaderboard.</div>';
+        }
+      }
+      eloSelect.addEventListener('change', loadEloBoard);
+      loadEloBoard();
+    }
   });
 </script>
 </div>

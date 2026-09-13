@@ -1164,9 +1164,11 @@
     }
     if (!GameState.socket) {
       GameState.socket = io({ transports: ['websocket', 'polling'] });
+      window._gameSocket = GameState.socket;
 
       GameState.socket.on('slime_room_joined', (data) => {
         GameState.roomId = data.room_id;
+        window._gameRoomId = data.room_id;
         GameState.isHost = data.is_host;
         GameState.isOnlineConnected = true;
         GameState.p1.name = data.host_name || 'Host';
@@ -1305,6 +1307,7 @@
         GameState.isFindingMatch = false;
         GameState.mode = 'online';
         GameState.roomId = data.room_id;
+        window._gameRoomId = data.room_id;
         GameState.isHost = data.is_host;
         GameState.isOnlineConnected = true;
         GameState.p1.name = data.host_name || 'Host';
@@ -1578,4 +1581,10 @@
     getRankedScore: getSavedSlimeRankedScore,
     syncScores: syncAllScores
   };
+
+  // Check URL room param
+  const slimeUrlRoom = new URLSearchParams(window.location.search).get('room');
+  if (slimeUrlRoom) {
+    connectSocket(slimeUrlRoom, false);
+  }
 })();

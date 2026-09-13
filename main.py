@@ -205,6 +205,10 @@ app.register_blueprint(whisper_bp)
 app.register_blueprint(bonds_bp)
 app.register_blueprint(forms_bp)
 app.register_blueprint(game_bp)
+from blueprints.game_stats import bp as game_stats_bp
+app.register_blueprint(game_stats_bp)
+from blueprints.tournaments import bp as tournaments_bp
+app.register_blueprint(tournaments_bp)
 app.register_blueprint(api_bp, url_prefix='/api/v1')
 
 
@@ -689,6 +693,23 @@ try:
 except Exception as e:
     app.logger.warning(f"arcade_leaderboards index creation deferred or failed: {e}")
 
+# --- Match History & Player Stats ---
+game_match_history_conf = db['game_match_history']
+player_stats_conf = db['player_stats']
+bond_h2h_records_conf = db['bond_h2h_records']
+community_tournaments_conf = db['community_tournaments']
+try:
+    game_match_history_conf.create_index([('created_at', -1)])
+    game_match_history_conf.create_index([('players.user_id', 1), ('game', 1), ('created_at', -1)])
+    game_match_history_conf.create_index([('bond_id', 1), ('game', 1)], sparse=True)
+    game_match_history_conf.create_index([('tournament_id', 1)], sparse=True)
+    player_stats_conf.create_index([('user_id', 1), ('game', 1)], unique=True)
+    player_stats_conf.create_index([('game', 1), ('elo', -1)])
+    bond_h2h_records_conf.create_index([('bond_id', 1), ('game', 1)], unique=True)
+    community_tournaments_conf.create_index([('community_id', 1), ('status', 1)])
+except Exception as e:
+    app.logger.warning(f"game stats index creation deferred or failed: {e}")
+
 # --- User Login Sessions (Active Sessions & Login History) ---
 user_sessions_conf = db['user_sessions']
 try:
@@ -1085,7 +1106,188 @@ database.game_sessions_conf = game_sessions_conf
 database.game_votes_conf = game_votes_conf
 database.game_submissions_conf = game_submissions_conf
 database.arcade_leaderboards_conf = arcade_leaderboards_conf
+database.game_match_history_conf = game_match_history_conf
+database.player_stats_conf = player_stats_conf
+database.bond_h2h_records_conf = bond_h2h_records_conf
+database.community_tournaments_conf = community_tournaments_conf
 
+
+# --- Match History Recording & ELO ---
+GAMES_WITH_MATCH_TRACKING = ('tic_tac_toe', 'connect_four', 'dots_and_boxes', 'ping_pong', 'slime_volleyball')
+ELO_DEFAULT = 1200
+ELO_FLOOR = 100
+
+def _calc_elo(player_elo, opponent_elo, score, total_matches):
+    """Calculate new ELO rating. score: 1.0=win, 0.5=draw, 0.0=loss."""
+    k = 32 if total_matches < 30 else 16
+    expected = 1.0 / (1.0 + 10 ** ((opponent_elo - player_elo) / 400.0))
+    new_elo = player_elo + k * (score - expected)
+    return max(ELO_FLOOR, round(new_elo))
+
+
+def record_match_result(game, room_id, players, winner_id, score=None, metadata=None,
+                        bond_id=None, tournament_id=None, duration_secs=None):
+    """Record a completed 1v1 match: history, per-game stats, ELO, and optionally bond H2H.
+
+    Args:
+        game: str – game identifier (e.g. 'tic_tac_toe')
+        room_id: str – the room/match identifier
+        players: list of dicts [{'user_id': str, 'username': str, 'side': str}, ...]
+        winner_id: str or None (None = draw)
+        score: dict – game-specific score data
+        metadata: dict – extra info (difficulty, mode, etc.)
+        bond_id: str or None – if this was a bond challenge
+        tournament_id: str or None – if this was a tournament match
+        duration_secs: int or None
+
+    Returns:
+        The inserted match document, or None on error.
+    """
+    if game not in GAMES_WITH_MATCH_TRACKING:
+        return None
+    if not players or len(players) < 2:
+        return None
+    # Only track authenticated users
+    if not all(p.get('user_id') for p in players):
+        return None
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+
+    # Determine result from each player's perspective and compute ELO
+    p1_id = players[0]['user_id']
+    p2_id = players[1]['user_id']
+    if p1_id == p2_id:
+        return None  # same user, skip
+
+    # Fetch current stats for ELO calculation
+    p1_stats = player_stats_conf.find_one({'user_id': p1_id, 'game': game}) or {}
+    p2_stats = player_stats_conf.find_one({'user_id': p2_id, 'game': game}) or {}
+    p1_elo = p1_stats.get('elo', ELO_DEFAULT)
+    p2_elo = p2_stats.get('elo', ELO_DEFAULT)
+    p1_total = p1_stats.get('total_matches', 0)
+    p2_total = p2_stats.get('total_matches', 0)
+
+    if winner_id:
+        p1_score_val = 1.0 if winner_id == p1_id else 0.0
+        p2_score_val = 1.0 if winner_id == p2_id else 0.0
+    else:
+        p1_score_val = 0.5
+        p2_score_val = 0.5
+
+    p1_new_elo = _calc_elo(p1_elo, p2_elo, p1_score_val, p1_total)
+    p2_new_elo = _calc_elo(p2_elo, p1_elo, p2_score_val, p2_total)
+    elo_changes = {p1_id: p1_new_elo - p1_elo, p2_id: p2_new_elo - p2_elo}
+
+    loser_id = None
+    if winner_id:
+        loser_id = p2_id if winner_id == p1_id else p1_id
+
+    match_doc = {
+        'game': game,
+        'room_id': room_id,
+        'players': players,
+        'result': 'draw' if not winner_id else 'win',
+        'winner_id': winner_id,
+        'loser_id': loser_id,
+        'score': score or {},
+        'metadata': metadata or {},
+        'elo_changes': elo_changes,
+        'bond_id': bond_id,
+        'tournament_id': tournament_id,
+        'duration_secs': duration_secs,
+        'created_at': now_utc
+    }
+
+    try:
+        game_match_history_conf.insert_one(match_doc)
+    except Exception as e:
+        app.logger.error(f"Failed to record match: {e}")
+        return None
+
+    # Upsert player stats for each participant
+    for p in players:
+        uid = p['user_id']
+        is_winner = (winner_id == uid) if winner_id else False
+        is_draw = (winner_id is None)
+        new_elo = p1_new_elo if uid == p1_id else p2_new_elo
+
+        inc_fields = {'total_matches': 1}
+        if is_draw:
+            inc_fields['draws'] = 1
+        elif is_winner:
+            inc_fields['wins'] = 1
+        else:
+            inc_fields['losses'] = 1
+
+        existing = player_stats_conf.find_one({'user_id': uid, 'game': game})
+        old_streak = existing.get('current_streak', 0) if existing else 0
+        old_best = existing.get('best_streak', 0) if existing else 0
+        old_total = existing.get('total_matches', 0) if existing else 0
+        old_wins = existing.get('wins', 0) if existing else 0
+
+        if is_winner:
+            new_streak = old_streak + 1 if old_streak >= 0 else 1
+        elif is_draw:
+            new_streak = 0
+        else:
+            new_streak = old_streak - 1 if old_streak <= 0 else -1
+
+        new_best = max(old_best, new_streak)
+        new_total_wins = old_wins + (1 if is_winner else 0)
+        new_total_m = old_total + 1
+        new_win_rate = round(new_total_wins / new_total_m, 3) if new_total_m > 0 else 0.0
+
+        player_stats_conf.update_one(
+            {'user_id': uid, 'game': game},
+            {
+                '$inc': inc_fields,
+                '$set': {
+                    'username': p.get('username', 'Unknown'),
+                    'elo': new_elo,
+                    'current_streak': new_streak,
+                    'best_streak': new_best,
+                    'win_rate': new_win_rate,
+                    'last_played_at': now_utc,
+                    'updated_at': now_utc
+                },
+                '$setOnInsert': {'created_at': now_utc}
+            },
+            upsert=True
+        )
+
+    # Upsert bond head-to-head if bond_id is provided
+    if bond_id:
+        try:
+            bond_oid = ObjectId(bond_id)
+            h2h = bond_h2h_records_conf.find_one({'bond_id': bond_oid, 'game': game})
+            if not h2h:
+                bond_h2h_records_conf.insert_one({
+                    'bond_id': bond_oid,
+                    'game': game,
+                    'user_a_id': p1_id,
+                    'user_b_id': p2_id,
+                    'user_a_wins': 1 if winner_id == p1_id else 0,
+                    'user_b_wins': 1 if winner_id == p2_id else 0,
+                    'draws': 1 if not winner_id else 0,
+                    'total_matches': 1,
+                    'last_played_at': now_utc
+                })
+            else:
+                inc_h2h = {'total_matches': 1}
+                if not winner_id:
+                    inc_h2h['draws'] = 1
+                elif winner_id == str(h2h.get('user_a_id', '')):
+                    inc_h2h['user_a_wins'] = 1
+                else:
+                    inc_h2h['user_b_wins'] = 1
+                bond_h2h_records_conf.update_one(
+                    {'_id': h2h['_id']},
+                    {'$inc': inc_h2h, '$set': {'last_played_at': now_utc}}
+                )
+        except Exception as e:
+            app.logger.error(f"Failed to update bond H2H: {e}")
+
+    return match_doc
 
 def purge_guest_user_data(guest_id_str):
     """Purge all ephemeral data for a guest tour session."""
@@ -1905,13 +2107,18 @@ def handle_join_slime_room(data=None, *args, **kwargs):
     sid = request.sid
 
     room_info = active_slime_rooms.get(room_id)
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
     if not room_info:
         # First player is Host
         room_info = {
             'host_sid': sid,
             'host_name': user_name,
+            'host_user_id': user_uid,
             'guest_sid': None,
-            'guest_name': None
+            'guest_name': None,
+            'guest_user_id': None,
+            'bond_id': (data or {}).get('bond_id') if isinstance(data, dict) else None,
+            'tournament_id': (data or {}).get('tournament_id') if isinstance(data, dict) else None,
         }
         active_slime_rooms[room_id] = room_info
         emit('slime_room_joined', {
@@ -1943,6 +2150,7 @@ def handle_join_slime_room(data=None, *args, **kwargs):
         # Second player is Guest
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
+        room_info['guest_user_id'] = user_uid
         active_slime_rooms[room_id] = room_info
         # Notify Guest
         emit('slime_room_joined', {
@@ -2001,6 +2209,37 @@ def handle_slime_restart(data=None, *args, **kwargs):
     if not room_id:
         return
     emit('slime_restart', {}, room=room_id, include_self=False)
+
+@socketio.on('slime_match_end')
+def handle_slime_match_end(data=None, *args, **kwargs):
+    """Record a completed Slime Volleyball match result (host-reported)."""
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    room_info = active_slime_rooms.get(room_id)
+    if not room_info:
+        return
+    # Only the host may report the result
+    if request.sid != room_info.get('host_sid'):
+        return
+    winner_side = data.get('winner')  # 'host' or 'guest'
+    host_uid = room_info.get('host_user_id')
+    guest_uid = room_info.get('guest_user_id')
+    if host_uid and guest_uid:
+        winner_id = host_uid if winner_side == 'host' else (guest_uid if winner_side == 'guest' else None)
+        record_match_result(
+            game='slime_volleyball', room_id=room_id,
+            players=[
+                {'user_id': host_uid, 'username': room_info.get('host_name', 'Host'), 'side': 'host'},
+                {'user_id': guest_uid, 'username': room_info.get('guest_name', 'Guest'), 'side': 'guest'}
+            ],
+            winner_id=winner_id,
+            score=data.get('score'),
+            metadata={'mode': 'online'},
+            bond_id=room_info.get('bond_id')
+        )
  
 @socketio.on('find_slime_match')
 def handle_find_slime_match(data=None, *args, **kwargs):
@@ -2020,11 +2259,14 @@ def handle_find_slime_match(data=None, *args, **kwargs):
         opponent = slime_matchmaking_queue.pop(0)
         room_id = f"duel_{secrets.token_hex(4)}"
 
+        user_id = str(current_user.id) if current_user.is_authenticated else None
         active_slime_rooms[room_id] = {
             'host_sid': opponent['sid'],
             'host_name': opponent['user_name'],
+            'host_user_id': opponent.get('user_id'),
             'guest_sid': sid,
-            'guest_name': user_name
+            'guest_name': user_name,
+            'guest_user_id': user_id
         }
 
         # Automatically join both sockets into the room
@@ -2055,6 +2297,7 @@ def handle_find_slime_match(data=None, *args, **kwargs):
         slime_matchmaking_queue.append({
             'sid': sid,
             'user_name': user_name,
+            'user_id': str(current_user.id) if current_user.is_authenticated else None,
             'streak': streak,
             'score': score,
             'created_at': datetime.datetime.now(datetime.timezone.utc)
@@ -2126,17 +2369,22 @@ def handle_join_pong_room(data=None, *args, **kwargs):
     sid = request.sid
 
     room_info = active_pong_rooms.get(room_id)
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
     if not room_info:
         room_info = {
             'host_sid': sid,
             'host_name': user_name,
+            'host_user_id': user_uid,
             'guest_sid': None,
             'guest_name': None,
+            'guest_user_id': None,
             'scores': [0, 0],
             'target': None,
             'disconnected_at': None,
             'disconnected_side': None,
             'just_rejoined': False,
+            'bond_id': payload.get('bond_id'),
+            'tournament_id': payload.get('tournament_id'),
         }
         active_pong_rooms[room_id] = room_info
         emit('pong_room_joined', _pong_joined_payload(room_id, room_info, True), room=sid)
@@ -2162,8 +2410,10 @@ def handle_join_pong_room(data=None, *args, **kwargs):
                 room_info[claimed_side] = sid
                 if claimed_side == 'host_sid':
                     room_info['host_name'] = user_name
+                    room_info['host_user_id'] = user_uid
                 else:
                     room_info['guest_name'] = user_name
+                    room_info['guest_user_id'] = user_uid
                 room_info['disconnected_at'] = None
                 room_info['disconnected_side'] = None
                 room_info['just_rejoined'] = True
@@ -2182,6 +2432,7 @@ def handle_join_pong_room(data=None, *args, **kwargs):
     else:
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
+        room_info['guest_user_id'] = user_uid
         room_info['just_rejoined'] = False
         active_pong_rooms[room_id] = room_info
 
@@ -2257,6 +2508,25 @@ def handle_pong_score_update(data=None, *args, **kwargs):
     # match self-resolves in a runaway loop. See commit.md.
     emit('pong_score_update', data, room=room_id, include_self=False)
 
+    # Record match when a validated winner is relayed
+    if data.get('winner') in (1, 2) and room_info:
+        w = data['winner']
+        host_uid = room_info.get('host_user_id')
+        guest_uid = room_info.get('guest_user_id')
+        if host_uid and guest_uid:
+            winner_id = host_uid if w == 1 else guest_uid
+            record_match_result(
+                game='ping_pong', room_id=room_id,
+                players=[
+                    {'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
+                    {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}
+                ],
+                winner_id=winner_id,
+                score={'host': room_info['scores'][0], 'guest': room_info['scores'][1]},
+                metadata={'mode': 'online', 'target': room_info.get('target')},
+                bond_id=room_info.get('bond_id')
+            )
+
 @socketio.on('pong_restart')
 def handle_pong_restart(data=None, *args, **kwargs):
     if not isinstance(data, dict):
@@ -2294,11 +2564,14 @@ def handle_find_pong_match(data=None, *args, **kwargs):
         # Shared first-to-N comes from the host (queued opponent) so both
         # clients validate the winner against the same actually-reached score.
         room_target = opponent.get('target')
+        user_id = str(current_user.id) if current_user.is_authenticated else None
         active_pong_rooms[room_id] = {
             'host_sid': opponent['sid'],
             'host_name': opponent['user_name'],
+            'host_user_id': opponent.get('user_id'),
             'guest_sid': sid,
             'guest_name': user_name,
+            'guest_user_id': user_id,
             'scores': [0, 0],
             'target': room_target,
             'disconnected_at': None,
@@ -2335,6 +2608,7 @@ def handle_find_pong_match(data=None, *args, **kwargs):
         pong_matchmaking_queue.append({
             'sid': sid,
             'user_name': user_name,
+            'user_id': str(current_user.id) if current_user.is_authenticated else None,
             'streak': streak,
             'score': score,
             'target': target,
@@ -2382,16 +2656,21 @@ def handle_join_ttt_room(data=None, *args, **kwargs):
     sid = request.sid
 
     room_info = active_ttt_rooms.get(room_id)
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
     if not room_info:
         room_info = {
             'host_sid': sid,
             'host_name': user_name,
+            'host_user_id': user_uid,
             'guest_sid': None,
             'guest_name': None,
+            'guest_user_id': None,
             'board': [''] * 9,
             'starter': 'x',
             'turn': 'x',
-            'scores': {'x': 0, 'o': 0, 'ties': 0}
+            'scores': {'x': 0, 'o': 0, 'ties': 0},
+            'bond_id': (data or {}).get('bond_id') if isinstance(data, dict) else None,
+            'tournament_id': (data or {}).get('tournament_id') if isinstance(data, dict) else None,
         }
         active_ttt_rooms[room_id] = room_info
         emit('ttt_room_joined', {
@@ -2405,6 +2684,7 @@ def handle_join_ttt_room(data=None, *args, **kwargs):
     else:
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
+        room_info['guest_user_id'] = user_uid
         active_ttt_rooms[room_id] = room_info
 
         emit('ttt_room_joined', {
@@ -2492,6 +2772,28 @@ def handle_ttt_move(data=None, *args, **kwargs):
         'board': board
     }, room=room_id)
 
+    # Record completed round
+    if winner or is_draw:
+        host_uid = room_info.get('host_user_id')
+        guest_uid = room_info.get('guest_user_id')
+        if host_uid and guest_uid:
+            winner_id = None
+            if winner == 'x':
+                winner_id = host_uid
+            elif winner == 'o':
+                winner_id = guest_uid
+            record_match_result(
+                game='tic_tac_toe', room_id=room_id,
+                players=[
+                    {'user_id': host_uid, 'username': room_info.get('host_name', 'X'), 'side': 'x'},
+                    {'user_id': guest_uid, 'username': room_info.get('guest_name', 'O'), 'side': 'o'}
+                ],
+                winner_id=winner_id,
+                score=room_info['scores'],
+                metadata={'mode': 'online'},
+                bond_id=room_info.get('bond_id')
+            )
+
 @socketio.on('ttt_restart')
 def handle_ttt_restart(data=None, *args, **kwargs):
     if not isinstance(data, dict):
@@ -2523,11 +2825,16 @@ def handle_find_ttt_match(data=None, *args, **kwargs):
         p1_sid, p1_name = (sid, user_name) if swap else (opponent['sid'], opponent['user_name'])
         p2_sid, p2_name = (opponent['sid'], opponent['user_name']) if swap else (sid, user_name)
 
+        user_id = str(current_user.id) if current_user.is_authenticated else None
+        p1_uid = user_id if swap else opponent.get('user_id')
+        p2_uid = opponent.get('user_id') if swap else user_id
         active_ttt_rooms[room_id] = {
             'host_sid': p1_sid,
             'host_name': p1_name,
+            'host_user_id': p1_uid,
             'guest_sid': p2_sid,
             'guest_name': p2_name,
+            'guest_user_id': p2_uid,
             'board': [''] * 9,
             'starter': 'x',
             'turn': 'x',
@@ -2561,6 +2868,7 @@ def handle_find_ttt_match(data=None, *args, **kwargs):
         ttt_matchmaking_queue.append({
             'sid': sid,
             'user_name': user_name,
+            'user_id': str(current_user.id) if current_user.is_authenticated else None,
             'created_at': datetime.datetime.now(datetime.timezone.utc)
         })
         emit('ttt_matchmaking_waiting', {'status': 'waiting'}, room=sid)
@@ -2608,15 +2916,20 @@ def handle_join_c4_room(data=None, *args, **kwargs):
     sid = request.sid
 
     room_info = active_c4_rooms.get(room_id)
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
     if not room_info:
         room_info = {
             'host_sid': sid,
             'host_name': user_name,
+            'host_user_id': user_uid,
             'guest_sid': None,
             'guest_name': None,
+            'guest_user_id': None,
             'board': [[-1] * C4_COLS for _ in range(C4_ROWS)],
             'turn': 0,
-            'scores': [0, 0, 0] # [p0, p1, draws]
+            'scores': [0, 0, 0], # [p0, p1, draws]
+            'bond_id': (data or {}).get('bond_id') if isinstance(data, dict) else None,
+            'tournament_id': (data or {}).get('tournament_id') if isinstance(data, dict) else None,
         }
         active_c4_rooms[room_id] = room_info
         emit('c4_room_joined', {
@@ -2647,6 +2960,7 @@ def handle_join_c4_room(data=None, *args, **kwargs):
     else:
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
+        room_info['guest_user_id'] = user_uid
         active_c4_rooms[room_id] = room_info
 
         emit('c4_room_joined', {
@@ -2738,6 +3052,28 @@ def handle_c4_move(data=None, *args, **kwargs):
         'board': board
     }, room=room_id)
 
+    # Record completed round
+    if winner is not None or is_draw:
+        host_uid = room_info.get('host_user_id')
+        guest_uid = room_info.get('guest_user_id')
+        if host_uid and guest_uid:
+            winner_id = None
+            if winner == 0:
+                winner_id = host_uid
+            elif winner == 1:
+                winner_id = guest_uid
+            record_match_result(
+                game='connect_four', room_id=room_id,
+                players=[
+                    {'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
+                    {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}
+                ],
+                winner_id=winner_id,
+                score={'host': room_info['scores'][0], 'guest': room_info['scores'][1], 'draws': room_info['scores'][2]},
+                metadata={'mode': 'online'},
+                bond_id=room_info.get('bond_id')
+            )
+
 @socketio.on('c4_restart')
 def handle_c4_restart(data=None, *args, **kwargs):
     if not isinstance(data, dict):
@@ -2769,11 +3105,14 @@ def handle_find_c4_match(data=None, *args, **kwargs):
         opponent = c4_matchmaking_queue.pop(0)
         room_id = f"c4_{secrets.token_hex(4)}"
 
+        user_id = str(current_user.id) if current_user.is_authenticated else None
         active_c4_rooms[room_id] = {
             'host_sid': opponent['sid'],
             'host_name': opponent['user_name'],
+            'host_user_id': opponent.get('user_id'),
             'guest_sid': sid,
             'guest_name': user_name,
+            'guest_user_id': user_id,
             'board': [[-1] * C4_COLS for _ in range(C4_ROWS)],
             'turn': 0,
             'scores': [0, 0, 0]
@@ -2806,6 +3145,7 @@ def handle_find_c4_match(data=None, *args, **kwargs):
         c4_matchmaking_queue.append({
             'sid': sid,
             'user_name': user_name,
+            'user_id': str(current_user.id) if current_user.is_authenticated else None,
             'streak': streak,
             'score': score,
             'created_at': datetime.datetime.now(datetime.timezone.utc)
@@ -2851,17 +3191,22 @@ def handle_join_dnb_room(data=None, *args, **kwargs):
     sid = request.sid
 
     room_info = active_dnb_rooms.get(room_id)
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
     if not room_info:
         room_info = {
             'host_sid': sid,
             'host_name': user_name,
+            'host_user_id': user_uid,
             'guest_sid': None,
             'guest_name': None,
+            'guest_user_id': None,
             'h_edges': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS)],
             'v_edges': [[None] * DNB_COLS for _ in range(DNB_ROWS - 1)],
             'boxes': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS - 1)],
             'turn': 0,
-            'scores': [0, 0] # [p0, p1]
+            'scores': [0, 0], # [p0, p1]
+            'bond_id': (data or {}).get('bond_id') if isinstance(data, dict) else None,
+            'tournament_id': (data or {}).get('tournament_id') if isinstance(data, dict) else None,
         }
         active_dnb_rooms[room_id] = room_info
         emit('dnb_room_joined', {
@@ -2892,6 +3237,7 @@ def handle_join_dnb_room(data=None, *args, **kwargs):
     else:
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
+        room_info['guest_user_id'] = user_uid
         active_dnb_rooms[room_id] = room_info
 
         emit('dnb_room_joined', {
@@ -3022,6 +3368,29 @@ def handle_dnb_line(data=None, *args, **kwargs):
         'winner': winner
     }, room=room_id)
 
+    # Record completed game
+    if is_game_over:
+        host_uid = room_info.get('host_user_id')
+        guest_uid = room_info.get('guest_user_id')
+        if host_uid and guest_uid:
+            winner_id = None
+            if winner == 0:
+                winner_id = host_uid
+            elif winner == 1:
+                winner_id = guest_uid
+            # winner == -1 means draw
+            record_match_result(
+                game='dots_and_boxes', room_id=room_id,
+                players=[
+                    {'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
+                    {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}
+                ],
+                winner_id=winner_id,
+                score={'host': room_info['scores'][0], 'guest': room_info['scores'][1]},
+                metadata={'mode': 'online'},
+                bond_id=room_info.get('bond_id')
+            )
+
 @socketio.on('dnb_restart')
 def handle_dnb_restart(data=None, *args, **kwargs):
     if not isinstance(data, dict):
@@ -3053,11 +3422,14 @@ def handle_find_dnb_match(data=None, *args, **kwargs):
         opponent = dnb_matchmaking_queue.pop(0)
         room_id = f"dnb_{secrets.token_hex(4)}"
 
+        user_id = str(current_user.id) if current_user.is_authenticated else None
         active_dnb_rooms[room_id] = {
             'host_sid': opponent['sid'],
             'host_name': opponent['user_name'],
+            'host_user_id': opponent.get('user_id'),
             'guest_sid': sid,
             'guest_name': user_name,
+            'guest_user_id': user_id,
             'h_edges': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS)],
             'v_edges': [[None] * DNB_COLS for _ in range(DNB_ROWS - 1)],
             'boxes': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS - 1)],
@@ -3092,6 +3464,7 @@ def handle_find_dnb_match(data=None, *args, **kwargs):
         dnb_matchmaking_queue.append({
             'sid': sid,
             'user_name': user_name,
+            'user_id': str(current_user.id) if current_user.is_authenticated else None,
             'streak': streak,
             'score': score,
             'created_at': datetime.datetime.now(datetime.timezone.utc)
@@ -3149,11 +3522,15 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
         c_name = challenger['user_name'] if challenger else 'Challenger'
         slime_matchmaking_queue = [q for q in slime_matchmaking_queue if q['sid'] not in (sid, challenger_sid)]
         room_id = f"duel_{secrets.token_hex(4)}"
+        c_uid = challenger.get('user_id') if challenger else None
+        user_uid = str(current_user.id) if current_user.is_authenticated else None
         active_slime_rooms[room_id] = {
             'host_sid': challenger_sid,
             'host_name': c_name,
+            'host_user_id': c_uid,
             'guest_sid': sid,
-            'guest_name': user_name
+            'guest_name': user_name,
+            'guest_user_id': user_uid
         }
         try:
             join_room(room_id, sid=challenger_sid)
@@ -3171,11 +3548,15 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
         pong_matchmaking_queue = [q for q in pong_matchmaking_queue if q['sid'] not in (sid, challenger_sid)]
         room_id = f"pong_{secrets.token_hex(4)}"
         challenge_target = (challenger or {}).get('target')
+        c_uid = challenger.get('user_id') if challenger else None
+        user_uid = str(current_user.id) if current_user.is_authenticated else None
         active_pong_rooms[room_id] = {
             'host_sid': challenger_sid,
             'host_name': c_name,
+            'host_user_id': c_uid,
             'guest_sid': sid,
             'guest_name': user_name,
+            'guest_user_id': user_uid,
             'scores': [0, 0],
             'target': challenge_target,
             'disconnected_at': None,
@@ -3197,11 +3578,15 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
         c_name = challenger['user_name'] if challenger else 'Challenger'
         c4_matchmaking_queue = [q for q in c4_matchmaking_queue if q['sid'] not in (sid, challenger_sid)]
         room_id = f"c4_{secrets.token_hex(4)}"
+        c_uid = challenger.get('user_id') if challenger else None
+        user_uid = str(current_user.id) if current_user.is_authenticated else None
         active_c4_rooms[room_id] = {
             'host_sid': challenger_sid,
             'host_name': c_name,
+            'host_user_id': c_uid,
             'guest_sid': sid,
             'guest_name': user_name,
+            'guest_user_id': user_uid,
             'board': [[-1] * C4_COLS for _ in range(C4_ROWS)],
             'turn': 0,
             'scores': [0, 0, 0]
@@ -3221,11 +3606,15 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
         c_name = challenger['user_name'] if challenger else 'Challenger'
         dnb_matchmaking_queue = [q for q in dnb_matchmaking_queue if q['sid'] not in (sid, challenger_sid)]
         room_id = f"dnb_{secrets.token_hex(4)}"
+        c_uid = challenger.get('user_id') if challenger else None
+        user_uid = str(current_user.id) if current_user.is_authenticated else None
         active_dnb_rooms[room_id] = {
             'host_sid': challenger_sid,
             'host_name': c_name,
+            'host_user_id': c_uid,
             'guest_sid': sid,
             'guest_name': user_name,
+            'guest_user_id': user_uid,
             'h_edges': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS)],
             'v_edges': [[None] * DNB_COLS for _ in range(DNB_ROWS - 1)],
             'boxes': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS - 1)],
@@ -3250,6 +3639,33 @@ def handle_decline_game_challenge(data=None, *args, **kwargs):
     user_name = getattr(current_user, 'username', 'Opponent') if current_user.is_authenticated else 'Opponent'
     if challenger_sid:
         emit('game_challenge_declined', {'game': game, 'declined_by': user_name}, room=challenger_sid)
+
+
+# --- In-Game Emoji Reactions ---
+GAME_REACTION_EMOJIS = {'👏', '🔥', '😱', '😂', '💀', '🎯', 'gg'}
+_game_reaction_timestamps = {}  # sid -> last_reaction_time for rate limiting
+
+@socketio.on('game_reaction')
+def handle_game_reaction(data=None, *args, **kwargs):
+    """Relay emoji reactions during live 1v1 games."""
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    emoji = data.get('emoji')
+    if not room_id or emoji not in GAME_REACTION_EMOJIS:
+        return
+    sid = request.sid
+    now = datetime.datetime.now(datetime.timezone.utc).timestamp()
+    last = _game_reaction_timestamps.get(sid, 0)
+    if now - last < 2.0:  # max 1 reaction per 2 seconds
+        return
+    _game_reaction_timestamps[sid] = now
+    user_name = getattr(current_user, 'username', 'Player') if current_user.is_authenticated else 'Player'
+    emit('game_reaction', {
+        'emoji': emoji,
+        'sender_name': user_name,
+        'sender_sid': sid
+    }, room=room_id, include_self=False)
 
 
 # --- Direct Messaging (DM) Functionality ---

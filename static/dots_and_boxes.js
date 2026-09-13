@@ -805,9 +805,11 @@
     if (typeof io === 'undefined') return;
 
     state.socket = io({ transports: ['websocket', 'polling'] });
+    window._gameSocket = state.socket;
 
     state.socket.on('dnb_room_joined', data => {
       state.roomId = data.room_id;
+      window._gameRoomId = data.room_id;
       state.isHost = data.is_host;
       state.myPlayer = data.player;
       state.opponentJoined = !!data.guest_name;
@@ -875,6 +877,7 @@
     state.socket.on('dnb_match_found', data => {
       state.isSearching = false;
       state.roomId = data.room_id;
+      window._gameRoomId = data.room_id;
       state.isHost = data.is_host;
       state.myPlayer = data.player;
       state.opponentJoined = true;

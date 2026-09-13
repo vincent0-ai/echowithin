@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, make_response, session
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, make_response, session, current_app
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, secrets, hashlib
@@ -425,7 +425,7 @@ def games_create():
                     image_url = m.optimize_cloudinary_url(upload_result.get('secure_url'))
                     image_public_id = upload_result.get('public_id')
                 except Exception as ex:
-                    logger.warning("Cloudinary upload failed for game caption photo: %s", ex)
+                    current_app.logger.warning("Cloudinary upload failed for game caption photo: %s", ex)
 
             if not image_url and caption_image_url:
                 image_url = caption_image_url

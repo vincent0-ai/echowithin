@@ -340,3 +340,15 @@ class TestBondCalendarAPIEndpoints:
             assert 'BEGIN:VCALENDAR' in body
             assert 'VERSION:2.0' in body
             assert 'END:VCALENDAR' in body
+
+    def test_candidate_occurrence_dates_lookahead(self):
+        from scripts.calendar_reminders import _get_candidate_occurrence_dates
+        today = datetime.date(2026, 9, 12)
+        start_date = datetime.date(2026, 9, 20)
+
+        candidates = _get_candidate_occurrence_dates(start_date, 'weekly', today)
+        assert start_date in candidates
+
+        start_date_far = datetime.date(2026, 10, 5)
+        candidates_far = _get_candidate_occurrence_dates(start_date_far, 'weekly', today)
+        assert start_date_far not in candidates_far

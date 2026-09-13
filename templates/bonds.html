@@ -6281,6 +6281,15 @@
     function selectCalendarDate(bondId, dateStr) {
         var state = initBondCalendarState(bondId);
         state.selectedDate = dateStr;
+        var parts = dateStr.split('-');
+        if (parts.length === 3) {
+            var targetYear = parseInt(parts[0], 10);
+            var targetMonth = parseInt(parts[1], 10) - 1;
+            if (state.year !== targetYear || state.month !== targetMonth) {
+                loadCalendar(bondId, targetYear, targetMonth);
+                return;
+            }
+        }
         renderCalendarGrid(bondId);
         renderCalendarDayEvents(bondId, dateStr);
     }

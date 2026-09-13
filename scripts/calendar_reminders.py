@@ -32,7 +32,7 @@ def get_app_url():
 
 def _get_candidate_occurrence_dates(start_date, recurrence, today, max_end=None):
     """
-    Get candidate occurrence dates around today (within -1 to +7 days) for recurrence checks.
+    Get candidate occurrence dates around today (within -1 to +14 days) for recurrence checks.
     """
     candidates = []
     if recurrence == 'none':
@@ -40,7 +40,7 @@ def _get_candidate_occurrence_dates(start_date, recurrence, today, max_end=None)
         return candidates
 
     check_window_start = today - datetime.timedelta(days=1)
-    check_window_end = today + datetime.timedelta(days=7)
+    check_window_end = today + datetime.timedelta(days=14)
 
     if recurrence == 'weekly':
         # Check weekly steps

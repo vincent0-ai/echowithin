@@ -6954,7 +6954,7 @@ def api_bond_challenge(bond_id):
     import main as m
     user_id_str = current_user.id if isinstance(current_user.id, str) else str(current_user.id)
 
-    bond_doc = m.bonds_conf.find_one({'_id': safe_object_id(bond_id)})
+    bond_doc = m.bonds_conf.find_one({'_id': m.safe_object_id(bond_id)})
     if not bond_doc:
         return jsonify({'error': 'Bond not found'}), 404
 
@@ -7018,7 +7018,7 @@ def api_bond_h2h(bond_id):
     import main as m
     user_id_str = current_user.id if isinstance(current_user.id, str) else str(current_user.id)
 
-    bond_doc = m.bonds_conf.find_one({'_id': safe_object_id(bond_id)})
+    bond_doc = m.bonds_conf.find_one({'_id': m.safe_object_id(bond_id)})
     if not bond_doc:
         return jsonify({'error': 'Bond not found'}), 404
 
@@ -7028,10 +7028,10 @@ def api_bond_h2h(bond_id):
         return jsonify({'error': 'Not a member of this bond'}), 403
 
     partner_id = ub if user_id_str == ua else ua
-    partner = m.users_conf.find_one({'_id': safe_object_id(partner_id)})
+    partner = m.users_conf.find_one({'_id': m.safe_object_id(partner_id)})
     partner_name = partner.get('username', 'Partner') if partner else 'Partner'
 
-    records = list(m.bond_h2h_records_conf.find({'bond_id': safe_object_id(bond_id)}))
+    records = list(m.bond_h2h_records_conf.find({'bond_id': m.safe_object_id(bond_id)}))
 
     h2h_data = []
     totals = {'my_wins': 0, 'partner_wins': 0, 'draws': 0, 'total': 0}

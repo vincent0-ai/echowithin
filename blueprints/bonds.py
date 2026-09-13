@@ -5091,6 +5091,15 @@ def api_bond_calendar_edit_event(event_id):
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
 
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} updated a calendar event",
+            f'"{title}" on {start_date_str}',
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-event-edit-{event_id}',
+            category='calendar'
+        )
+
         _on_bond_action(bond_doc, 'calendar', current_user.id)
 
         return jsonify({'success': True, 'event_id': event_id})
@@ -5118,6 +5127,15 @@ def api_bond_calendar_delete_event(event_id):
         if not _is_bond_participant(bond_doc, user_id_str):
             return jsonify({'error': 'Not authorized'}), 403
 
+        # Decrypt title before archiving so we can notify the partner
+        if ev.get('encrypted'):
+            try:
+                event_title = m.decrypt_bond_data(ev.get('title', ''), bond_id)
+            except Exception:
+                event_title = 'Calendar Event'
+        else:
+            event_title = ev.get('title', 'Calendar Event')
+
         m.bond_events_conf.update_one(
             {'_id': ObjectId(event_id)},
             {'$set': {'archived': True, 'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
@@ -5130,6 +5148,15 @@ def api_bond_calendar_delete_event(event_id):
             'event_id': event_id,
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} removed a calendar event",
+            f'"{event_title}" was removed from the calendar',
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-event-del-{event_id}',
+            category='calendar'
+        )
 
         _on_bond_action(bond_doc, 'calendar', current_user.id)
 
@@ -5168,13 +5195,38 @@ def api_bond_calendar_event_rsvp(event_id):
             {'$set': {f'rsvps.{user_id_str}': rsvp_status, 'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
         )
 
+        # Decrypt event title for the notification
+        if ev.get('encrypted'):
+            try:
+                event_title = m.decrypt_bond_data(ev.get('title', ''), bond_id)
+            except Exception:
+                event_title = 'Calendar Event'
+        else:
+            event_title = ev.get('title', 'Calendar Event')
+
+        rsvp_labels = {'accepted': 'Going', 'tentative': 'Maybe', 'declined': "Can't make it"}
+        rsvp_label = rsvp_labels.get(rsvp_status, rsvp_status)
+
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
         m.socketio.emit('bond_calendar_updated', {
             'bond_id': bond_id,
             'action': 'rsvp',
             'event_id': event_id,
+            'rsvp_status': rsvp_status,
+            'rsvp_label': rsvp_label,
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} responded to \"{event_title}\"",
+            f'{current_user.username} said {rsvp_label} for "{event_title}"',
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-event-rsvp-{event_id}',
+            category='calendar'
+        )
+
+        _on_bond_action(bond_doc, 'calendar', current_user.id)
 
         return jsonify({'success': True, 'status': rsvp_status})
     except Exception as e:

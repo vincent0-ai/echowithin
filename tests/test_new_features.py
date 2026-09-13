@@ -38,8 +38,8 @@ class TestCalendarReminders:
         mock_bond = {
             '_id': bond_id,
             'status': 'active',
-            'user1_id': user1_id,
-            'user2_id': user2_id
+            'user_a_id': user1_id,
+            'user_b_id': user2_id
         }
 
         mock_event = {

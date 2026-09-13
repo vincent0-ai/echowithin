@@ -184,8 +184,8 @@ def check_and_dispatch_calendar_reminders(bonds_conf, bond_events_conf, decrypt_
                 body = f"'{title}' {offset_text} ({occ_date.isoformat()}{' at ' + time_str if ev.get('time') else ''})."
 
                 rsvps = ev.get('rsvps') or {}
-                user1_id = str(bond.get('user1_id', ''))
-                user2_id = str(bond.get('user2_id', ''))
+                user1_id = str(bond.get('user_a_id', ''))
+                user2_id = str(bond.get('user_b_id', ''))
 
                 sent_any = False
                 bonds_url = '/bonds'

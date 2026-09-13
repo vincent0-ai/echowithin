@@ -1849,6 +1849,16 @@
                     <button class="bond-nudge-btn" title="Send a nudge" onclick="sendNudge('{{ bond.id }}', this)"><span class="nudge-icon">💭</span> <span class="nudge-count" style="font-size: 0.7rem;">({{ bond.nudge_remaining }} left)</span></button>
                 </div>
             </div>
+
+            <!-- At-a-Glance: Upcoming Events Widget -->
+            <div id="upcoming-glance-{{ bond.id }}" style="display:none; margin: 0.5rem 0; padding: 0.5rem 0.7rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+                    <span style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">Upcoming Events</span>
+                    <a href="javascript:void(0)" onclick="openCalendarFromGlance('{{ bond.id }}')" style="font-size: 0.72rem; color: var(--primary-color); text-decoration: none; font-weight: 500;">View all</a>
+                </div>
+                <div id="upcoming-glance-list-{{ bond.id }}" style="display: flex; flex-direction: column; gap: 0.3rem;"></div>
+            </div>
+
             <div class="bond-actions">
                 <button class="btn btn-bond-primary btn-bond-section"
                     onclick="toggleSection('mood-{{ bond.id }}', this); loadMood('{{ bond.id }}')">
@@ -5879,8 +5889,20 @@
         });
         // --- Shared Calendar JS ---
         socket.on('bond_calendar_updated', function(data) {
-            if (window.showCustomToast) showCustomToast((data.by_username || 'Partner') + ' updated the calendar! 📅', 'success');
+            var msg = '';
+            var who = data.by_username || 'Partner';
+            if (data.action === 'rsvp' && data.rsvp_label) {
+                msg = who + ' responded ' + data.rsvp_label + ' to an event';
+            } else if (data.action === 'delete') {
+                msg = who + ' removed a calendar event';
+            } else if (data.action === 'update') {
+                msg = who + ' updated a calendar event';
+            } else {
+                msg = who + ' added a new calendar event';
+            }
+            if (window.showCustomToast) showCustomToast(msg, 'success');
             loadCalendar(data.bond_id);
+            loadUpcomingGlance(data.bond_id);
         });
 
         // --- Shared Countdowns JS ---
@@ -6098,18 +6120,59 @@
     function updateNearestBanner(bondId, nearest) {
         var banner = document.getElementById('calendar-nearest-banner-' + bondId);
         if (!banner) return;
-        if (!nearest) {
-            banner.style.display = 'none';
+
+        var state = bondCalendarState[bondId];
+        var allEvents = (state && state.events) ? state.events : [];
+
+        // Gather events within the next 7 days
+        var todayStr = new Date().toISOString().slice(0, 10);
+        var weekAhead = [];
+        allEvents.forEach(function(ev) {
+            if (ev.diff_days !== undefined && ev.diff_days >= 0 && ev.diff_days <= 7) {
+                weekAhead.push(ev);
+            }
+        });
+        // Sort by diff_days, then time
+        weekAhead.sort(function(a, b) { return (a.diff_days - b.diff_days) || ((a.time || '').localeCompare(b.time || '')); });
+
+        if (weekAhead.length === 0) {
+            // Fallback to nearest upcoming if nothing within 7 days
+            if (!nearest) { banner.style.display = 'none'; return; }
+            var icon = nearest.source === 'countdown' ? '⏳' : (nearest.source === 'goal' ? '🎯' : (nearest.source === 'anniversary' ? '❤️' : '📅'));
+            var colorStyle = nearest.badge_status === 'success' ? 'var(--success-color)' : 'var(--primary-color)';
+            banner.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem;">' +
+                '<div style="font-size:0.85rem; color:var(--text-dark-color);">' +
+                '<strong>Next Up:</strong> ' + icon + ' ' + escHtml(nearest.title) + ' (' + nearest.date + (nearest.time ? ' at ' + nearest.time : '') + ')' +
+                '</div>' +
+                '<span style="font-weight:700; font-size:0.85rem; color:' + colorStyle + ';">' + nearest.badge_label + '</span>' +
+                '</div>';
+            banner.style.display = 'block';
             return;
         }
-        var icon = nearest.source === 'countdown' ? '⏳' : (nearest.source === 'goal' ? '🎯' : (nearest.source === 'anniversary' ? '❤️' : '📅'));
-        var colorStyle = nearest.badge_status === 'success' ? 'var(--success-color)' : 'var(--primary-color)';
-        banner.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem;">' +
-            '<div style="font-size:0.85rem; color:var(--text-dark-color);">' +
-            '<strong>Nearest Upcoming:</strong> ' + icon + ' ' + escHtml(nearest.title) + ' (' + nearest.date + (nearest.time ? ' at ' + nearest.time : '') + ')' +
-            '</div>' +
-            '<span style="font-weight:700; font-size:0.85rem; color:' + colorStyle + ';">' + nearest.badge_label + '</span>' +
-            '</div>';
+
+        var html = '<div style="font-size:0.78rem; font-weight:600; color:var(--text-muted); margin-bottom:0.4rem;">This Week (' + weekAhead.length + ' event' + (weekAhead.length !== 1 ? 's' : '') + ')</div>';
+        html += '<div style="display:flex; flex-direction:column; gap:0.3rem;">';
+        weekAhead.slice(0, 5).forEach(function(ev) {
+            var icon = '📅';
+            if (ev.source === 'countdown') icon = '⏳';
+            else if (ev.source === 'goal') icon = '🎯';
+            else if (ev.source === 'anniversary' || ev.source === 'milestone') icon = '❤️';
+            var labelColor = ev.badge_status === 'success' ? 'var(--success-color)' : 'var(--primary-color)';
+            var timeStr = ev.time ? ' at ' + ev.time : '';
+            html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:0.3rem 0.4rem; background:var(--card-bg); border-radius:5px; cursor:pointer;" onclick="selectCalendarDate(\'' + bondId + '\', \'' + ev.date + '\')">' +
+                '<div style="font-size:0.82rem; color:var(--text-dark-color); display:flex; align-items:center; gap:0.3rem; flex:1; min-width:0;">' +
+                '<span>' + icon + '</span>' +
+                '<span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escHtml(ev.title) + '</span>' +
+                '<span style="font-size:0.72rem; color:var(--text-muted); flex-shrink:0;">' + timeStr + '</span>' +
+                '</div>' +
+                '<span style="font-size:0.75rem; font-weight:600; color:' + labelColor + '; flex-shrink:0; margin-left:0.4rem;">' + ev.badge_label + '</span>' +
+                '</div>';
+        });
+        if (weekAhead.length > 5) {
+            html += '<div style="font-size:0.72rem; color:var(--text-muted); text-align:center;">+ ' + (weekAhead.length - 5) + ' more this week</div>';
+        }
+        html += '</div>';
+        banner.innerHTML = html;
         banner.style.display = 'block';
     }
 
@@ -6276,12 +6339,20 @@
             var rsvpBlock = '';
             if (ev.source === 'custom') {
                 var myR = ev.my_rsvp || 'none';
+                var partnerR = ev.partner_rsvp || 'none';
+                var partnerRsvpLabel = 'No response yet';
+                var partnerRsvpColor = 'var(--text-muted)';
+                if (partnerR === 'accepted') { partnerRsvpLabel = 'Going'; partnerRsvpColor = 'var(--success-color)'; }
+                else if (partnerR === 'tentative') { partnerRsvpLabel = 'Maybe'; partnerRsvpColor = '#f59e0b'; }
+                else if (partnerR === 'declined') { partnerRsvpLabel = "Can\\'t make it"; partnerRsvpColor = 'var(--text-muted)'; }
+
                 rsvpBlock = '<div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.4rem; font-size:0.75rem;">' +
                     '<span style="color:var(--text-muted);">RSVP:</span>' +
                     '<button onclick="rsvpCalendarEvent(\'' + ev.id + '\', \'' + bondId + '\', \'accepted\')" style="background:' + (myR === 'accepted' ? 'var(--primary-color)' : 'none') + '; color:' + (myR === 'accepted' ? '#fff' : 'var(--text-muted)') + '; border:1px solid var(--border-color); border-radius:4px; padding:0.1rem 0.4rem; cursor:pointer;">Going</button>' +
                     '<button onclick="rsvpCalendarEvent(\'' + ev.id + '\', \'' + bondId + '\', \'tentative\')" style="background:' + (myR === 'tentative' ? 'var(--primary-color)' : 'none') + '; color:' + (myR === 'tentative' ? '#fff' : 'var(--text-muted)') + '; border:1px solid var(--border-color); border-radius:4px; padding:0.1rem 0.4rem; cursor:pointer;">Maybe</button>' +
                     '<button onclick="rsvpCalendarEvent(\'' + ev.id + '\', \'' + bondId + '\', \'declined\')" style="background:' + (myR === 'declined' ? 'var(--primary-color)' : 'none') + '; color:' + (myR === 'declined' ? '#fff' : 'var(--text-muted)') + '; border:1px solid var(--border-color); border-radius:4px; padding:0.1rem 0.4rem; cursor:pointer;">Can\'t</button>' +
-                    '</div>';
+                    '</div>' +
+                    '<div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.25rem;">Partner: <span style="font-weight:600; color:' + partnerRsvpColor + ';">' + partnerRsvpLabel + '</span></div>';
             }
 
             html += '<div style="padding:0.6rem; background:var(--card-bg); border:1px solid var(--border-color); border-radius:6px;">' +
@@ -6447,12 +6518,96 @@
         }).then(function(r) { return r.json(); }).then(function(d) {
             if (d.success) {
                 loadCalendar(bondId);
-                if (window.showCustomToast) showCustomToast('Countdown promoted to calendar event! 📅', 'success');
+                if (window.showCustomToast) showCustomToast('Countdown promoted to calendar event!', 'success');
             } else if (window.showCustomAlert) {
                 showCustomAlert(d.error || 'Failed to promote countdown', 'danger');
             }
         });
     }
+
+    // --- At-a-Glance Upcoming Events Widget ---
+    function loadUpcomingGlance(bondId) {
+        var container = document.getElementById('upcoming-glance-' + bondId);
+        var listEl = document.getElementById('upcoming-glance-list-' + bondId);
+        if (!container || !listEl) return;
+
+        var todayStr = new Date().toISOString().slice(0, 10);
+        var futureStr = new Date(Date.now() + 45 * 86400000).toISOString().slice(0, 10);
+
+        echoFetch('/api/bonds/' + bondId + '/calendar?start=' + todayStr + '&end=' + futureStr)
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d || !d.success) { container.style.display = 'none'; return; }
+                var upcoming = (d.events || []).filter(function(e) {
+                    return e.diff_days !== undefined && e.diff_days >= 0;
+                });
+                upcoming.sort(function(a, b) { return (a.diff_days - b.diff_days) || ((a.time || '').localeCompare(b.time || '')); });
+                renderGlanceList(bondId, upcoming.slice(0, 3), container, listEl);
+            })
+            .catch(function() {
+                // Try from cache
+                getBondCache(bondId + ':calendar').then(function(cached) {
+                    if (cached && cached.events) {
+                        var upcoming = cached.events.filter(function(e) {
+                            return e.diff_days !== undefined && e.diff_days >= 0;
+                        });
+                        upcoming.sort(function(a, b) { return (a.diff_days - b.diff_days) || ((a.time || '').localeCompare(b.time || '')); });
+                        renderGlanceList(bondId, upcoming.slice(0, 3), container, listEl);
+                    }
+                }).catch(function() { container.style.display = 'none'; });
+            });
+    }
+
+    function renderGlanceList(bondId, events, container, listEl) {
+        if (!events || events.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+        var html = '';
+        events.forEach(function(ev) {
+            var icon = '📅';
+            if (ev.source === 'countdown') icon = '⏳';
+            else if (ev.source === 'goal') icon = '🎯';
+            else if (ev.source === 'anniversary' || ev.source === 'milestone') icon = '❤️';
+            var labelColor = ev.badge_status === 'success' ? 'var(--success-color)' : (ev.badge_status === 'muted' ? 'var(--text-muted)' : 'var(--primary-color)');
+            var timeStr = ev.time ? ' · ' + ev.time : '';
+            html += '<div onclick="openCalendarFromGlance(\'' + bondId + '\', \'' + ev.date + '\')" style="display:flex; justify-content:space-between; align-items:center; padding:0.3rem 0; cursor:pointer;">' +
+                '<div style="display:flex; align-items:center; gap:0.35rem; flex:1; min-width:0; font-size:0.8rem; color:var(--text-dark-color);">' +
+                '<span>' + icon + '</span>' +
+                '<span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escHtml(ev.title) + '</span>' +
+                '<span style="font-size:0.7rem; color:var(--text-muted); flex-shrink:0;">' + timeStr + '</span>' +
+                '</div>' +
+                '<span style="font-size:0.72rem; font-weight:600; color:' + labelColor + '; flex-shrink:0; margin-left:0.4rem;">' + ev.badge_label + '</span>' +
+                '</div>';
+        });
+        listEl.innerHTML = html;
+        container.style.display = 'block';
+    }
+
+    function openCalendarFromGlance(bondId, dateStr) {
+        // Find and click the Calendar section tab
+        var bondCard = document.getElementById('bond-' + bondId);
+        if (bondCard) {
+            var tabs = bondCard.querySelectorAll('.btn-bond-section');
+            tabs.forEach(function(tab) {
+                if (tab.textContent.trim().indexOf('Calendar') === 0) {
+                    tab.click();
+                }
+            });
+        }
+        // If a date was passed, select it after a short delay for the calendar to load
+        if (dateStr) {
+            setTimeout(function() { selectCalendarDate(bondId, dateStr); }, 400);
+        }
+    }
+
+    // Auto-load the at-a-glance widget for each bond on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.bond-card').forEach(function(card) {
+            var bondId = card.id.replace('bond-', '');
+            if (bondId) loadUpcomingGlance(bondId);
+        });
+    });
 
     // --- App Lock PIN Modal & Verification ---
     let currentPin = '';

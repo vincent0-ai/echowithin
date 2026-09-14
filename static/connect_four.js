@@ -174,9 +174,13 @@
     return token;
   }
 
+  let _rateLimitedUntil = 0;
+  let _isFlushing = false;
+
   function queuePendingSync(category, score, metadata = {}) {
     try {
-      const items = JSON.parse(localStorage.getItem(STORAGE_PENDING_SYNC) || '[]');
+      let items = JSON.parse(localStorage.getItem(STORAGE_PENDING_SYNC) || '[]');
+      items = items.filter(it => it.category !== category);
       items.push({
         game: 'connect_four',
         category,
@@ -184,6 +188,7 @@
         metadata: metadata || {},
         timestamp: new Date().toISOString()
       });
+      if (items.length > 10) items = items.slice(-10);
       localStorage.setItem(STORAGE_PENDING_SYNC, JSON.stringify(items));
     } catch (_) {}
   }
@@ -196,13 +201,17 @@
     } catch (_) {}
   }
 
-  async function submitArcadeScore(category, score, metadata = {}) {
-    if (!score || score <= 0) return;
-    if (state.mode === 'local') return; // Strict local isolation
+  async function submitArcadeScore(category, score, metadata = {}, isFlushing = false) {
+    if (!score || score <= 0) return false;
+    if (state.mode === 'local') return false; // Strict local isolation
+    if (Date.now() < _rateLimitedUntil) {
+      if (!isFlushing) queuePendingSync(category, score, metadata);
+      return false;
+    }
     try {
       if (!navigator.onLine) {
-        queuePendingSync(category, score, metadata);
-        return;
+        if (!isFlushing) queuePendingSync(category, score, metadata);
+        return false;
       }
       const token = getGuestToken();
       const res = await fetch('/api/games/leaderboard/submit', {
@@ -221,27 +230,43 @@
         if (typeof window.fetchLeaderboard === 'function') {
           window.fetchLeaderboard();
         }
+        return true;
+      } else if (res.status === 429) {
+        _rateLimitedUntil = Date.now() + 30000;
+        if (!isFlushing) queuePendingSync(category, score, metadata);
+        return false;
       } else {
-        queuePendingSync(category, score, metadata);
+        if (!isFlushing) queuePendingSync(category, score, metadata);
+        return false;
       }
     } catch (_) {
-      queuePendingSync(category, score, metadata);
+      if (!isFlushing) queuePendingSync(category, score, metadata);
+      return false;
     }
   }
 
   async function flushPendingSync() {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine || _isFlushing) return;
+    if (Date.now() < _rateLimitedUntil) return;
+    _isFlushing = true;
     try {
       const raw = localStorage.getItem(STORAGE_PENDING_SYNC);
       if (!raw) return;
       const items = JSON.parse(raw);
       if (!Array.isArray(items) || items.length === 0) return;
       for (const item of items) {
+        if (Date.now() < _rateLimitedUntil) break;
         if (item.game === 'connect_four') {
-          await submitArcadeScore(item.category, item.score, item.metadata || {});
+          const success = await submitArcadeScore(item.category, item.score, item.metadata || {}, true);
+          if (!success && Date.now() < _rateLimitedUntil) {
+            break;
+          }
         }
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _isFlushing = false;
+    }
   }
   window.addEventListener('online', flushPendingSync);
 
@@ -342,10 +367,10 @@
     state.winLine = winLine;
 
     if (draw) {
-      state.scores[2]++;
+      if (state.mode !== 'online') state.scores[2]++;
       playDrawSound();
     } else {
-      state.scores[winner]++;
+      if (state.mode !== 'online') state.scores[winner]++;
       playWinSound();
 
       if (state.mode === 'local') {

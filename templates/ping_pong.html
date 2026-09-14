@@ -549,11 +549,15 @@
 
     const urlParams = new URLSearchParams(window.location.search);
     const roomParam = urlParams.get('room');
-    if (roomParam && tabOnline && window.__pong) {
+    if (roomParam && tabOnline) {
       setActiveTab(tabOnline);
       if (roomInput) roomInput.value = roomParam;
-      window.__pong.setMode('online');
-      window.__pong.joinOnlineRoom(roomParam);
+      if (window.__pong) {
+        window.__pong.setMode('online');
+        if (typeof window.__pong.getRoomId === 'function' && window.__pong.getRoomId() !== roomParam) {
+          window.__pong.joinOnlineRoom(roomParam);
+        }
+      }
     }
   });
 </script>

@@ -5402,7 +5402,7 @@ def api_bond_calendar_export_ics(bond_id):
 @bp.route('/api/bonds/<bond_id>/album/photos', methods=['GET'])
 @login_required
 def api_bond_album_list(bond_id):
-    """List all photos in the bond's shared album with category filter & sorting."""
+    """List photos in the bond's shared album with category filter, sorting & pagination."""
     import main as m
     try:
         bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
@@ -5414,6 +5414,16 @@ def api_bond_album_list(bond_id):
 
         category = request.args.get('category', 'all').strip().lower()
         sort_mode = request.args.get('sort', 'date_desc').strip().lower()
+
+        # Pagination params
+        try:
+            page = max(1, int(request.args.get('page', 1)))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            per_page = min(60, max(1, int(request.args.get('per_page', 30))))
+        except (TypeError, ValueError):
+            per_page = 30
 
         query_filter = {'bond_id': ObjectId(bond_id)}
         if category and category != 'all':
@@ -5430,7 +5440,9 @@ def api_bond_album_list(bond_id):
         elif sort_mode == 'pinned':
             sort_spec = [('is_pinned', -1), ('date_taken', -1)]
 
-        photos = list(m.bond_album_photos_conf.find(query_filter).sort(sort_spec).limit(200))
+        total_count = m.bond_album_photos_conf.count_documents(query_filter)
+        skip = (page - 1) * per_page
+        photos = list(m.bond_album_photos_conf.find(query_filter).sort(sort_spec).skip(skip).limit(per_page))
 
         result = []
         for p in photos:
@@ -5444,6 +5456,12 @@ def api_bond_album_list(bond_id):
                 decrypted_url = m.build_media_serve_url(pub_id, p.get('mime_type', 'application/octet-stream')) or decrypted_url
             else:
                 decrypted_url = m.re_sign_cloudinary_url(pub_id, resource_type='image', delivery_type='authenticated', fallback_url=decrypted_url or '') or decrypted_url
+
+            # Generate thumbnail URL from dedicated thumb asset if available
+            thumb_url = None
+            thumb_pub_id = p.get('thumb_public_id', '')
+            if thumb_pub_id:
+                thumb_url = m.build_media_serve_url(thumb_pub_id, p.get('thumb_mime_type', 'image/jpeg'))
 
             uploaded_by_id = str(p.get('uploaded_by', ''))
             uploader_name = 'Partner'
@@ -5471,6 +5489,7 @@ def api_bond_album_list(bond_id):
                 'category': p.get('category', 'other'),
                 'date_taken': _format_datetime(p.get('date_taken')),
                 'url': decrypted_url,
+                'thumb_url': thumb_url,
                 'uploaded_by': uploaded_by_id,
                 'uploaded_by_name': uploader_name,
                 'uploaded_by_me': uploaded_by_id == user_id_str,
@@ -5482,10 +5501,14 @@ def api_bond_album_list(bond_id):
             if decrypted_url:
                 result.append(photo)
 
+        has_more = (skip + per_page) < total_count
         return jsonify({
             'success': True,
             'photos': result,
-            'total_count': len(result),
+            'total_count': total_count,
+            'page': page,
+            'per_page': per_page,
+            'has_more': has_more,
             'sort': sort_mode,
             'category': category
         })
@@ -5565,15 +5588,34 @@ def api_bond_album_upload(bond_id):
             photo_public_id = ''
             photo_mime = ''
             media_encrypted = False
+            thumb_public_id = ''
+            thumb_mime = 'image/jpeg'
             # Attempt Cloudinary upload first (server-side encrypted at rest)
             try:
                 photo_mime = (file.mimetype or 'image/jpeg')[:200]
                 _raw = file.read()
+                _thumb_raw = None
                 try:
                     from PIL import Image, ImageOps
                     import io
                     with Image.open(io.BytesIO(_raw)) as img:
                         img = ImageOps.exif_transpose(img)
+                        # Generate 300x300 thumbnail for grid display (before full-size resize)
+                        try:
+                            thumb_img = img.copy()
+                            thumb_img.thumbnail((300, 300), Image.Resampling.LANCZOS)
+                            if thumb_img.mode in ('RGBA', 'LA'):
+                                thumb_img = thumb_img.convert('RGB')
+                            thumb_io = io.BytesIO()
+                            thumb_img.save(thumb_io, format='JPEG', quality=70, optimize=True)
+                            _thumb_raw = thumb_io.getvalue()
+                            thumb_mime = 'image/jpeg'
+                            thumb_img.close()
+                        except Exception as thumb_err:
+                            current_app.logger.debug(f"Album thumbnail generation skipped: {thumb_err}")
+                            _thumb_raw = None
+
+                        # Full-size optimization (1600x1600)
                         max_dim = (1600, 1600)
                         img.thumbnail(max_dim, Image.Resampling.LANCZOS)
                         out_io = io.BytesIO()
@@ -5590,6 +5632,24 @@ def api_bond_album_upload(bond_id):
 
                 _cipher = m.encrypt_media_bytes(_raw)
                 del _raw
+
+                # Upload thumbnail first (non-blocking failure)
+                if _thumb_raw:
+                    try:
+                        _thumb_cipher = m.encrypt_media_bytes(_thumb_raw)
+                        del _thumb_raw
+                        thumb_result = m.cloudinary.uploader.upload(
+                            _thumb_cipher,
+                            folder='echowithin_bond_album_thumb',
+                            resource_type='raw',
+                            type='authenticated'
+                        )
+                        thumb_public_id = thumb_result.get('public_id', '')
+                        del _thumb_cipher
+                    except Exception as thumb_upload_err:
+                        current_app.logger.debug(f"Album thumbnail upload skipped: {thumb_upload_err}")
+                        thumb_public_id = ''
+
                 upload_result = m.cloudinary.uploader.upload(
                     _cipher,
                     folder='echowithin_bond_album',
@@ -5631,6 +5691,8 @@ def api_bond_album_upload(bond_id):
                 'date_taken': date_taken,
                 'url': encrypted_url,
                 'public_id': photo_public_id if photo_public_id else '',
+                'thumb_public_id': thumb_public_id,
+                'thumb_mime_type': thumb_mime,
                 'resource_type': 'raw' if media_encrypted else 'image',
                 'media_encrypted': media_encrypted,
                 'mime_type': photo_mime or 'image/jpeg',

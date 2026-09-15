@@ -4317,7 +4317,7 @@
     };
 
     function setAlbumViewMode(bondId, mode) {
-        if (!bondAlbumState[bondId]) bondAlbumState[bondId] = { category: 'all', sort: 'date_desc', viewMode: 'grid', photos: [] };
+        if (!bondAlbumState[bondId]) bondAlbumState[bondId] = { category: 'all', sort: 'date_desc', viewMode: 'grid', photos: [], page: 1, hasMore: false, isLoadingMore: false, totalCount: 0 };
         bondAlbumState[bondId].viewMode = mode;
 
         ['grid', 'timeline', 'polaroid'].forEach(function(m) {
@@ -4330,7 +4330,7 @@
 
         var container = document.getElementById('album-grid-' + bondId);
         if (container && bondAlbumState[bondId].photos) {
-            container.innerHTML = renderAlbumContentHtml(bondId, bondAlbumState[bondId].photos, mode);
+            container.innerHTML = renderAlbumContentHtml(bondId, bondAlbumState[bondId].photos, mode) + renderLoadMoreBtn(bondId);
         }
     }
 
@@ -4374,7 +4374,7 @@
 
         matches.forEach(function(m) {
             var fullIdx = photos.findIndex(function(x) { return x.id === m.id; });
-            html += '<img src="' + m.url + '" class="otd-thumb" alt="' + escHtml(m.title || 'Memory') + '" title="' + escHtml(m.title || 'Memory') + '" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + (fullIdx >= 0 ? fullIdx : 0) + ')">';
+            html += '<img src="' + (m.thumb_url || m.url) + '" class="otd-thumb" alt="' + escHtml(m.title || 'Memory') + '" title="' + escHtml(m.title || 'Memory') + '" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + (fullIdx >= 0 ? fullIdx : 0) + ')">';
         });
 
         html += '</div></div>';
@@ -4416,7 +4416,7 @@
                 html += '<div class="album-pin-badge" title="Pinned Memory"><i class="fas fa-thumbtack"></i></div>';
             }
             html += '<div class="album-cat-badge">' + catIcon + ' ' + escHtml(catLabel) + '</div>';
-            html += '<img src="' + p.url + '" alt="' + title + '" loading="lazy" decoding="async">';
+            html += '<img src="' + (p.thumb_url || p.url) + '" alt="' + title + '" loading="lazy" decoding="async">';
             html += '<div style="padding:0.4rem 0.5rem;">';
             html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
             html += '<div style="font-size:0.75rem;font-weight:600;color:var(--text-dark-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">' + title + '</div>';
@@ -4447,7 +4447,7 @@
             if (p.is_pinned) {
                 html += '<div style="position:absolute;top:2px;right:6px;color:#c62828;font-size:1.1rem;"><i class="fas fa-thumbtack"></i></div>';
             }
-            html += '<img src="' + p.url + '" alt="' + title + '" loading="lazy" decoding="async">';
+            html += '<img src="' + (p.thumb_url || p.url) + '" alt="' + title + '" loading="lazy" decoding="async">';
             html += '<div class="polaroid-caption">' + title + '</div>';
             html += '<div class="polaroid-date">' + (dateStr ? dateStr : 'A special moment') + (reactBadges ? ' · ' + reactBadges : '') + '</div>';
             html += '</div>';
@@ -4483,7 +4483,7 @@
 
                 html += '<div class="album-photo-card" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + idx + ')">';
                 if (p.is_pinned) html += '<div class="album-pin-badge"><i class="fas fa-thumbtack"></i></div>';
-                html += '<img src="' + p.url + '" alt="' + title + '" loading="lazy" decoding="async" style="height:105px;">';
+                html += '<img src="' + (p.thumb_url || p.url) + '" alt="' + title + '" loading="lazy" decoding="async" style="height:105px;">';
                 html += '<div style="padding:0.35rem 0.45rem;">';
                 html += '<div style="font-size:0.72rem;font-weight:600;color:var(--text-dark-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>';
                 html += '<div style="font-size:0.62rem;color:var(--text-muted);">' + catIcon + ' ' + (dayStr || 'Photo') + '</div>';
@@ -4496,13 +4496,38 @@
         return html;
     }
 
+    function renderLoadMoreBtn(bondId) {
+        var st = bondAlbumState[bondId];
+        if (!st || !st.hasMore) return '';
+        if (st.isLoadingMore) {
+            return '<div style="text-align:center;padding:0.8rem;"><div style="color:var(--text-muted);font-size:0.82rem;">Loading more photos...</div></div>';
+        }
+        var loaded = st.photos ? st.photos.length : 0;
+        var total = st.totalCount || 0;
+        return '<div style="text-align:center;padding:0.8rem;">'
+            + '<button type="button" class="btn btn-bond-section" style="font-size:0.78rem; padding:0.35rem 1.2rem; border-radius:20px; touch-action:manipulation;" '
+            + 'onclick="loadMoreAlbumPhotos(\'' + bondId + '\')">'
+            + 'Load More (' + loaded + ' of ' + total + ')</button></div>';
+    }
+
     function loadAlbum(bondId, catOverride, sortOverride) {
         var container = document.getElementById('album-grid-' + bondId);
         if (!container) return;
 
         if (!bondAlbumState[bondId]) {
-            bondAlbumState[bondId] = { category: 'all', sort: 'date_desc', viewMode: 'grid', photos: [] };
+            bondAlbumState[bondId] = { category: 'all', sort: 'date_desc', viewMode: 'grid', photos: [], page: 1, hasMore: false, isLoadingMore: false, totalCount: 0 };
         }
+
+        // Reset pagination when category or sort changes
+        var catChanged = catOverride !== undefined && catOverride !== bondAlbumState[bondId].category;
+        var sortChanged = sortOverride !== undefined && sortOverride !== bondAlbumState[bondId].sort;
+        if (catChanged || sortChanged) {
+            bondAlbumState[bondId].photos = [];
+            bondAlbumState[bondId].page = 1;
+            bondAlbumState[bondId].hasMore = false;
+            bondAlbumState[bondId].totalCount = 0;
+        }
+
         if (catOverride !== undefined) bondAlbumState[bondId].category = catOverride;
         if (sortOverride !== undefined) bondAlbumState[bondId].sort = sortOverride;
 
@@ -4511,21 +4536,27 @@
         var viewMode = bondAlbumState[bondId].viewMode || 'grid';
         var cacheKey = bondId + ':album:' + cat + ':' + sort;
         var hasExistingPhotos = bondAlbumState[bondId].photos && bondAlbumState[bondId].photos.length > 0;
+
+        // Reset to page 1 for fresh load
+        bondAlbumState[bondId].page = 1;
+
         if (!hasExistingPhotos) {
             getBondCache(cacheKey).then(function(cached) {
                 if (cached && cached.photos && cached.photos.length > 0 && (!bondAlbumState[bondId].photos || bondAlbumState[bondId].photos.length === 0)) {
                     bondAlbumState[bondId].photos = cached.photos;
+                    bondAlbumState[bondId].hasMore = cached.has_more || false;
+                    bondAlbumState[bondId].totalCount = cached.total_count || cached.photos.length;
                     var countEl = document.getElementById('album-count-' + bondId);
-                    if (countEl) countEl.textContent = cached.photos.length + ' photo' + (cached.photos.length > 1 ? 's' : '');
+                    if (countEl) countEl.textContent = bondAlbumState[bondId].totalCount + ' photo' + (bondAlbumState[bondId].totalCount > 1 ? 's' : '');
                     checkOnThisDayMemories(bondId, cached.photos);
                     var el = document.getElementById('album-grid-' + bondId);
-                    if (el) el.innerHTML = renderAlbumContentHtml(bondId, cached.photos, viewMode);
+                    if (el) el.innerHTML = renderAlbumContentHtml(bondId, cached.photos, viewMode) + renderLoadMoreBtn(bondId);
                 }
             }).catch(function() {});
             container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:0.8rem;">Loading photos...</div>';
         }
 
-        echoFetch('/api/bonds/' + bondId + '/album/photos?category=' + cat + '&sort=' + sort)
+        echoFetch('/api/bonds/' + bondId + '/album/photos?category=' + cat + '&sort=' + sort + '&page=1&per_page=30')
             .then(function(r) { return r.json(); })
             .then(function(d) {
                 var el = document.getElementById('album-grid-' + bondId);
@@ -4535,6 +4566,8 @@
                 }
                 if (!d.success || !d.photos || d.photos.length === 0) {
                     bondAlbumState[bondId].photos = [];
+                    bondAlbumState[bondId].hasMore = false;
+                    bondAlbumState[bondId].totalCount = 0;
                     var countEl = document.getElementById('album-count-' + bondId);
                     if (countEl) countEl.textContent = '0 photos';
                     el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1.2rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">No photos found in this category. Click "+ Add Photos" to capture your first memory!</div>';
@@ -4542,19 +4575,16 @@
                     return;
                 }
 
-                var prevPhotos = bondAlbumState[bondId].photos || [];
-                var samePhotos = prevPhotos.length === d.photos.length && prevPhotos.every(function(p, i) {
-                    return d.photos[i] && p.id === d.photos[i].id && p.url === d.photos[i].url;
-                });
-
                 bondAlbumState[bondId].photos = d.photos;
+                bondAlbumState[bondId].page = d.page || 1;
+                bondAlbumState[bondId].hasMore = d.has_more || false;
+                bondAlbumState[bondId].totalCount = d.total_count || d.photos.length;
+
                 var countEl = document.getElementById('album-count-' + bondId);
-                if (countEl) countEl.textContent = d.photos.length + ' photo' + (d.photos.length > 1 ? 's' : '');
+                if (countEl) countEl.textContent = bondAlbumState[bondId].totalCount + ' photo' + (bondAlbumState[bondId].totalCount > 1 ? 's' : '');
 
                 checkOnThisDayMemories(bondId, d.photos);
-                if (!samePhotos || !hasExistingPhotos) {
-                    el.innerHTML = renderAlbumContentHtml(bondId, d.photos, viewMode);
-                }
+                el.innerHTML = renderAlbumContentHtml(bondId, d.photos, viewMode) + renderLoadMoreBtn(bondId);
             })
             .catch(function() {
                 var el = document.getElementById('album-grid-' + bondId);
@@ -4562,10 +4592,12 @@
                 getBondCache(cacheKey).then(function(cached) {
                     if (cached && cached.photos && cached.photos.length > 0) {
                         bondAlbumState[bondId].photos = cached.photos;
+                        bondAlbumState[bondId].hasMore = cached.has_more || false;
+                        bondAlbumState[bondId].totalCount = cached.total_count || cached.photos.length;
                         var countEl = document.getElementById('album-count-' + bondId);
-                        if (countEl) countEl.textContent = cached.photos.length + ' photo' + (cached.photos.length > 1 ? 's' : '');
+                        if (countEl) countEl.textContent = bondAlbumState[bondId].totalCount + ' photo' + (bondAlbumState[bondId].totalCount > 1 ? 's' : '');
                         checkOnThisDayMemories(bondId, cached.photos);
-                        el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached photos</div>' + renderAlbumContentHtml(bondId, cached.photos, viewMode);
+                        el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached photos</div>' + renderAlbumContentHtml(bondId, cached.photos, viewMode) + renderLoadMoreBtn(bondId);
                     } else {
                         var countEl = document.getElementById('album-count-' + bondId);
                         if (countEl) countEl.textContent = 'Offline';
@@ -4574,6 +4606,55 @@
                 }).catch(function() {
                     el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1.2rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">Shared album photos will load once you are back online.</div>';
                 });
+            });
+    }
+
+    function loadMoreAlbumPhotos(bondId) {
+        var st = bondAlbumState[bondId];
+        if (!st || !st.hasMore || st.isLoadingMore) return;
+
+        st.isLoadingMore = true;
+        var nextPage = (st.page || 1) + 1;
+        var cat = st.category;
+        var sort = st.sort;
+        var viewMode = st.viewMode || 'grid';
+
+        // Update the Load More button to show loading state
+        var container = document.getElementById('album-grid-' + bondId);
+        if (container) {
+            var existingBtn = container.querySelector('[onclick*="loadMoreAlbumPhotos"]');
+            if (existingBtn) {
+                existingBtn.parentElement.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;">Loading more photos...</div>';
+            }
+        }
+
+        echoFetch('/api/bonds/' + bondId + '/album/photos?category=' + cat + '&sort=' + sort + '&page=' + nextPage + '&per_page=30')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                st.isLoadingMore = false;
+                if (!d || !d.success || !d.photos || d.photos.length === 0) {
+                    st.hasMore = false;
+                    // Remove the Load More button
+                    var el = document.getElementById('album-grid-' + bondId);
+                    if (el) el.innerHTML = renderAlbumContentHtml(bondId, st.photos, viewMode);
+                    return;
+                }
+
+                // Append new photos to existing array
+                st.photos = st.photos.concat(d.photos);
+                st.page = d.page || nextPage;
+                st.hasMore = d.has_more || false;
+                st.totalCount = d.total_count || st.photos.length;
+
+                // Re-render the full grid with all loaded photos + Load More
+                var el = document.getElementById('album-grid-' + bondId);
+                if (el) el.innerHTML = renderAlbumContentHtml(bondId, st.photos, viewMode) + renderLoadMoreBtn(bondId);
+            })
+            .catch(function() {
+                st.isLoadingMore = false;
+                // Restore the Load More button on error
+                var el = document.getElementById('album-grid-' + bondId);
+                if (el) el.innerHTML = renderAlbumContentHtml(bondId, st.photos, viewMode) + renderLoadMoreBtn(bondId);
             });
     }
 

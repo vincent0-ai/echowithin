@@ -32,11 +32,10 @@ def run_backfill(batch_size=20, dry_run=False):
 
     with app.app_context():
         query = {
-            'media_encrypted': True,
-            'public_id': {'$ne': ''},
             '$or': [
                 {'thumb_public_id': {'$exists': False}},
                 {'thumb_public_id': ''},
+                {'thumb_public_id': None},
             ],
         }
         total = bond_album_photos_conf.count_documents(query)
@@ -53,35 +52,62 @@ def run_backfill(batch_size=20, dry_run=False):
         for doc in cursor:
             photo_id = doc['_id']
             public_id = doc.get('public_id', '')
-            if not public_id:
-                skipped += 1
-                continue
+            is_media_enc = doc.get('media_encrypted')
 
             processed += 1
-            print(f"[{processed}/{total}] Processing {photo_id} (public_id={public_id[:40]}...)")
+            print(f"[{processed}/{total}] Processing {photo_id} (public_id={public_id[:35] if public_id else 'none'}...)")
 
             if dry_run:
                 print(f"  [DRY RUN] Would generate thumbnail for {photo_id}")
                 continue
 
             try:
-                # 1. Fetch encrypted full image from Cloudinary
-                signed_url = generate_signed_cloudinary_url(
-                    public_id, resource_type='raw', delivery_type='authenticated'
-                )
-                if not signed_url:
-                    print(f"  [SKIP] No signed URL for {public_id}")
+                plain = None
+                # 1. Fetch image
+                if is_media_enc and public_id:
+                    signed_url = generate_signed_cloudinary_url(
+                        public_id, resource_type='raw', delivery_type='authenticated'
+                    )
+                    if not signed_url:
+                        print(f"  [SKIP] No signed URL for {public_id}")
+                        skipped += 1
+                        continue
+
+                    resp = http_requests.get(signed_url, timeout=30)
+                    if resp.status_code != 200:
+                        print(f"  [FAIL] Cloudinary fetch HTTP {resp.status_code}")
+                        failed += 1
+                        continue
+
+                    plain = decrypt_media_bytes(resp.content)
+                elif doc.get('url'):
+                    from security import decrypt_bond_data
+                    raw_url = doc.get('url', '')
+                    if doc.get('encrypted'):
+                        try:
+                            raw_url = decrypt_bond_data(raw_url, str(doc['bond_id']))
+                        except Exception:
+                            pass
+                    if raw_url and ' ' in raw_url:
+                        raw_url = raw_url.replace(' ', '%20')
+                    if not raw_url or not raw_url.startswith('http'):
+                        print(f"  [SKIP] Invalid url for {photo_id}")
+                        skipped += 1
+                        continue
+
+                    resp = http_requests.get(raw_url, timeout=30)
+                    if resp.status_code != 200:
+                        print(f"  [FAIL] Image fetch HTTP {resp.status_code}")
+                        failed += 1
+                        continue
+                    plain = resp.content
+                    if is_media_enc:
+                        plain = decrypt_media_bytes(plain)
+
+                if not plain:
+                    print(f"  [SKIP] No plain image data obtained for {photo_id}")
                     skipped += 1
                     continue
-
-                resp = http_requests.get(signed_url, timeout=30)
-                if resp.status_code != 200:
-                    print(f"  [FAIL] Cloudinary fetch HTTP {resp.status_code}")
-                    failed += 1
-                    continue
-
-                # 2. Decrypt
-                plain = decrypt_media_bytes(resp.content)
 
                 # 3. Generate 300x300 JPEG thumbnail
                 from PIL import Image, ImageOps

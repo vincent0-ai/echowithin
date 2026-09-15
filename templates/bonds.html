@@ -269,35 +269,58 @@
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         position: relative;
     }
-    @media (min-width: 768px) {
-        .bond-lightbox-container {
-            flex-direction: row;
-        }
-    }
     .bond-lightbox-media {
-        flex: 1.5;
         background: #0a0a0a;
         display: flex;
         align-items: center;
         justify-content: center;
         position: relative;
-        min-height: 300px;
-        max-height: 70dvh;
+        overflow: hidden;
+        flex: 0 0 auto;
+        height: 46dvh;
+        max-height: 46dvh;
+        min-height: 180px;
         user-select: none;
     }
     .bond-lightbox-media img {
         max-width: 100%;
         max-height: 100%;
+        width: auto;
+        height: auto;
         object-fit: contain;
+        display: block;
     }
     .bond-lightbox-details {
-        flex: 1;
-        padding: 1.2rem;
+        flex: 1 1 auto;
+        min-height: 0;
+        padding: 1rem 1.2rem;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
         background: var(--card-bg);
         overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        position: relative;
+        z-index: 2;
+        border-top: 1px solid var(--border-color);
+    }
+    @media (min-width: 768px) {
+        .bond-lightbox-container {
+            flex-direction: row;
+            max-height: 88dvh;
+        }
+        .bond-lightbox-media {
+            flex: 1.5;
+            height: auto;
+            max-height: 88dvh;
+            min-height: 400px;
+        }
+        .bond-lightbox-details {
+            flex: 1;
+            border-top: none;
+            border-left: 1px solid var(--border-color);
+            max-height: 88dvh;
+        }
     }
 
     /* On This Day / Flashback Card */
@@ -2108,6 +2131,9 @@
                         <span id="album-count-{{ bond.id }}" style="font-size: 0.75rem; color: var(--text-muted); background: var(--surface-bg); border: 1px solid var(--border-color); padding: 0.1rem 0.4rem; border-radius: 12px;">0 photos</span>
                     </div>
                     <div style="display: flex; gap: 0.4rem; align-items: center;">
+                        <button type="button" class="btn btn-bond-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; border-radius: 6px; touch-action: manipulation;" onclick="toggleCollageMode('{{ bond.id }}')" id="collage-toggle-btn-{{ bond.id }}" title="Create a collage from 4-9 photos">
+                            <i class="fas fa-th"></i> Collage
+                        </button>
                         <button type="button" class="btn btn-bond-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; border-radius: 6px; touch-action: manipulation;" onclick="startAlbumSlideshow('{{ bond.id }}')">
                             <i class="fas fa-play"></i> Slideshow
                         </button>
@@ -2115,51 +2141,61 @@
                     </div>
                 </div>
 
+                <!-- Collage Mode Banner Toolbar -->
+                <div id="collage-toolbar-{{ bond.id }}" style="display: none; justify-content: space-between; align-items: center; background: var(--surface-bg); border: 1px solid var(--primary-color); border-radius: 8px; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <div style="font-size: 0.8rem; color: var(--text-dark-color); display: flex; align-items: center; gap: 0.4rem;">
+                        <i class="fas fa-layer-group" style="color: var(--primary-color);"></i>
+                        <span><strong id="collage-counter-{{ bond.id }}">0</strong> / 9 selected</span>
+                        <span style="color: var(--text-muted); font-size: 0.72rem;">(choose 4 to 9 photos)</span>
+                    </div>
+                    <div style="display: flex; gap: 0.4rem; align-items: center;">
+                        <button type="button" class="btn btn-bond-secondary" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;" onclick="cancelCollageMode('{{ bond.id }}')">Cancel</button>
+                        <button type="button" id="collage-submit-btn-{{ bond.id }}" class="btn btn-bond-primary" style="font-size: 0.72rem; padding: 0.2rem 0.65rem;" onclick="submitCollageGeneration('{{ bond.id }}')" disabled>Generate Collage</button>
+                    </div>
+                </div>
+
                 <!-- "On This Day" / Flashback Banner (populated dynamically if memories exist) -->
                 <div id="album-on-this-day-{{ bond.id }}" style="display: none;"></div>
 
-                <!-- Album Toolbar: View Switcher, Category Chips & Sort Selector -->
-                <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem; padding: 0.5rem 0.6rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px;">
-                    <!-- Top Row: View Mode Switcher + Sort Selector -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                        <div style="display: flex; gap: 0.3rem; align-items: center;">
-                            <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">View:</span>
-                            <button type="button" class="album-view-btn active" id="view-grid-btn-{{ bond.id }}" onclick="setAlbumViewMode('{{ bond.id }}', 'grid')" title="Compact Grid">
-                                <i class="fas fa-th-large"></i> Grid
-                            </button>
-                            <button type="button" class="album-view-btn" id="view-timeline-btn-{{ bond.id }}" onclick="setAlbumViewMode('{{ bond.id }}', 'timeline')" title="Story / Timeline">
-                                <i class="fas fa-stream"></i> Timeline
-                            </button>
-                            <button type="button" class="album-view-btn" id="view-polaroid-btn-{{ bond.id }}" onclick="setAlbumViewMode('{{ bond.id }}', 'polaroid')" title="Polaroid Scrapbook">
-                                <i class="fas fa-images"></i> Polaroid
-                            </button>
-                        </div>
-
-                        <!-- Sort Arrangement Selector -->
-                        <div style="display: flex; align-items: center; gap: 0.4rem;">
-                            <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">Sort:</label>
-                            <select id="album-sort-{{ bond.id }}" onchange="changeAlbumSort('{{ bond.id }}', this.value)" style="font-size: 0.75rem; padding: 0.2rem 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; touch-action: manipulation;">
-                                <option value="date_desc">Date Taken (Newest)</option>
-                                <option value="date_asc">Date Taken (Oldest)</option>
-                                <option value="uploaded_desc">Latest Uploaded</option>
-                                <option value="uploaded_asc">Oldest Uploaded</option>
-                                <option value="pinned">Pinned First</option>
-                            </select>
-                        </div>
+                <!-- Album Toolbar: View Switcher, Category & Sort Selectors — Single Row -->
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; padding: 0.5rem 0.6rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; align-items: center; flex-wrap: wrap;">
+                    <!-- View Mode Switcher -->
+                    <div style="display: flex; gap: 0.3rem; align-items: center;">
+                        <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">View:</span>
+                        <button type="button" class="album-view-btn active" id="view-grid-btn-{{ bond.id }}" onclick="setAlbumViewMode('{{ bond.id }}', 'grid')" title="Compact Grid">
+                            <i class="fas fa-th-large"></i> Grid
+                        </button>
+                        <button type="button" class="album-view-btn" id="view-timeline-btn-{{ bond.id }}" onclick="setAlbumViewMode('{{ bond.id }}', 'timeline')" title="Story / Timeline">
+                            <i class="fas fa-stream"></i> Timeline
+                        </button>
+                        <button type="button" class="album-view-btn" id="view-polaroid-btn-{{ bond.id }}" onclick="setAlbumViewMode('{{ bond.id }}', 'polaroid')" title="Polaroid Scrapbook">
+                            <i class="fas fa-images"></i> Polaroid
+                        </button>
                     </div>
 
-                    <!-- Bottom Row: Category Filter Chips -->
-                    <div style="display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center;" id="album-cat-chips-{{ bond.id }}">
-                        <button type="button" class="album-chip active" onclick="setAlbumCategory('{{ bond.id }}', 'all', this)" style="touch-action: manipulation;">All</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'memory', this)" style="touch-action: manipulation;">📸 Memories</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'milestone', this)" style="touch-action: manipulation;">🏆 Milestones</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'fun', this)" style="touch-action: manipulation;">😄 Fun</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'travel', this)" style="touch-action: manipulation;">✈️ Travel</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'special', this)" style="touch-action: manipulation;">✨ Special</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'food', this)" style="touch-action: manipulation;">🍴 Food</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'pets', this)" style="touch-action: manipulation;">🐾 Pets</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'jokes', this)" style="touch-action: manipulation;">💬 Inside Jokes</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'other', this)" style="touch-action: manipulation;">Other</button>
+                    <!-- Category Filter Dropdown -->
+                    <div style="display: flex; align-items: center; gap: 0.3rem; margin-left: auto;">
+                        <select id="album-cat-{{ bond.id }}" onchange="setAlbumCategory('{{ bond.id }}', this.value)" style="font-size: 0.75rem; padding: 0.2rem 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; touch-action: manipulation;">
+                            <option value="all">All Photos</option>
+                            <option value="memory">📸 Memories</option>
+                            <option value="milestone">🏆 Milestones</option>
+                            <option value="fun">😄 Fun</option>
+                            <option value="travel">✈️ Travel</option>
+                            <option value="special">✨ Special</option>
+                            <option value="food">🍴 Food</option>
+                            <option value="pets">🐾 Pets</option>
+                            <option value="jokes">💬 Inside Jokes</option>
+                            <option value="other">Other</option>
+                        </select>
+
+                        <!-- Sort Selector -->
+                        <select id="album-sort-{{ bond.id }}" onchange="changeAlbumSort('{{ bond.id }}', this.value)" style="font-size: 0.75rem; padding: 0.2rem 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; touch-action: manipulation;">
+                            <option value="date_desc">Newest</option>
+                            <option value="date_asc">Oldest</option>
+                            <option value="uploaded_desc">Latest Upload</option>
+                            <option value="uploaded_asc">Oldest Upload</option>
+                            <option value="pinned">Pinned First</option>
+                        </select>
                     </div>
                 </div>
 
@@ -2653,6 +2689,13 @@
         </div>
 
         <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <!-- Music Track Selector -->
+            <select id="slideshow-music-select" onchange="changeSlideshowMusic(this.value)" style="font-size: 0.72rem; padding: 0.2rem 0.35rem; border-radius: 5px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: #ddd; cursor: pointer; max-width: 110px;" title="Background Music">
+                <option value="">🔇 No Music</option>
+                <option value="soft-piano">🎹 Soft Piano</option>
+                <option value="acoustic">🎸 Acoustic</option>
+                <option value="rain">🌧️ Rain</option>
+            </select>
             <button type="button" class="slideshow-ctrl-btn" onclick="prevSlideshowSlide()" title="Previous Memory">
                 <i class="fas fa-chevron-left"></i>
             </button>
@@ -2664,6 +2707,7 @@
             </button>
         </div>
     </div>
+    <audio id="slideshow-audio" loop preload="none" style="display:none;"></audio>
 </div>
 
 <!-- Edit Photo Details Modal -->
@@ -2713,6 +2757,61 @@
             <div style="display: flex; gap: 0.6rem; justify-content: flex-end;">
                 <button type="button" class="btn btn-bond-secondary" style="font-size: 0.8rem; padding: 0.4rem 0.9rem;" onclick="closeAlbumEditModal()">Cancel</button>
                 <button type="submit" class="btn btn-bond-primary" style="font-size: 0.8rem; padding: 0.4rem 1rem;">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Media Recommendation Progress Modal -->
+<div id="rec-progress-modal" class="bond-modal-backdrop" style="display:none;" onclick="if(event.target===this) closeRecProgressModal()">
+    <div class="bond-modal-content" style="max-width: 420px; width: 90%; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.2rem; box-shadow: 0 10px 30px var(--shadow-color);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.6rem;">
+            <strong style="font-size: 0.95rem; color: var(--primary-dark-color);"><i class="fas fa-tasks" style="color:var(--primary-color); margin-right:4px;"></i> Update Progress</strong>
+            <button type="button" onclick="closeRecProgressModal()" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer; line-height:1;">&times;</button>
+        </div>
+
+        <form id="rec-progress-form" onsubmit="submitRecProgress(event)">
+            <input type="hidden" id="prog-rec-id" value="">
+            <input type="hidden" id="prog-bond-id" value="">
+
+            <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="prog-item-title"></div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 0.8rem;">
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Current Progress</label>
+                    <input type="number" id="prog-current" min="0" step="any" placeholder="e.g. 5" required style="width: 100%; font-size: 0.85rem; padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); box-sizing: border-box;">
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Total (optional)</label>
+                    <input type="number" id="prog-total" min="0" step="any" placeholder="e.g. 10" style="width: 100%; font-size: 0.85rem; padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); box-sizing: border-box;">
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 1rem;">
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Unit</label>
+                    <select id="prog-unit" style="width: 100%; font-size: 0.85rem; padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; box-sizing: border-box;">
+                        <option value="episodes">Episodes</option>
+                        <option value="chapters">Chapters</option>
+                        <option value="pages">Pages</option>
+                        <option value="levels">Levels</option>
+                        <option value="%">% Percent</option>
+                        <option value="units">Units</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Status</label>
+                    <select id="prog-status" style="width: 100%; font-size: 0.85rem; padding: 0.4rem 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; box-sizing: border-box;">
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="paused">Paused</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 0.4rem;">
+                <button type="button" class="btn btn-bond-secondary" style="font-size: 0.78rem; padding: 0.35rem 0.8rem;" onclick="closeRecProgressModal()">Cancel</button>
+                <button type="submit" id="prog-submit-btn" class="btn btn-bond-primary" style="font-size: 0.78rem; padding: 0.35rem 0.9rem;">Save Progress</button>
             </div>
         </form>
     </div>
@@ -4303,6 +4402,7 @@
     var bondAlbumState = {}; // Stores { category: 'all', sort: 'date_desc', viewMode: 'grid', photos: [] } per bondId
     var currentLightboxState = { bondId: null, index: -1 };
     var slideshowState = { bondId: null, index: 0, timer: null, isPlaying: false };
+    var collageState = { active: false, bondId: null, selectedIds: [] };
 
     var categoryIcons = {
         'memory': '📸',
@@ -4315,6 +4415,15 @@
         'jokes': '💬',
         'other': '📁'
     };
+
+    function safePhotoUrl(url) {
+        if (!url) return '';
+        try {
+            return encodeURI(decodeURI(url));
+        } catch (e) {
+            return url.replace(/ /g, '%20');
+        }
+    }
 
     function setAlbumViewMode(bondId, mode) {
         if (!bondAlbumState[bondId]) bondAlbumState[bondId] = { category: 'all', sort: 'date_desc', viewMode: 'grid', photos: [], page: 1, hasMore: false, isLoadingMore: false, totalCount: 0 };
@@ -4374,7 +4483,9 @@
 
         matches.forEach(function(m) {
             var fullIdx = photos.findIndex(function(x) { return x.id === m.id; });
-            html += '<img src="' + (m.thumb_url || m.url) + '" class="otd-thumb" alt="' + escHtml(m.title || 'Memory') + '" title="' + escHtml(m.title || 'Memory') + '" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + (fullIdx >= 0 ? fullIdx : 0) + ')">';
+            var pSrc = safePhotoUrl(m.thumb_url || m.url);
+            var fbSrc = safePhotoUrl(m.url);
+            html += '<img src="' + pSrc + '" class="otd-thumb" alt="' + escHtml(m.title || 'Memory') + '" title="' + escHtml(m.title || 'Memory') + '" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + (fullIdx >= 0 ? fullIdx : 0) + ')" onerror="this.onerror=null; if(this.src!==\'' + fbSrc + '\'){this.src=\'' + fbSrc + '\';}">';
         });
 
         html += '</div></div>';
@@ -4396,6 +4507,7 @@
     }
 
     function renderAlbumGridHtml(bondId, photos) {
+        var isCollage = collageState.active && collageState.bondId === bondId;
         var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:0.6rem;">';
         photos.forEach(function(p, idx) {
             var title = p.title ? escHtml(p.title) : 'Untitled';
@@ -4411,12 +4523,21 @@
                 });
             }
 
-            html += '<div class="album-photo-card" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + idx + ')">';
-            if (p.is_pinned) {
+            var isSelected = isCollage && collageState.selectedIds.indexOf(p.id) !== -1;
+            var cardStyle = isSelected ? ' style="outline: 3px solid var(--primary-color); outline-offset: -2px;"' : '';
+            var checkBadge = isSelected ? '<div style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:var(--primary-color);color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.75rem;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,0.4);"><i class="fas fa-check"></i></div>' : (isCollage ? '<div style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.4);border:2px solid #fff;z-index:10;"></div>' : '');
+
+            var pSrc = safePhotoUrl(p.thumb_url || p.url);
+            var fbSrc = safePhotoUrl(p.url);
+
+            html += '<div class="album-photo-card"' + cardStyle + ' onclick="handleAlbumPhotoClick(\'' + bondId + '\',' + idx + ',\'' + (p.id || '') + '\')">';
+            if (checkBadge) {
+                html += checkBadge;
+            } else if (p.is_pinned) {
                 html += '<div class="album-pin-badge" title="Pinned Memory"><i class="fas fa-thumbtack"></i></div>';
             }
             html += '<div class="album-cat-badge">' + catIcon + ' ' + escHtml(catLabel) + '</div>';
-            html += '<img src="' + (p.thumb_url || p.url) + '" alt="' + title + '" loading="lazy" decoding="async">';
+            html += '<img src="' + pSrc + '" alt="' + title + '" loading="lazy" decoding="async" onerror="this.onerror=null; if(this.src!==\'' + fbSrc + '\'){this.src=\'' + fbSrc + '\';}else{this.style.opacity=0.3;}">';
             html += '<div style="padding:0.4rem 0.5rem;">';
             html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
             html += '<div style="font-size:0.75rem;font-weight:600;color:var(--text-dark-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">' + title + '</div>';
@@ -4430,6 +4551,7 @@
     }
 
     function renderPolaroidViewHtml(bondId, photos) {
+        var isCollage = collageState.active && collageState.bondId === bondId;
         var html = '<div class="album-polaroid-grid">';
         photos.forEach(function(p, idx) {
             var title = p.title ? escHtml(p.title) : 'Cherished Memory';
@@ -4443,11 +4565,20 @@
                 });
             }
 
-            html += '<div class="album-polaroid-card" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + idx + ')">';
-            if (p.is_pinned) {
+            var isSelected = isCollage && collageState.selectedIds.indexOf(p.id) !== -1;
+            var cardStyle = isSelected ? ' style="outline: 3px solid var(--primary-color); outline-offset: -2px;"' : '';
+            var checkBadge = isSelected ? '<div style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:var(--primary-color);color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.75rem;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,0.4);"><i class="fas fa-check"></i></div>' : (isCollage ? '<div style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.4);border:2px solid #fff;z-index:10;"></div>' : '');
+
+            var pSrc = safePhotoUrl(p.thumb_url || p.url);
+            var fbSrc = safePhotoUrl(p.url);
+
+            html += '<div class="album-polaroid-card"' + cardStyle + ' onclick="handleAlbumPhotoClick(\'' + bondId + '\',' + idx + ',\'' + (p.id || '') + '\')">';
+            if (checkBadge) {
+                html += checkBadge;
+            } else if (p.is_pinned) {
                 html += '<div style="position:absolute;top:2px;right:6px;color:#c62828;font-size:1.1rem;"><i class="fas fa-thumbtack"></i></div>';
             }
-            html += '<img src="' + (p.thumb_url || p.url) + '" alt="' + title + '" loading="lazy" decoding="async">';
+            html += '<img src="' + pSrc + '" alt="' + title + '" loading="lazy" decoding="async" onerror="this.onerror=null; if(this.src!==\'' + fbSrc + '\'){this.src=\'' + fbSrc + '\';}else{this.style.opacity=0.3;}">';
             html += '<div class="polaroid-caption">' + title + '</div>';
             html += '<div class="polaroid-date">' + (dateStr ? dateStr : 'A special moment') + (reactBadges ? ' · ' + reactBadges : '') + '</div>';
             html += '</div>';
@@ -4457,6 +4588,7 @@
     }
 
     function renderTimelineViewHtml(bondId, photos) {
+        var isCollage = collageState.active && collageState.bondId === bondId;
         // Group photos by Month Year
         var groups = {};
         photos.forEach(function(p, idx) {
@@ -4481,9 +4613,20 @@
                 var dayStr = dtObj && !isNaN(dtObj) ? dtObj.toLocaleDateString(undefined, { day: 'numeric', weekday: 'short' }) : '';
                 var catIcon = categoryIcons[p.category] || '📸';
 
-                html += '<div class="album-photo-card" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + idx + ')">';
-                if (p.is_pinned) html += '<div class="album-pin-badge"><i class="fas fa-thumbtack"></i></div>';
-                html += '<img src="' + (p.thumb_url || p.url) + '" alt="' + title + '" loading="lazy" decoding="async" style="height:105px;">';
+                var isSelected = isCollage && collageState.selectedIds.indexOf(p.id) !== -1;
+                var cardStyle = isSelected ? ' style="outline: 3px solid var(--primary-color); outline-offset: -2px;"' : '';
+                var checkBadge = isSelected ? '<div style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:var(--primary-color);color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.75rem;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,0.4);"><i class="fas fa-check"></i></div>' : (isCollage ? '<div style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.4);border:2px solid #fff;z-index:10;"></div>' : '');
+
+                var pSrc = safePhotoUrl(p.thumb_url || p.url);
+                var fbSrc = safePhotoUrl(p.url);
+
+                html += '<div class="album-photo-card"' + cardStyle + ' onclick="handleAlbumPhotoClick(\'' + bondId + '\',' + idx + ',\'' + (p.id || '') + '\')">';
+                if (checkBadge) {
+                    html += checkBadge;
+                } else if (p.is_pinned) {
+                    html += '<div class="album-pin-badge"><i class="fas fa-thumbtack"></i></div>';
+                }
+                html += '<img src="' + pSrc + '" alt="' + title + '" loading="lazy" decoding="async" style="height:105px;" onerror="this.onerror=null; if(this.src!==\'' + fbSrc + '\'){this.src=\'' + fbSrc + '\';}else{this.style.opacity=0.3;}">';
                 html += '<div style="padding:0.35rem 0.45rem;">';
                 html += '<div style="font-size:0.72rem;font-weight:600;color:var(--text-dark-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>';
                 html += '<div style="font-size:0.62rem;color:var(--text-muted);">' + catIcon + ' ' + (dayStr || 'Photo') + '</div>';
@@ -4658,13 +4801,7 @@
             });
     }
 
-    function setAlbumCategory(bondId, cat, chipBtn) {
-        var parent = document.getElementById('album-cat-chips-' + bondId);
-        if (parent) {
-            var chips = parent.querySelectorAll('.album-chip');
-            chips.forEach(function(c) { c.classList.remove('active'); });
-        }
-        if (chipBtn) chipBtn.classList.add('active');
+    function setAlbumCategory(bondId, cat) {
         loadAlbum(bondId, cat, undefined);
     }
 
@@ -4689,6 +4826,7 @@
         document.getElementById('album-upload-date').value = today;
         document.getElementById('album-file-input').value = '';
         document.getElementById('album-files-preview').innerHTML = '';
+        window._albumSelectedFiles = [];
 
         modal.style.display = 'flex';
     }
@@ -4699,21 +4837,45 @@
     }
 
     function handleAlbumFileSelect(files) {
-        var previewContainer = document.getElementById('album-files-preview');
-        previewContainer.innerHTML = '';
+        if (!window._albumSelectedFiles) window._albumSelectedFiles = [];
         if (!files || files.length === 0) return;
 
         Array.from(files).forEach(function(file) {
             if (!file.type.startsWith('image/')) return;
+            // Avoid duplicates by name+size
+            var isDup = window._albumSelectedFiles.some(function(f) { return f.name === file.name && f.size === file.size; });
+            if (!isDup) window._albumSelectedFiles.push(file);
+        });
+
+        _renderAlbumFilePreviews();
+    }
+
+    function _renderAlbumFilePreviews() {
+        var previewContainer = document.getElementById('album-files-preview');
+        previewContainer.innerHTML = '';
+        if (!window._albumSelectedFiles || window._albumSelectedFiles.length === 0) return;
+
+        window._albumSelectedFiles.forEach(function(file, idx) {
             var reader = new FileReader();
             reader.onload = function(e) {
                 var thumb = document.createElement('div');
-                thumb.style.cssText = 'position:relative;width:55px;height:55px;border-radius:6px;overflow:hidden;border:1px solid var(--border-color);';
-                thumb.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:cover;">';
+                thumb.style.cssText = 'position:relative;width:55px;height:55px;border-radius:6px;overflow:hidden;border:1px solid var(--border-color);flex-shrink:0;';
+                thumb.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:cover;">'
+                    + '<button type="button" onclick="dismissAlbumFile(' + idx + ')" style="position:absolute;top:-1px;right:-1px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.7);color:#fff;border:none;font-size:0.65rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;padding:0;touch-action:manipulation;">&times;</button>';
                 previewContainer.appendChild(thumb);
             };
             reader.readAsDataURL(file);
         });
+    }
+
+    function dismissAlbumFile(idx) {
+        if (!window._albumSelectedFiles) return;
+        window._albumSelectedFiles.splice(idx, 1);
+        _renderAlbumFilePreviews();
+        // Update file count — if all dismissed, reset the input
+        if (window._albumSelectedFiles.length === 0) {
+            document.getElementById('album-file-input').value = '';
+        }
     }
 
     function submitAlbumUploadModal(e) {
@@ -4723,8 +4885,8 @@
             return;
         }
         var bondId = document.getElementById('upload-bond-id').value;
-        var fileInput = document.getElementById('album-file-input');
-        if (!fileInput.files || fileInput.files.length === 0) {
+        var selectedFiles = window._albumSelectedFiles || [];
+        if (selectedFiles.length === 0) {
             if (window.showCustomAlert) showCustomAlert('Please select at least one photo.', 'danger');
             return;
         }
@@ -4734,7 +4896,7 @@
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
 
         var fd = new FormData();
-        Array.from(fileInput.files).forEach(function(f) {
+        selectedFiles.forEach(function(f) {
             fd.append('files', f);
         });
 
@@ -4788,7 +4950,7 @@
         if (!photos || photos.length === 0 || index < 0 || index >= photos.length) return;
 
         var p = photos[index];
-        document.getElementById('lightbox-img').src = p.url;
+        document.getElementById('lightbox-img').src = safePhotoUrl(p.url);
         document.getElementById('lightbox-title').textContent = p.title || 'Untitled Memory';
         document.getElementById('lightbox-desc').textContent = p.description || 'No description provided.';
         
@@ -5042,6 +5204,12 @@
         var modal = document.getElementById('bond-album-slideshow-modal');
         if (modal) modal.style.display = 'flex';
 
+        // Load saved music preference
+        var savedTrack = localStorage.getItem('slideshow_music_track') || '';
+        var musicSelect = document.getElementById('slideshow-music-select');
+        if (musicSelect) musicSelect.value = savedTrack;
+        playSlideshowMusic(savedTrack);
+
         renderSlideshowSlide();
         scheduleNextSlide();
     }
@@ -5055,7 +5223,7 @@
         if (imgEl) {
             imgEl.classList.add('fading');
             setTimeout(function() {
-                imgEl.src = p.url;
+                imgEl.src = safePhotoUrl(p.url);
                 imgEl.classList.remove('fading');
             }, 250);
         }
@@ -5099,16 +5267,52 @@
         scheduleNextSlide();
     }
 
+    function playSlideshowMusic(track) {
+        var audio = document.getElementById('slideshow-audio');
+        if (!audio) return;
+        if (!track) {
+            audio.pause();
+            audio.removeAttribute('src');
+            audio.removeAttribute('data-current-track');
+            return;
+        }
+        var trackSrc = '/static/audio/' + track + '.mp3';
+        if (audio.getAttribute('data-current-track') !== track) {
+            audio.setAttribute('data-current-track', track);
+            audio.src = trackSrc;
+        }
+        audio.volume = 0.35;
+        var playPromise = audio.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(function(err) {
+                // Autoplay restrictions may require user interaction
+                console.log('Slideshow audio playback prevented:', err);
+            });
+        }
+    }
+
+    function changeSlideshowMusic(track) {
+        localStorage.setItem('slideshow_music_track', track || '');
+        playSlideshowMusic(track);
+    }
+
     function toggleSlideshowPlayback() {
         slideshowState.isPlaying = !slideshowState.isPlaying;
         var btn = document.getElementById('slideshow-play-pause-btn');
+        var audio = document.getElementById('slideshow-audio');
         if (btn) {
             btn.innerHTML = slideshowState.isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
         }
         if (slideshowState.isPlaying) {
             scheduleNextSlide();
-        } else if (slideshowState.timer) {
-            clearTimeout(slideshowState.timer);
+            if (audio && audio.src && audio.paused) {
+                audio.play().catch(function() {});
+            }
+        } else {
+            if (slideshowState.timer) clearTimeout(slideshowState.timer);
+            if (audio && !audio.paused) {
+                audio.pause();
+            }
         }
     }
 
@@ -5116,8 +5320,129 @@
         if (slideshowState.timer) clearTimeout(slideshowState.timer);
         slideshowState.isPlaying = false;
         slideshowState.bondId = null;
+        var audio = document.getElementById('slideshow-audio');
+        if (audio) {
+            audio.pause();
+            audio.currentTime = 0;
+        }
         var modal = document.getElementById('bond-album-slideshow-modal');
         if (modal) modal.style.display = 'none';
+    }
+
+    // ===================================================================
+    // Collage Creation Functions
+    // ===================================================================
+    function toggleCollageMode(bondId) {
+        var toolbar = document.getElementById('collage-toolbar-' + bondId);
+        var toggleBtn = document.getElementById('collage-toggle-btn-' + bondId);
+        if (collageState.active && collageState.bondId === bondId) {
+            cancelCollageMode(bondId);
+            return;
+        }
+
+        collageState.active = true;
+        collageState.bondId = bondId;
+        collageState.selectedIds = [];
+
+        if (toolbar) toolbar.style.display = 'flex';
+        if (toggleBtn) toggleBtn.classList.add('active');
+        _updateCollageCounter(bondId);
+
+        var container = document.getElementById('album-grid-' + bondId);
+        if (container && bondAlbumState[bondId] && bondAlbumState[bondId].photos) {
+            container.innerHTML = renderAlbumContentHtml(bondId, bondAlbumState[bondId].photos, bondAlbumState[bondId].viewMode || 'grid') + renderLoadMoreBtn(bondId);
+        }
+    }
+
+    function cancelCollageMode(bondId) {
+        collageState.active = false;
+        collageState.bondId = null;
+        collageState.selectedIds = [];
+
+        var toolbar = document.getElementById('collage-toolbar-' + bondId);
+        var toggleBtn = document.getElementById('collage-toggle-btn-' + bondId);
+        if (toolbar) toolbar.style.display = 'none';
+        if (toggleBtn) toggleBtn.classList.remove('active');
+
+        var container = document.getElementById('album-grid-' + bondId);
+        if (container && bondAlbumState[bondId] && bondAlbumState[bondId].photos) {
+            container.innerHTML = renderAlbumContentHtml(bondId, bondAlbumState[bondId].photos, bondAlbumState[bondId].viewMode || 'grid') + renderLoadMoreBtn(bondId);
+        }
+    }
+
+    function _updateCollageCounter(bondId) {
+        var counter = document.getElementById('collage-counter-' + bondId);
+        var submitBtn = document.getElementById('collage-submit-btn-' + bondId);
+        var count = collageState.selectedIds ? collageState.selectedIds.length : 0;
+        if (counter) counter.textContent = count;
+        if (submitBtn) {
+            submitBtn.disabled = count < 4 || count > 9;
+        }
+    }
+
+    function handleAlbumPhotoClick(bondId, idx, photoId) {
+        if (!collageState.active || collageState.bondId !== bondId) {
+            openBondPhotoLightbox(bondId, idx);
+            return;
+        }
+
+        if (!photoId) return;
+        var sIdx = collageState.selectedIds.indexOf(photoId);
+        if (sIdx !== -1) {
+            collageState.selectedIds.splice(sIdx, 1);
+        } else {
+            if (collageState.selectedIds.length >= 9) {
+                if (window.showCustomAlert) showCustomAlert('You can select a maximum of 9 photos for a collage.', 'warning');
+                return;
+            }
+            collageState.selectedIds.push(photoId);
+        }
+
+        _updateCollageCounter(bondId);
+        var container = document.getElementById('album-grid-' + bondId);
+        if (container && bondAlbumState[bondId] && bondAlbumState[bondId].photos) {
+            container.innerHTML = renderAlbumContentHtml(bondId, bondAlbumState[bondId].photos, bondAlbumState[bondId].viewMode || 'grid') + renderLoadMoreBtn(bondId);
+        }
+    }
+
+    function submitCollageGeneration(bondId) {
+        if (collageState.selectedIds.length < 4 || collageState.selectedIds.length > 9) {
+            if (window.showCustomAlert) showCustomAlert('Please select between 4 and 9 photos for the collage.', 'warning');
+            return;
+        }
+
+        var btn = document.getElementById('collage-submit-btn-' + bondId);
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+        }
+
+        echoFetch('/api/bonds/' + bondId + '/album/collage', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ photo_ids: collageState.selectedIds })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                if (window.showCustomToast) showCustomToast('Collage created successfully!', 'success');
+                cancelCollageMode(bondId);
+                loadAlbum(bondId);
+            } else {
+                if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to create collage.', 'danger');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = 'Generate Collage';
+                }
+            }
+        }).catch(function(err) {
+            if (window.showCustomAlert) showCustomAlert('Failed to create collage: ' + err.message, 'danger');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = 'Generate Collage';
+            }
+        });
     }
 
     // Expose functions globally for inline HTML event attributes
@@ -5127,6 +5452,7 @@
     window.setAlbumViewMode = setAlbumViewMode;
     window.startAlbumSlideshow = startAlbumSlideshow;
     window.stopAlbumSlideshow = stopAlbumSlideshow;
+    window.changeSlideshowMusic = changeSlideshowMusic;
     window.nextSlideshowSlide = nextSlideshowSlide;
     window.prevSlideshowSlide = prevSlideshowSlide;
     window.toggleSlideshowPlayback = toggleSlideshowPlayback;
@@ -5134,6 +5460,8 @@
     window.openAlbumUploadModal = openAlbumUploadModal;
     window.closeAlbumUploadModal = closeAlbumUploadModal;
     window.handleAlbumFileSelect = handleAlbumFileSelect;
+    window.dismissAlbumFile = dismissAlbumFile;
+    window.loadMoreAlbumPhotos = loadMoreAlbumPhotos;
     window.submitAlbumUploadModal = submitAlbumUploadModal;
     window.openBondPhotoLightbox = openBondPhotoLightbox;
     window.navigateLightbox = navigateLightbox;
@@ -5145,6 +5473,11 @@
     window.submitAlbumEditModal = submitAlbumEditModal;
     window.deleteLightboxPhoto = deleteLightboxPhoto;
     window.deleteAlbumPhoto = deleteAlbumPhoto;
+    window.toggleCollageMode = toggleCollageMode;
+    window.cancelCollageMode = cancelCollageMode;
+    window.handleAlbumPhotoClick = handleAlbumPhotoClick;
+    window.submitCollageGeneration = submitCollageGeneration;
+    window.safePhotoUrl = safePhotoUrl;
     window.breakBond = breakBond;
     window.doBreakBond = doBreakBond;
 
@@ -5313,8 +5646,69 @@
                 + '<div style="font-size:0.85rem;font-weight:600;color:var(--text-dark-color);">' + escHtml(r.title) + '</div>'
                 + (r.note ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.1rem;">' + escHtml(r.note) + '</div>' : '')
                 + (r.image_url ? '<div style="margin-top:0.3rem;"><img src="' + escHtml(r.image_url) + '" style="max-width:100%;max-height:200px;border-radius:6px;border:1px solid var(--border-color);object-fit:cover;cursor:pointer;" onclick="openRecImageFull(this.src)" alt="Recommendation image"></div>' : '')
-                + (hrefUrl ? '<a href="' + escHtml(hrefUrl) + '" target="_blank" rel="noopener noreferrer" style="font-size:0.68rem;color:var(--primary-color);">Open link</a>' : '')
-                + '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.2rem;">' + (r.recommended_by_me ? 'You' : 'Partner') + ' · ' + escHtml(r.media_type) + rDateStr + '</div>'
+                + (hrefUrl ? '<a href="' + escHtml(hrefUrl) + '" target="_blank" rel="noopener noreferrer" style="font-size:0.68rem;color:var(--primary-color);">Open link</a>' : '');
+
+            // Shared Reading / Watch Progress block
+            var showProgress = ['book', 'show', 'movie', 'podcast', 'game'].indexOf(r.media_type) !== -1 || (r.my_progress && (r.my_progress.current || r.my_progress.total)) || (r.partner_progress && (r.partner_progress.current || r.partner_progress.total));
+            if (showProgress) {
+                var myP = r.my_progress || {};
+                var partP = r.partner_progress || {};
+                var myCur = myP.current || 0;
+                var myTot = myP.total || 0;
+                var myUnit = myP.unit || (r.media_type === 'book' ? 'pages' : (r.media_type === 'game' ? 'levels' : 'episodes'));
+                var myPct = myTot > 0 ? Math.min(100, Math.round((myCur / myTot) * 100)) : (myP.status === 'completed' ? 100 : 0);
+
+                var partCur = partP.current || 0;
+                var partTot = partP.total || 0;
+                var partUnit = partP.unit || myUnit;
+                var partPct = partTot > 0 ? Math.min(100, Math.round((partCur / partTot) * 100)) : (partP.status === 'completed' ? 100 : 0);
+
+                var inSync = (myCur > 0 && myCur === partCur && (myTot === 0 || myTot === partTot));
+                var bothDone = (myP.status === 'completed' || (myTot > 0 && myCur >= myTot)) && (partP.status === 'completed' || (partTot > 0 && partCur >= partTot));
+
+                html += '<div style="margin-top:0.45rem;padding:0.45rem 0.55rem;background:var(--surface-bg);border:1px solid var(--border-color);border-radius:6px;font-size:0.75rem;">';
+                
+                // Header of progress box
+                html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.35rem;">';
+                html += '<span style="font-weight:600;color:var(--text-dark-color);font-size:0.75rem;"><i class="fas fa-tasks" style="color:var(--primary-color);margin-right:3px;"></i> Progress</span>';
+                if (bothDone) {
+                    html += '<span style="font-size:0.65rem;background:#c8e6c9;color:#2e7d32;padding:1px 6px;border-radius:10px;font-weight:600;"><i class="fas fa-trophy"></i> Both Completed!</span>';
+                } else if (inSync) {
+                    html += '<span style="font-size:0.65rem;background:#e1f5fe;color:#0277bd;padding:1px 6px;border-radius:10px;font-weight:600;"><i class="fas fa-check-circle"></i> In Sync!</span>';
+                }
+                html += '</div>';
+
+                // "You" progress bar
+                html += '<div style="margin-bottom:0.3rem;">';
+                html += '<div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--text-secondary);margin-bottom:2px;">';
+                html += '<span><strong>You:</strong> ' + (myTot > 0 ? (myCur + '/' + myTot + ' ' + myUnit) : (myCur > 0 ? (myCur + ' ' + myUnit) : (myP.status === 'completed' ? 'Completed' : 'Not started'))) + '</span>';
+                html += '<span>' + (myTot > 0 ? myPct + '%' : '') + '</span>';
+                html += '</div>';
+                html += '<div style="width:100%;height:5px;background:var(--border-color);border-radius:3px;overflow:hidden;">';
+                html += '<div style="width:' + myPct + '%;height:100%;background:var(--primary-color);transition:width 0.3s;"></div>';
+                html += '</div></div>';
+
+                // "Partner" progress bar
+                html += '<div style="margin-bottom:0.35rem;">';
+                html += '<div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--text-muted);margin-bottom:2px;">';
+                html += '<span><strong>Partner:</strong> ' + (partTot > 0 ? (partCur + '/' + partTot + ' ' + partUnit) : (partCur > 0 ? (partCur + ' ' + partUnit) : (partP.status === 'completed' ? 'Completed' : 'Not started'))) + '</span>';
+                html += '<span>' + (partTot > 0 ? partPct + '%' : '') + '</span>';
+                html += '</div>';
+                html += '<div style="width:100%;height:5px;background:var(--border-color);border-radius:3px;overflow:hidden;">';
+                html += '<div style="width:' + partPct + '%;height:100%;background:#81c784;transition:width 0.3s;"></div>';
+                html += '</div></div>';
+
+                // Update Progress Button
+                var rTitleAttr = (r.title || 'Recommendation').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                var myStatusAttr = (myP.status || 'in_progress').replace(/'/g, "\\'");
+                html += '<div style="display:flex;justify-content:flex-end;">';
+                html += '<button type="button" class="btn btn-bond-secondary" style="font-size:0.68rem;padding:0.15rem 0.45rem;border-radius:4px;" onclick="openRecProgressModal(\'' + r.id + '\',\'' + bondId + '\',\'' + rTitleAttr + '\',\'' + r.media_type + '\',' + myCur + ',' + myTot + ',\'' + myUnit + '\',\'' + myStatusAttr + '\')"><i class="fas fa-edit"></i> Update Progress</button>';
+                html += '</div>';
+
+                html += '</div>';
+            }
+
+            html += '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.35rem;">' + (r.recommended_by_me ? 'You' : 'Partner') + ' · ' + escHtml(r.media_type) + rDateStr + '</div>'
                 + '</div>'
                 + '<div style="display:flex;flex-direction:column;align-items:center;gap:0.2rem;flex-shrink:0;">';
             if (!r.recommended_by_me) {
@@ -5471,6 +5865,81 @@
             });
         }
     }
+
+    function openRecProgressModal(recId, bondId, title, mediaType, current, total, unit, status) {
+        document.getElementById('prog-rec-id').value = recId;
+        document.getElementById('prog-bond-id').value = bondId;
+        document.getElementById('prog-item-title').textContent = title || 'Recommendation';
+        document.getElementById('prog-current').value = (current !== undefined && current !== null && current !== 0) ? current : '';
+        document.getElementById('prog-total').value = (total !== undefined && total !== null && total !== 0) ? total : '';
+
+        var unitSelect = document.getElementById('prog-unit');
+        if (unitSelect) {
+            var defaultUnit = (mediaType === 'book') ? 'pages' : ((mediaType === 'game') ? 'levels' : 'episodes');
+            unitSelect.value = unit || defaultUnit;
+        }
+        var statusSelect = document.getElementById('prog-status');
+        if (statusSelect) {
+            statusSelect.value = status || 'in_progress';
+        }
+        var modal = document.getElementById('rec-progress-modal');
+        if (modal) modal.style.display = 'flex';
+    }
+
+    function closeRecProgressModal() {
+        var modal = document.getElementById('rec-progress-modal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function submitRecProgress(e) {
+        if (e) e.preventDefault();
+        var recId = document.getElementById('prog-rec-id').value;
+        var bondId = document.getElementById('prog-bond-id').value;
+        var current = parseFloat(document.getElementById('prog-current').value) || 0;
+        var total = parseFloat(document.getElementById('prog-total').value) || 0;
+        var unit = document.getElementById('prog-unit').value || 'episodes';
+        var status = document.getElementById('prog-status').value || 'in_progress';
+
+        var btn = document.getElementById('prog-submit-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        }
+
+        echoFetch('/api/bonds/recommendations/' + recId + '/progress', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ current: current, total: total, unit: unit, status: status })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Save Progress';
+            }
+            if (d.success) {
+                closeRecProgressModal();
+                loadRecommendations(bondId);
+                if (window.showCustomToast) showCustomToast('Progress updated!', 'success');
+            } else {
+                if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to update progress.', 'danger');
+            }
+        }).catch(function(err) {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Save Progress';
+            }
+            if (window.showCustomAlert) showCustomAlert('Error updating progress.', 'danger');
+        });
+    }
+
+    window.openRecProgressModal = openRecProgressModal;
+    window.closeRecProgressModal = closeRecProgressModal;
+    window.submitRecProgress = submitRecProgress;
+    window.toggleTriedRec = toggleTriedRec;
+    window.deleteRecommendation = deleteRecommendation;
+    window.loadRecommendations = loadRecommendations;
 
     // ===================================================================
     // Quick Pulse Functions
@@ -6048,6 +6517,10 @@
         });
         socket.on('bond_recommendation_added', function(data) {
             if (window.showCustomToast) showCustomToast(data.by_username + ' recommended: ' + data.title, 'success');
+            loadRecommendations(data.bond_id);
+        });
+        socket.on('bond_recommendation_progress_updated', function(data) {
+            if (window.showCustomToast) showCustomToast(data.username + ' updated reading/watch progress!', 'info');
             loadRecommendations(data.bond_id);
         });
         socket.on('bond_pulse_received', function(data) {

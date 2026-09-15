@@ -5457,11 +5457,16 @@ def api_bond_album_list(bond_id):
             else:
                 decrypted_url = m.re_sign_cloudinary_url(pub_id, resource_type='image', delivery_type='authenticated', fallback_url=decrypted_url or '') or decrypted_url
 
+            if decrypted_url and ' ' in decrypted_url:
+                decrypted_url = decrypted_url.replace(' ', '%20')
+
             # Generate thumbnail URL from dedicated thumb asset if available
             thumb_url = None
             thumb_pub_id = p.get('thumb_public_id', '')
             if thumb_pub_id:
                 thumb_url = m.build_media_serve_url(thumb_pub_id, p.get('thumb_mime_type', 'image/jpeg'))
+            if thumb_url and ' ' in thumb_url:
+                thumb_url = thumb_url.replace(' ', '%20')
 
             uploaded_by_id = str(p.get('uploaded_by', ''))
             uploader_name = 'Partner'
@@ -5742,6 +5747,227 @@ def api_bond_album_upload(bond_id):
     except Exception as e:
         current_app.logger.error(f"Album upload error: {e}")
         return jsonify({'error': 'Failed to upload photo'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/album/collage', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_bond_album_collage(bond_id):
+    """Generate a photo collage from 4 to 9 selected album photos."""
+    import main as m
+    import io
+    import requests as http_requests
+    from PIL import Image, ImageOps
+    from security import generate_signed_cloudinary_url
+
+    try:
+        user_id_str = str(current_user.id)
+        bond_doc = _get_active_bond(bond_id, user_id_str)
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found or not active'}), 404
+
+        data = request.get_json(silent=True) or {}
+        photo_ids = data.get('photo_ids')
+        if not isinstance(photo_ids, list) or len(photo_ids) < 4 or len(photo_ids) > 9:
+            return jsonify({'error': 'Please select between 4 and 9 photos to create a collage.'}), 400
+
+        valid_oids = []
+        for pid in photo_ids:
+            try:
+                valid_oids.append(ObjectId(pid))
+            except Exception:
+                pass
+
+        if len(valid_oids) < 4:
+            return jsonify({'error': 'Invalid photo selection.'}), 400
+
+        db_photos = list(m.bond_album_photos_conf.find({
+            '_id': {'$in': valid_oids},
+            'bond_id': ObjectId(bond_id)
+        }))
+
+        photos_by_id = {str(p['_id']): p for p in db_photos}
+        ordered_photos = [photos_by_id[str(oid)] for oid in valid_oids if str(oid) in photos_by_id]
+
+        if len(ordered_photos) < 4:
+            return jsonify({'error': 'At least 4 photos from this album are required.'}), 400
+
+        pil_images = []
+        for p in ordered_photos:
+            pub_id = p.get('public_id')
+            raw_data = None
+            if pub_id and p.get('media_encrypted'):
+                s_url = generate_signed_cloudinary_url(pub_id, resource_type='raw', delivery_type='authenticated')
+                if s_url:
+                    try:
+                        r = http_requests.get(s_url, timeout=25)
+                        if r.status_code == 200:
+                            raw_data = m.decrypt_media_bytes(r.content)
+                    except Exception as fetch_err:
+                        current_app.logger.warning(f"Failed to fetch collage source photo: {fetch_err}")
+            if not raw_data and p.get('url'):
+                u = p.get('url')
+                if p.get('encrypted'):
+                    try:
+                        u = m.decrypt_bond_data(u, bond_id)
+                    except Exception:
+                        pass
+                if u and ' ' in u:
+                    u = u.replace(' ', '%20')
+                try:
+                    r = http_requests.get(u, timeout=25)
+                    if r.status_code == 200:
+                        raw_data = r.content
+                        if p.get('media_encrypted'):
+                            raw_data = m.decrypt_media_bytes(raw_data)
+                except Exception:
+                    pass
+
+            if raw_data:
+                try:
+                    img = Image.open(io.BytesIO(raw_data))
+                    img = ImageOps.exif_transpose(img)
+                    if img.mode in ('RGBA', 'LA'):
+                        img = img.convert('RGB')
+                    pil_images.append(img)
+                except Exception as img_err:
+                    current_app.logger.warning(f"Error opening collage image: {img_err}")
+
+        if len(pil_images) < 4:
+            return jsonify({'error': 'Could not load enough photos to generate collage.'}), 400
+
+        n = len(pil_images)
+        canvas_size = (1200, 1200)
+        canvas = Image.new('RGB', canvas_size, (255, 255, 255))
+        margin = 16
+        spacing = 16
+
+        if n == 4:
+            rows, cols = 2, 2
+        elif n in (5, 6):
+            rows, cols = 2, 3
+        else:
+            rows, cols = 3, 3
+
+        cell_w = (canvas_size[0] - 2 * margin - (cols - 1) * spacing) // cols
+        cell_h = (canvas_size[1] - 2 * margin - (rows - 1) * spacing) // rows
+
+        for idx, img in enumerate(pil_images):
+            if idx >= rows * cols:
+                break
+            r = idx // cols
+            c = idx % cols
+            x = margin + c * (cell_w + spacing)
+            y = margin + r * (cell_h + spacing)
+            fitted = ImageOps.fit(img, (cell_w, cell_h), Image.Resampling.LANCZOS)
+            canvas.paste(fitted, (x, y))
+            fitted.close()
+            img.close()
+
+        # Generate 300x300 thumbnail
+        thumb_img = canvas.copy()
+        thumb_img.thumbnail((300, 300), Image.Resampling.LANCZOS)
+        thumb_io = io.BytesIO()
+        thumb_img.save(thumb_io, format='JPEG', quality=70, optimize=True)
+        thumb_bytes = thumb_io.getvalue()
+        thumb_img.close()
+
+        # Full size 1200x1200
+        full_io = io.BytesIO()
+        canvas.save(full_io, format='JPEG', quality=85, optimize=True)
+        full_bytes = full_io.getvalue()
+        canvas.close()
+
+        # Encrypt
+        thumb_cipher = m.encrypt_media_bytes(thumb_bytes)
+        del thumb_bytes
+        full_cipher = m.encrypt_media_bytes(full_bytes)
+        del full_bytes
+
+        # Upload to Cloudinary
+        thumb_pub_id = ''
+        try:
+            t_res = m.cloudinary.uploader.upload(
+                thumb_cipher,
+                folder='echowithin_bond_album_thumb',
+                resource_type='raw',
+                type='authenticated'
+            )
+            thumb_pub_id = t_res.get('public_id', '')
+        except Exception as t_err:
+            current_app.logger.warning(f"Collage thumbnail upload failed: {t_err}")
+        del thumb_cipher
+
+        photo_pub_id = ''
+        try:
+            up_res = m.cloudinary.uploader.upload(
+                full_cipher,
+                folder='echowithin_bond_album',
+                resource_type='raw',
+                type='authenticated'
+            )
+            photo_pub_id = up_res.get('public_id', '')
+        except Exception as up_err:
+            current_app.logger.error(f"Collage upload to Cloudinary failed: {up_err}")
+        del full_cipher
+
+        photo_url = m.build_media_serve_url(photo_pub_id, 'image/jpeg') if photo_pub_id else None
+        if not photo_url:
+            return jsonify({'error': 'Failed to save collage.'}), 500
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        title_text = f"Collage of {n} Memories"
+        desc_text = f"Created from {n} album memories."
+        enc_title = m.encrypt_bond_data(title_text, bond_id)
+        enc_desc = m.encrypt_bond_data(desc_text, bond_id)
+        enc_url = m.encrypt_bond_data(photo_url, bond_id)
+
+        ins_res = m.bond_album_photos_conf.insert_one({
+            'bond_id': ObjectId(bond_id),
+            'title': enc_title,
+            'description': enc_desc,
+            'category': 'milestone',
+            'date_taken': now,
+            'url': enc_url,
+            'public_id': photo_pub_id,
+            'thumb_public_id': thumb_pub_id,
+            'thumb_mime_type': 'image/jpeg',
+            'resource_type': 'raw',
+            'media_encrypted': True,
+            'mime_type': 'image/jpeg',
+            'uploaded_by': ObjectId(user_id_str),
+            'uploaded_at': now,
+            'is_pinned': False,
+            'encrypted': True,
+        })
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_album_updated', {
+            'bond_id': bond_id,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        _on_bond_action(bond_doc, 'album', current_user.id)
+        _update_bond_streak(bond_doc)
+
+        thumb_serve_url = m.build_media_serve_url(thumb_pub_id, 'image/jpeg') if thumb_pub_id else None
+
+        return jsonify({
+            'success': True,
+            'photo': {
+                'id': str(ins_res.inserted_id),
+                'title': title_text,
+                'description': desc_text,
+                'category': 'milestone',
+                'url': photo_url,
+                'thumb_url': thumb_serve_url,
+                'uploaded_by_me': True,
+                'date_taken': _format_datetime(now)
+            }
+        })
+    except Exception as e:
+        current_app.logger.error(f"Collage generation error: {e}")
+        return jsonify({'error': 'Failed to create collage'}), 500
 
 
 @bp.route('/api/bonds/album/photo/<photo_id>/pin', methods=['POST'])
@@ -6207,6 +6433,7 @@ def api_bond_recommendations_list(bond_id):
             {'bond_id': ObjectId(bond_id)}
         ).sort('created_at', -1).limit(60))
 
+        partner_id = _get_partner_id_from_bond(bond_doc, str(current_user.id))
         result = []
         for r in recs:
             image_url = ''
@@ -6220,6 +6447,14 @@ def api_bond_recommendations_list(bond_id):
                 image_url = m.build_media_serve_url(r.get('image_public_id', ''), r.get('mime_type', 'application/octet-stream')) or image_url
             else:
                 image_url = m.re_sign_cloudinary_url(r.get('image_public_id', ''), resource_type=r.get('image_resource_type', 'image'), delivery_type='authenticated', fallback_url=image_url or '') or image_url
+
+            if image_url and ' ' in image_url:
+                image_url = image_url.replace(' ', '%20')
+
+            progress_dict = r.get('progress', {})
+            my_prog = progress_dict.get(str(current_user.id), {})
+            partner_prog = progress_dict.get(partner_id, {}) if partner_id else {}
+
             result.append({
                 'id': str(r['_id']),
                 'title': m.decrypt_bond_data(r.get('title', ''), bond_id) if r.get('encrypted') else r.get('title', ''),
@@ -6231,6 +6466,8 @@ def api_bond_recommendations_list(bond_id):
                 'recommended_by_me': str(r.get('recommended_by', '')) == str(current_user.id),
                 'tried_by_partner': r.get('tried_by_partner', False),
                 'created_at': _format_datetime(r.get('created_at')),
+                'my_progress': my_prog,
+                'partner_progress': partner_prog,
             })
         return jsonify({'success': True, 'recommendations': result})
     except Exception as e:
@@ -6442,6 +6679,81 @@ def api_bond_recommendations_delete(rec_id):
     except Exception as e:
         current_app.logger.error(f"Recommendation delete error: {e}")
         return jsonify({'error': 'Failed to delete recommendation'}), 500
+
+
+@bp.route('/api/bonds/recommendations/<rec_id>/progress', methods=['POST'])
+@login_required
+def api_bond_recommendations_progress(rec_id):
+    """Update user progress on a shared reading/watching recommendation."""
+    import main as m
+    try:
+        rec = m.bond_recommendations_conf.find_one({'_id': ObjectId(rec_id)})
+        if not rec:
+            return jsonify({'error': 'Recommendation not found'}), 404
+
+        bond_id = str(rec['bond_id'])
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json(silent=True) or {}
+        try:
+            current = float(data.get('current', 0))
+            current = int(current) if current.is_integer() else round(current, 1)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid current progress value'}), 400
+
+        try:
+            total = float(data.get('total', 0))
+            total = int(total) if total.is_integer() else round(total, 1)
+        except (ValueError, TypeError):
+            total = 0
+
+        unit = (data.get('unit', '') or '').strip()[:30]
+        if not unit:
+            unit = 'episodes' if rec.get('media_type') in ('show', 'movie') else ('pages' if rec.get('media_type') == 'book' else 'units')
+
+        status = (data.get('status', 'in_progress') or '').strip()[:20]
+        if total > 0 and current >= total:
+            status = 'completed'
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        prog_entry = {
+            'current': current,
+            'total': total,
+            'unit': unit,
+            'status': status,
+            'updated_at': now.isoformat().replace('+00:00', 'Z')
+        }
+
+        m.bond_recommendations_conf.update_one(
+            {'_id': ObjectId(rec_id)},
+            {'$set': {f'progress.{user_id_str}': prog_entry}}
+        )
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        if partner_id:
+            m.socketio.emit('bond_recommendation_progress_updated', {
+                'bond_id': bond_id,
+                'rec_id': rec_id,
+                'user_id': user_id_str,
+                'username': current_user.username,
+                'progress': prog_entry
+            }, room=f"user_{partner_id}")
+
+        _on_bond_action(bond_doc, 'recommendations', current_user.id)
+
+        return jsonify({
+            'success': True,
+            'my_progress': prog_entry
+        })
+    except Exception as e:
+        current_app.logger.error(f"Recommendation progress error: {e}")
+        return jsonify({'error': 'Failed to update progress'}), 500
 
 
 # ===================================================================

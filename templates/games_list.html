@@ -24,20 +24,15 @@
     </div>
   </div>
 
-  <!-- Category Filter Tabs -->
-  <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
-    <button type="button" id="tab-all" class="ew-btn ew-btn--sm games-nav-tab" style="cursor: pointer;">
-      All Games
-    </button>
-    <button type="button" id="tab-party" class="ew-btn--outline ew-btn--sm games-nav-tab" style="cursor: pointer;">
-      Party &amp; Trivia (6)
-    </button>
-    <button type="button" id="tab-arcade" class="ew-btn--outline ew-btn--sm games-nav-tab" style="cursor: pointer;">
-      Arcade &amp; 1v1 (7)
-    </button>
-    <button type="button" id="tab-lobbies" class="ew-btn--outline ew-btn--sm games-nav-tab" style="cursor: pointer;">
-      Active Lobbies{% if lobbies %} ({{ lobbies|length }}){% endif %}
-    </button>
+  <!-- Category Filter -->
+  <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; align-items: center;">
+    <label style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">Show:</label>
+    <select id="games-category-filter" class="form-input" style="padding: 0.35rem 0.6rem; font-size: 0.85rem; width: auto;" onchange="setFilter(this.value)">
+      <option value="all">All Games</option>
+      <option value="party">Party & Trivia (6)</option>
+      <option value="arcade">Arcade & 1v1 (7)</option>
+      <option value="lobbies">Active Lobbies{% if lobbies %} ({{ lobbies|length }}){% endif %}</option>
+    </select>
   </div>
 
   <!-- SECTION: Party & Social Games -->
@@ -793,56 +788,30 @@
 
 <script nonce="{{ csp_nonce }}">
   document.addEventListener('DOMContentLoaded', () => {
-    // Category Tabs Filter
-    const tabAll = document.getElementById('tab-all');
-    const tabParty = document.getElementById('tab-party');
-    const tabArcade = document.getElementById('tab-arcade');
-    const tabLobbies = document.getElementById('tab-lobbies');
-
+    // Category Filter (dropdown-based)
     const secParty = document.getElementById('section-party');
     const secArcade = document.getElementById('section-arcade');
     const secLobbies = document.getElementById('section-lobbies');
 
-    const tabs = [tabAll, tabParty, tabArcade, tabLobbies];
-
-    function setFilter(filter) {
-      tabs.forEach(tab => {
-        if (!tab) return;
-        tab.classList.remove('ew-btn');
-        tab.classList.add('ew-btn--outline');
-      });
-
+    window.setFilter = function(filter) {
       if (filter === 'party') {
-        tabParty?.classList.remove('ew-btn--outline');
-        tabParty?.classList.add('ew-btn');
         if (secParty) secParty.style.display = 'block';
         if (secArcade) secArcade.style.display = 'none';
         if (secLobbies) secLobbies.style.display = 'none';
       } else if (filter === 'arcade') {
-        tabArcade?.classList.remove('ew-btn--outline');
-        tabArcade?.classList.add('ew-btn');
         if (secParty) secParty.style.display = 'none';
         if (secArcade) secArcade.style.display = 'block';
         if (secLobbies) secLobbies.style.display = 'none';
       } else if (filter === 'lobbies') {
-        tabLobbies?.classList.remove('ew-btn--outline');
-        tabLobbies?.classList.add('ew-btn');
         if (secParty) secParty.style.display = 'none';
         if (secArcade) secArcade.style.display = 'none';
         if (secLobbies) secLobbies.style.display = 'block';
       } else {
-        tabAll?.classList.remove('ew-btn--outline');
-        tabAll?.classList.add('ew-btn');
         if (secParty) secParty.style.display = 'block';
         if (secArcade) secArcade.style.display = 'block';
         if (secLobbies) secLobbies.style.display = 'block';
       }
-    }
-
-    tabAll?.addEventListener('click', () => setFilter('all'));
-    tabParty?.addEventListener('click', () => setFilter('party'));
-    tabArcade?.addEventListener('click', () => setFilter('arcade'));
-    tabLobbies?.addEventListener('click', () => setFilter('lobbies'));
+    };
 
     // Weekly Champions Fetch
     (async () => {

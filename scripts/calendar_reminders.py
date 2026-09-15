@@ -17,6 +17,11 @@ load_dotenv()
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+try:
+    from lock_utils import TaskLock
+except ImportError:
+    from scripts.lock_utils import TaskLock
+
 
 def get_app_url():
     """Returns the app's base URL."""
@@ -254,6 +259,19 @@ def process_via_api():
 
 def run_calendar_reminders():
     """Check active calendar events and dispatch due push reminders."""
+    lock = TaskLock('calendar_reminders', ttl_seconds=300)
+    if not lock.acquire():
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        print(f"[{now_utc}] Calendar reminders check already in progress (concurrency lock active). Skipping overlapping run.")
+        return 0
+
+    try:
+        return _run_calendar_reminders_internal()
+    finally:
+        lock.release()
+
+
+def _run_calendar_reminders_internal():
     # 1. First attempt to delegate to running web worker via internal API
     api_result = process_via_api()
     if api_result is not None:

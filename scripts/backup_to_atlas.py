@@ -16,6 +16,11 @@ import datetime
 import requests
 from dotenv import load_dotenv
 
+try:
+    from lock_utils import TaskLock
+except ImportError:
+    from scripts.lock_utils import TaskLock
+
 load_dotenv()
 
 
@@ -106,6 +111,19 @@ TIMESTAMP_FIELDS = {
 
 
 def run_backup():
+    lock = TaskLock('backup_to_atlas', ttl_seconds=1800)
+    if not lock.acquire():
+        now = datetime.datetime.now(datetime.timezone.utc)
+        print(f"[{now}] Backup already in progress (concurrency lock active). Skipping overlapping run.")
+        return True
+
+    try:
+        return _run_backup_internal()
+    finally:
+        lock.release()
+
+
+def _run_backup_internal():
     from pymongo import MongoClient, ReplaceOne
     from bson.objectid import ObjectId
 
@@ -275,7 +293,8 @@ def run_backup():
         return total_errors == 0
 
     except Exception as e:
-        print(f"[{datetime.datetime.now()}] Atlas backup failed: {e}")
+        now = datetime.datetime.now(datetime.timezone.utc)
+        print(f"[{now}] Atlas backup failed: {e}")
         return False
 
 

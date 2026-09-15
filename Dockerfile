@@ -7,4 +7,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 ENV FLASK_APP=main.py
 ENV FLASK_DEBUG=0
+ENV PYTHONUNBUFFERED=1
 CMD ["honcho", "start"]

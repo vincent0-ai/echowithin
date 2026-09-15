@@ -97,7 +97,30 @@ def run_backfill(batch_size=20, dry_run=False):
 
                     resp = http_requests.get(raw_url, timeout=30)
                     if resp.status_code != 200:
-                        print(f"  [FAIL] Image fetch HTTP {resp.status_code}")
+                        # Try extracting public_id from Cloudinary URL and re-signing
+                        import re
+                        m_id = re.search(r'/(?:image|raw|video)/(?:upload|authenticated)/(?:s--[^/]+--/)?(?:v\d+/)?(.+?)(?:\.[a-zA-Z0-9]+)?$', raw_url)
+                        if m_id:
+                            extracted_id = m_id.group(1).replace('%20', ' ')
+                            for r_type in ['image', 'raw']:
+                                for d_type in ['authenticated', 'upload']:
+                                    for id_candidate in [extracted_id, extracted_id.replace(' ', '%20')]:
+                                        s_url = generate_signed_cloudinary_url(id_candidate, resource_type=r_type, delivery_type=d_type)
+                                        if s_url:
+                                            try:
+                                                r_test = http_requests.get(s_url, timeout=15)
+                                                if r_test.status_code == 200:
+                                                    resp = r_test
+                                                    break
+                                            except Exception:
+                                                pass
+                                    if resp.status_code == 200:
+                                        break
+                                if resp.status_code == 200:
+                                    break
+
+                    if resp.status_code != 200:
+                        print(f"  [FAIL] Image fetch HTTP {resp.status_code} (URL: {raw_url[:90]}...)")
                         failed += 1
                         continue
                     plain = resp.content

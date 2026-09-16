@@ -875,6 +875,8 @@ bond_events_conf.create_index([('created_by', 1)])
 # --- Bond Shared Album (Photo Memories) ---
 bond_album_photos_conf = db['bond_album_photos']
 bond_album_photos_conf.create_index([('bond_id', 1), ('uploaded_at', -1)])
+bond_album_music_conf = db['bond_album_music']
+bond_album_music_conf.create_index([('bond_id', 1), ('uploaded_at', -1)])
 
 # --- Bond Bucket List ---
 bond_bucketlist_conf = db['bond_bucketlist']
@@ -1096,6 +1098,7 @@ database.bond_habits_conf = bond_habits_conf
 database.bond_countdowns_conf = bond_countdowns_conf
 database.bond_events_conf = bond_events_conf
 database.bond_album_photos_conf = bond_album_photos_conf
+database.bond_album_music_conf = bond_album_music_conf
 database.bond_bucketlist_conf = bond_bucketlist_conf
 database.bond_recommendations_conf = bond_recommendations_conf
 database.bond_pulses_conf = bond_pulses_conf

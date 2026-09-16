@@ -52,6 +52,7 @@ bond_events_conf = None
 
 # --- Bond Shared Album (Photo Memories) ---
 bond_album_photos_conf = None
+bond_album_music_conf = None
 
 # --- Bond Bucket List ---
 bond_bucketlist_conf = None

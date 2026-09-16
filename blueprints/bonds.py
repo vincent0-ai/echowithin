@@ -6180,6 +6180,211 @@ def api_bond_album_delete(photo_id):
 
 
 # ===================================================================
+# Bond Slideshow Custom Music Endpoints
+# ===================================================================
+
+@bp.route('/api/bonds/<bond_id>/album/music', methods=['GET'])
+@login_required
+def api_bond_album_music_list(bond_id):
+    """List custom slideshow music tracks uploaded for this bond."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        tracks_cursor = m.bond_album_music_conf.find({'bond_id': ObjectId(bond_id)}).sort('uploaded_at', -1)
+        tracks = []
+        for t in tracks_cursor:
+            pub_id = t.get('public_id', '')
+            mime_type = t.get('mime_type', 'audio/mpeg')
+            track_url = None
+            if pub_id:
+                track_url = m.build_media_serve_url(pub_id, mime_type)
+            if not track_url:
+                track_url = t.get('url', '')
+
+            tracks.append({
+                'id': str(t['_id']),
+                'title': t.get('title') or t.get('filename') or 'Custom Track',
+                'filename': t.get('filename', 'custom.mp3'),
+                'url': track_url,
+                'uploaded_by': str(t.get('uploaded_by', '')),
+                'is_owner': str(t.get('uploaded_by', '')) == user_id_str,
+                'uploaded_at': _format_datetime(t.get('uploaded_at'))
+            })
+
+        return jsonify({'tracks': tracks, 'max_tracks': 3})
+    except Exception as e:
+        current_app.logger.error(f"Album music list error: {e}")
+        return jsonify({'error': 'Failed to load music tracks'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/album/music', methods=['POST'])
+@login_required
+@limits(calls=15, period=60)
+def api_bond_album_music_upload(bond_id):
+    """Upload a custom background music track for the bond slideshow (max 3 tracks per bond, max 10MB each)."""
+    import main as m
+    import uuid
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        # Enforce max 3 tracks per bond
+        current_count = m.bond_album_music_conf.count_documents({'bond_id': ObjectId(bond_id)})
+        if current_count >= 3:
+            return jsonify({'error': 'Maximum of 3 custom music tracks allowed per bond. Please delete one before uploading.'}), 400
+
+        audio_file = request.files.get('file') or request.files.get('audio')
+        if not audio_file or not audio_file.filename:
+            return jsonify({'error': 'No audio file provided.'}), 400
+
+        filename = audio_file.filename.strip()
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+        if ext not in m.ALLOWED_AUDIO_EXTENSIONS:
+            allowed_str = ', '.join(sorted(m.ALLOWED_AUDIO_EXTENSIONS))
+            return jsonify({'error': f'Unsupported audio format. Allowed: {allowed_str}'}), 400
+
+        # Enforce max 10MB file size
+        MAX_AUDIO_SIZE = 10 * 1024 * 1024
+        audio_file.seek(0, os.SEEK_END)
+        size = audio_file.tell()
+        audio_file.seek(0)
+        if size == 0:
+            return jsonify({'error': 'The uploaded audio file is empty.'}), 400
+        if size > MAX_AUDIO_SIZE:
+            return jsonify({'error': 'Audio file size exceeds the 10 MB limit.'}), 400
+
+        raw_title = request.form.get('title', '').strip()
+        if not raw_title:
+            raw_title = filename.rsplit('.', 1)[0]
+        title = raw_title[:60].strip()
+
+        mime_type = (audio_file.mimetype or 'audio/mpeg')[:100]
+        if mime_type == 'application/octet-stream':
+            ext_map = {'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'ogg': 'audio/ogg', 'm4a': 'audio/mp4', 'aac': 'audio/aac', 'webm': 'audio/webm'}
+            mime_type = ext_map.get(ext, 'audio/mpeg')
+
+        raw_bytes = audio_file.read()
+        cipher_bytes = m.encrypt_media_bytes(raw_bytes)
+        del raw_bytes
+
+        public_id = ''
+        music_url = None
+        try:
+            upload_result = m.cloudinary.uploader.upload(
+                cipher_bytes,
+                folder='echowithin_bond_music',
+                resource_type='raw',
+                type='authenticated'
+            )
+            public_id = upload_result.get('public_id', '')
+            music_url = m.build_media_serve_url(public_id, mime_type) or upload_result.get('secure_url', '')
+        except Exception as upload_err:
+            current_app.logger.warning(f"Cloudinary upload failed for bond music, trying local fallback: {upload_err}")
+            public_id = ''
+            music_url = None
+
+        # Local storage fallback
+        if not music_url:
+            try:
+                os.makedirs(m.UPLOAD_FOLDER, exist_ok=True)
+                unique_filename = f"bond_music_{uuid.uuid4().hex[:12]}.{ext}"
+                save_path = os.path.join(m.UPLOAD_FOLDER, unique_filename)
+                with open(save_path, 'wb') as f:
+                    f.write(cipher_bytes)
+                music_url = url_for('blog.encrypted_uploaded_file', filename=unique_filename, _external=True)
+            except Exception as save_err:
+                current_app.logger.error(f"Local storage fallback failed for bond music: {save_err}")
+                return jsonify({'error': 'Failed to save audio file.'}), 500
+
+        del cipher_bytes
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        doc = {
+            'bond_id': ObjectId(bond_id),
+            'uploaded_by': ObjectId(current_user.id),
+            'title': title,
+            'filename': filename,
+            'public_id': public_id,
+            'mime_type': mime_type,
+            'url': music_url,
+            'size': size,
+            'uploaded_at': now
+        }
+        res = m.bond_album_music_conf.insert_one(doc)
+        track_id = str(res.inserted_id)
+
+        # Notify partner
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_album_updated', {
+            'bond_id': bond_id,
+            'action': 'music_uploaded',
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({
+            'success': True,
+            'track': {
+                'id': track_id,
+                'title': title,
+                'filename': filename,
+                'url': music_url,
+                'uploaded_by': user_id_str,
+                'is_owner': True,
+                'uploaded_at': _format_datetime(now)
+            }
+        })
+    except Exception as e:
+        current_app.logger.error(f"Album music upload error: {e}")
+        return jsonify({'error': 'Failed to upload music track'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/album/music/<music_id>', methods=['DELETE'])
+@login_required
+def api_bond_album_music_delete(bond_id, music_id):
+    """Delete a custom slideshow music track for the bond."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        track = m.bond_album_music_conf.find_one({'_id': ObjectId(music_id), 'bond_id': ObjectId(bond_id)})
+        if not track:
+            return jsonify({'error': 'Music track not found'}), 404
+
+        pid = track.get('public_id')
+        if pid:
+            m.destroy_cloudinary_media(pid, resource_type='raw', delivery_type='authenticated')
+
+        m.bond_album_music_conf.delete_one({'_id': ObjectId(music_id)})
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_album_updated', {
+            'bond_id': bond_id,
+            'action': 'music_deleted',
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"Album music delete error: {e}")
+        return jsonify({'error': 'Failed to delete music track'}), 500
+
+
+# ===================================================================
 # Shared Bucket List
 # ===================================================================
 

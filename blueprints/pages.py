@@ -369,8 +369,7 @@ def sitemap_index():
     for path, priority, changefreq in static_pages:
         xml_parts.append(f'  <url><loc>{escape(m.clean_xml_text(base_url + path))}</loc><lastmod>{today}</lastmod><changefreq>{changefreq}</changefreq><priority>{priority}</priority></url>')
     try:
-        sample_post = m.posts_conf.find_one({}) or {}
-        posts_query = {'status': 'published'} if 'status' in sample_post else {}
+        posts_query = m.get_public_posts_filter()
         posts = m.posts_conf.find(posts_query, {'slug': 1, 'timestamp': 1, 'edited_at': 1}).sort('timestamp', -1).limit(50000)
         for post in posts:
             slug = post.get('slug')
@@ -414,20 +413,9 @@ def api_clear_sitemap_cache():
 def robots():
     robots_txt = """User-agent: *
 Allow: /
-Disallow: /admin
 Disallow: /api/
-Disallow: /login
-Disallow: /register
-Disallow: /logout
-Disallow: /dashboard
-Disallow: /messages
-Disallow: /personal_space
-Disallow: /shared/
-Disallow: /search
-Disallow: /profile_settings
-Disallow: /create_post
-Disallow: /edit_post
-Disallow: /reset_password
+Disallow: /admin/
+Disallow: /static/downloads/
 
 # Sitemap
 Sitemap: https://echowithin.xyz/sitemap_index.xml

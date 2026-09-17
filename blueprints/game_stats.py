@@ -158,7 +158,7 @@ def api_elo_leaderboard():
     import main as m
     game = (request.args.get('game') or '').strip()
     if game not in GAME_LABELS:
-        return jsonify({'error': 'Invalid game'}), 400
+        return jsonify({'leaders': []}), 200
     try:
         limit = min(int(request.args.get('limit', 20)), 50)
     except (ValueError, TypeError):

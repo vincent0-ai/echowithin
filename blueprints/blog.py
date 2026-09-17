@@ -983,7 +983,7 @@ def get_related_posts_json():
     post_id = request.args.get('post_id')
     slug = request.args.get('slug')
     if not post_id and not slug:
-        return jsonify({'error': 'post_id or slug required'}), 400
+        return jsonify([]), 200
     obj_id = m.safe_object_id(post_id)
     post = m.posts_conf.find_one({'_id': obj_id} if obj_id else {'slug': slug})
     if not post:

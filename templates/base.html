@@ -40,6 +40,13 @@
     <link rel="canonical" href="{{ canonical_url or request.base_url }}" />
     {% endblock %}
 
+    <!-- Robots Indexing Directives -->
+    {% block meta_robots %}
+    {% if is_noindex or (request.path and request.path.startswith(('/admin', '/login', '/register', '/dashboard', '/messages', '/personal_space', '/search', '/profile_settings', '/create_post', '/edit_post', '/reset_password', '/forgot_password', '/confirm', '/tour', '/offline', '/shared/', '/share/'))) %}
+    <meta name="robots" content="noindex, nofollow" />
+    {% endif %}
+    {% endblock %}
+
     <!-- RSS Feed Discovery -->
     <link rel="alternate" type="application/rss+xml" title="EchoWithin - Recent Posts" href="{{ url_for('pages.feed', _external=True) }}" />
 
@@ -829,8 +836,8 @@
                 {% else %}
                 <a href="{{ url_for('pages.dashboard') }}" class="{{ 'active' if active_page == 'home' or active_page == 'dashboard' }}">Home</a>
                 <a href="{{ url_for('game.games_join') }}" class="{{ 'active' if active_page == 'game_join' }}">Join Game</a>
-                <a href="{{ url_for('auth.login', next=request.path if request.path not in ['/login', '/register', '/logout'] else url_for('pages.dashboard')) }}" class="{{ 'active' if active_page == 'login' }}">Login</a>
-                <a href="{{ url_for('auth.login', next=url_for('notes.personal_space')) }}">Notes</a>
+                <a href="{{ url_for('auth.login', next=request.path if request.path not in ['/login', '/register', '/logout'] else url_for('pages.dashboard')) }}" class="{{ 'active' if active_page == 'login' }}" rel="nofollow">Login</a>
+                <a href="{{ url_for('auth.login', next=url_for('notes.personal_space')) }}" rel="nofollow">Notes</a>
                 <a href="{{ url_for('blog.blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('pages.about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
                 {% endif %}

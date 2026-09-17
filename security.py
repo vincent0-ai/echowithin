@@ -9,10 +9,11 @@ import hmac
 import time as _time
 import secrets as _secrets
 import threading
+import socket
 from functools import wraps
 from urllib.parse import urlparse, urljoin, quote
 
-from flask import request, flash, redirect, url_for
+from flask import request, flash, redirect, url_for, has_request_context
 from flask_login import current_user
 from bson.objectid import ObjectId
 from cryptography.fernet import Fernet
@@ -154,7 +155,82 @@ def get_active_achievements(user_id):
     return achievements
 
 
-def limits(calls, period):
+_VERIFIED_CRAWLER_CACHE = TTLCache(maxsize=1024, ttl=86400)
+_CRAWLER_DOMAINS = (
+    '.googlebot.com',
+    '.google.com',
+    '.search.msn.com',
+    '.bing.com',
+    '.yandex.com',
+    '.yandex.net',
+    '.yandex.ru',
+)
+
+
+def is_verified_search_crawler(ip=None):
+    """Detect and verify search engine crawlers via Forward-Confirmed Reverse DNS (FCrDNS).
+
+    SECURITY: Header spoofing ('User-Agent: Googlebot') is prevented by executing
+    Google and Bing's official FCrDNS protocol:
+    1. Check if User-Agent claims to be a recognized search engine crawler.
+    2. Check 24-hour cache for the client IP to avoid repeated DNS queries.
+    3. Perform reverse DNS lookup (PTR) on the client IP.
+    4. Verify hostname ends with an authoritative crawler domain (.googlebot.com, etc.).
+    5. Perform forward DNS lookup on that hostname to verify it maps back to the client IP.
+    6. If any step fails, verification returns False and the client is treated as untrusted.
+    """
+    if not has_request_context():
+        return False
+    try:
+        ua = (request.headers.get('User-Agent') or '').lower()
+        crawler_tokens = ('googlebot', 'google-inspectiontool', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider', 'yandexbot')
+        if not any(token in ua for token in crawler_tokens):
+            return False
+
+        if not ip:
+            ip = _bf_get_client_ip()
+
+        if not ip or ip in ('127.0.0.1', 'localhost', '::1'):
+            return False
+
+        cached = _VERIFIED_CRAWLER_CACHE.get(ip)
+        if cached is not None:
+            return cached
+
+        if database.redis_cache is not None:
+            try:
+                r_cached = database.redis_cache.get(f"vbot:{ip}")
+                if isinstance(r_cached, (bytes, str)):
+                    val = (r_cached in (b'1', '1'))
+                    _VERIFIED_CRAWLER_CACHE[ip] = val
+                    return val
+            except Exception:
+                pass
+
+        verified = False
+        try:
+            host, _, _ = socket.gethostbyaddr(ip)
+            host_lower = host.lower()
+            if any(host_lower.endswith(domain) for domain in _CRAWLER_DOMAINS):
+                resolved_ip = socket.gethostbyname(host)
+                if resolved_ip == ip:
+                    verified = True
+        except (socket.herror, socket.gaierror, socket.timeout, Exception):
+            verified = False
+
+        _VERIFIED_CRAWLER_CACHE[ip] = verified
+        if database.redis_cache is not None:
+            try:
+                database.redis_cache.setex(f"vbot:{ip}", 86400, '1' if verified else '0')
+            except Exception:
+                pass
+
+        return verified
+    except Exception:
+        return False
+
+
+def limits(calls, period, methods=None):
     """Conditional rate limiter that respects BYPASS_RATE_LIMIT for testing.
 
     SECURITY: rate limiting is enforced PER-CLIENT-IP using a fixed-window
@@ -162,6 +238,12 @@ def limits(calls, period):
     implementation that used the `ratelimit` package's single shared counter
     per function, which meant one client exhausting the budget caused 429s
     for every user on the platform (cross-user DoS).
+
+    - If `methods` is specified (e.g. methods=('POST',)), only requests with matching
+      HTTP methods are counted against the rate limit.
+    - Verified search engine crawlers (Googlebot, Bingbot confirmed via FCrDNS)
+      performing GET requests are exempt from rate limiting to prevent 429 indexing errors.
+      Mutating requests (POST) are NEVER exempt under any circumstances.
     """
     if BYPASS_RATE_LIMIT:
         def noop_decorator(func):
@@ -172,6 +254,13 @@ def limits(calls, period):
         @wraps(func)
         def wrapper(*args, **kwargs):
             ip = _bf_get_client_ip()
+
+            if has_request_context():
+                if methods is not None and request.method not in methods:
+                    return func(*args, **kwargs)
+                if request.method == 'GET' and is_verified_search_crawler(ip):
+                    return func(*args, **kwargs)
+
             key = "rl:%s.%s:%s" % (func.__module__, func.__name__, ip)
             window = int(_time.time() // period)
             try:

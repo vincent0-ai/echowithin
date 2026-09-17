@@ -1565,8 +1565,13 @@ def add_security_headers(response):
         "form-action 'self' https://accounts.google.com;"
     )
 
-    # Prevent indexing of private/auth routes without triggering GSC blocked warnings
-    noindex_paths = ('/admin', '/api', '/logout', '/login', '/register', '/dashboard', '/messages', '/personal_space', '/shared/', '/search', '/profile_settings', '/reset_password', '/create_post', '/edit_post')
+    # Prevent indexing of private/auth/interactive routes without triggering GSC blocked warnings
+    noindex_paths = (
+        '/admin', '/api', '/logout', '/login', '/register', '/dashboard',
+        '/messages', '/personal_space', '/shared/', '/share/', '/search',
+        '/profile_settings', '/reset_password', '/create_post', '/edit_post',
+        '/tour', '/forgot_password', '/confirm', '/offline'
+    )
     if getattr(request, 'path', '').startswith(noindex_paths):
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
 

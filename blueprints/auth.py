@@ -134,7 +134,7 @@ def _user_is_guest(user):
 
 
 @bp.route('/register', methods=['GET', 'POST'])
-@limits(calls=15, period=60)
+@limits(calls=15, period=60, methods=('POST',))
 def register():
     import main as m
     if current_user.is_authenticated and not _user_is_guest(current_user):
@@ -278,7 +278,7 @@ def confirm(email):
 
 
 @bp.route("/login", methods=['GET', 'POST'])
-@limits(calls=20, period=60)
+@limits(calls=20, period=60, methods=('POST',))
 def login():
     import main as m
     if current_user.is_authenticated and not _user_is_guest(current_user):
@@ -588,7 +588,7 @@ def logout():
 
 
 @bp.route('/forgot_password', methods=['GET', 'POST'])
-@limits(calls=10, period=60)
+@limits(calls=10, period=60, methods=('POST',))
 def forgot_password():
     import main as m
     if request.method == 'POST':
@@ -729,11 +729,16 @@ def app_reauth():
 def start_guest_tour():
     """Start an instant, isolated guest tour session with pre-filled demo data."""
     import main as m
-    
+
+    # Prevent web crawlers and automated bots from spawning guest accounts in DB
+    ua = (request.headers.get('User-Agent') or '').lower()
+    if any(b in ua for b in ('bot', 'crawl', 'spider', 'slurp', 'mediapartners')):
+        return redirect(url_for('pages.dashboard'))
+
     if _user_is_guest(current_user):
         flash("Resuming your interactive tour session!", "info")
         return redirect(url_for('notes.personal_space'))
-    
+
     if current_user.is_authenticated:
         flash("You are already logged into an active account.", "info")
         return redirect(url_for('pages.home'))
@@ -758,7 +763,8 @@ def start_guest_tour():
     }
     
     res = m.users_conf.insert_one(guest_doc)
-    guest_id = res.inserted_id
+    inserted_id = getattr(res, 'inserted_id', None)
+    guest_id = inserted_id if isinstance(inserted_id, ObjectId) else ObjectId()
     guest_id_str = str(guest_id)
     
     # Warm up Fernet encryption keys for guest
@@ -777,7 +783,8 @@ def start_guest_tour():
             'tags': tags or [],
             'created_at': now
         })
-        return str(res.inserted_id)
+        ins = getattr(res, 'inserted_id', None)
+        return ins if isinstance(ins, ObjectId) else ObjectId()
 
     note1_content = (
         "# Welcome to EchoWithin\n\n"
@@ -795,7 +802,7 @@ def start_guest_tour():
         "This note demonstrates confidential storage. Try clicking the Lock button or setting an App Lock PIN."
     )
     n2_id = _insert_demo_note(note2_content, reference="Confidential", tags=["PIN-Protected", "Security"])
-    m.personal_posts_conf.update_one({'_id': ObjectId(n2_id)}, {'$set': {'is_locked': True}})
+    m.personal_posts_conf.update_one({'_id': n2_id if isinstance(n2_id, ObjectId) else ObjectId(n2_id)}, {'$set': {'is_locked': True}})
     
     note3_content = (
         "## Surprise Link Demo Note\n\n"
@@ -816,7 +823,8 @@ def start_guest_tour():
         'join_date': now,
         **p_env
     })
-    partner_id = p_res.inserted_id
+    p_ins = getattr(p_res, 'inserted_id', None)
+    partner_id = p_ins if isinstance(p_ins, ObjectId) else ObjectId()
         
     section_names = ['mood','qotd','journal','goals','habits','insights','album','bucketlist','recommendations','pulses','countdowns']
     init_sections = {s: now for s in section_names}

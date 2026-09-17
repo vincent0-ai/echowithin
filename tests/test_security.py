@@ -129,9 +129,60 @@ class TestStaticPages:
         assert 'xml' in content_type
 
     def test_robots_txt(self, https_client):
-        """robots.txt should be accessible."""
+        """robots.txt should be accessible and allow crawl of auth/search routes for noindex detection."""
         response = https_client.get('/robots.txt')
-        assert response.status_code in (200, 301, 302)
+        assert response.status_code == 200
+        text = response.get_data(as_text=True)
+        assert 'Disallow: /api/' in text
+        assert 'Disallow: /admin/' in text
+        assert 'Disallow: /static/downloads/' in text
+        # Public auth & search pages must NOT be disallowed in robots.txt so Googlebot can read noindex
+        assert 'Disallow: /login' not in text
+        assert 'Disallow: /register' not in text
+        assert 'Disallow: /search' not in text
+        assert 'Disallow: /dashboard' not in text
+
+    def test_noindex_headers_on_private_routes(self, https_client):
+        """Private, auth, and search routes must carry X-Robots-Tag: noindex, nofollow."""
+        for path in ('/login', '/register', '/search', '/forgot_password', '/tour'):
+            resp = https_client.get(path)
+            assert resp.headers.get('X-Robots-Tag') == 'noindex, nofollow', f"Missing noindex on {path}"
+
+    def test_crawled_api_endpoints_return_200(self, https_client):
+        """Discovered API endpoints must return 200 (not 400 Bad Request) when crawled without params."""
+        resp_related = https_client.get('/api/posts/related')
+        assert resp_related.status_code == 200
+        assert resp_related.get_json() == []
+
+        resp_elo = https_client.get('/api/games/elo-leaderboard')
+        assert resp_elo.status_code == 200
+        assert resp_elo.get_json() == {'leaders': []}
+
+    def test_tour_bot_guard(self, https_client):
+        """Bots visiting /tour must be redirected and not create guest sessions."""
+        resp = https_client.get('/tour', headers={'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'})
+        assert resp.status_code in (301, 302)
+        assert resp.headers.get('Location') in ('/dashboard', 'https://echowithin.xyz/dashboard', '/')
+
+    def test_is_verified_search_crawler(self, app):
+        """FCrDNS must verify legitimate Googlebot IPs and reject spoofed IPs."""
+        from security import is_verified_search_crawler
+        from unittest.mock import patch
+
+        # 1. Non-crawler User-Agent -> False
+        with app.test_request_context('/', headers={'User-Agent': 'Mozilla/5.0'}):
+            assert is_verified_search_crawler('66.249.66.1') is False
+
+        # 2. Crawler User-Agent with spoofed IP (fails DNS check) -> False
+        with app.test_request_context('/', headers={'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)'}):
+            with patch('socket.gethostbyaddr', return_value=('attacker.com', [], ['198.51.100.5'])):
+                assert is_verified_search_crawler('198.51.100.5') is False
+
+        # 3. Legitimate Googlebot IP and matching PTR/Forward DNS -> True
+        with app.test_request_context('/', headers={'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)'}):
+            with patch('socket.gethostbyaddr', return_value=('crawl-66-249-66-1.googlebot.com', [], ['66.249.66.1'])), \
+                 patch('socket.gethostbyname', return_value='66.249.66.1'):
+                assert is_verified_search_crawler('66.249.66.1') is True
 
 
 class TestCanonicalDomain:

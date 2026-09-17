@@ -515,7 +515,10 @@
     isHost: true,
     isOnlineConnected: false,
     latency: 0,
-    lastPingTime: 0
+    lastPingTime: 0,
+    // Post-restart: skip position lerping for a few sync frames so stale
+    // host data doesn't pull slimes away from their reset positions.
+    syncSnapFrames: 0
   };
 
   function applyDifficulty(diff) {
@@ -941,13 +944,13 @@
           streakTxt.style.display = localPlayerWon ? 'none' : 'block';
         }
       }
+      const totalPts = getSavedSlimeRankedScore();
       const pointsTxt = document.getElementById('winner-points');
       if (pointsTxt) {
         if (localPlayerWon) {
           const diffKey = GameState.mode === 'online' ? 'online' : GameState.difficulty;
           const winPts = DIFF_MULTIPLIERS[diffKey] || 100;
           const volleysBonus = (GameState.volleysReturned || 0) * (RETURN_POINTS[diffKey] || 10);
-          const totalPts = getSavedSlimeRankedScore();
           pointsTxt.textContent = `+${winPts + volleysBonus} ranked pts (Total: ${totalPts.toLocaleString()} pts)`;
           pointsTxt.style.display = 'block';
         } else {
@@ -973,6 +976,9 @@
     GameState.gameOver = false;
     GameState.winner = null;
     GameState.isPaused = false;
+    // After restart, snap positions for the first few sync frames so stale
+    // pre-restart data doesn't pull slimes away from their reset baseline.
+    GameState.syncSnapFrames = 5;
     if (typeof window.__updateSlimePauseBtn === 'function') {
       window.__updateSlimePauseBtn(false);
     }
@@ -1093,7 +1099,6 @@
   }
 
   function render() {
-    ctx.clearRect(0, 0, W, H);
     drawCourt();
     GameState.p1.draw(ctx, GameState.ball);
     GameState.p2.draw(ctx, GameState.ball);
@@ -1149,7 +1154,11 @@
           p2: {
             x: GameState.p2.x, y: GameState.p2.y,
             vx: GameState.p2.vx, vy: GameState.p2.vy,
-            desiredVx: GameState.p2.desiredVx, desiredVy: GameState.p2.desiredVy
+            desiredVx: GameState.p2.desiredVx,
+            // Jump intent: the host must know when P2 wants to jump so it
+            // can call setInput() — without this, P2 is ground-locked on
+            // the host because vy is never set to PLAYER_SPEED_Y.
+            jump: !!(keys.w || keys.up)
           }
         });
       }
@@ -1199,15 +1208,30 @@
       GameState.socket.on('slime_host_sync', (data) => {
         if (!GameState.isHost) {
           if (!data || data.room_id !== GameState.roomId || !data.ball || !data.p1 || !Array.isArray(data.scores)) return;
-          // Linear interpolation for smooth ball movement
-          GameState.ball.x = GameState.ball.x * 0.2 + data.ball.x * 0.8;
-          GameState.ball.y = GameState.ball.y * 0.2 + data.ball.y * 0.8;
-          GameState.ball.vx = data.ball.vx;
-          GameState.ball.vy = data.ball.vy;
-          GameState.p1.x = GameState.p1.x * 0.3 + data.p1.x * 0.7;
-          GameState.p1.y = GameState.p1.y * 0.3 + data.p1.y * 0.7;
-          GameState.p1.vx = data.p1.vx;
-          GameState.p1.vy = data.p1.vy;
+          // Post-restart snap frames or serve countdown: snap positions cleanly
+          // rather than lerping from stale pre-restart coordinates.
+          if (GameState.syncSnapFrames > 0) {
+            GameState.syncSnapFrames--;
+            GameState.ball.x = Number(data.ball.x) || 0;
+            GameState.ball.y = Number(data.ball.y) || 11;
+            GameState.p1.x = Number(data.p1.x) || (-REF_W / 4);
+            GameState.p1.y = Number(data.p1.y) || REF_U;
+          } else if (GameState.serveState === 'SERVE_COUNTDOWN') {
+            GameState.ball.x = Number(data.ball.x) || 0;
+            GameState.ball.y = Number(data.ball.y) || 11;
+            GameState.p1.x = Number(data.p1.x) || (-REF_W / 4);
+            GameState.p1.y = Number(data.p1.y) || REF_U;
+          } else {
+            // Linear interpolation for smooth ball movement
+            GameState.ball.x = GameState.ball.x * 0.2 + (Number(data.ball.x) || 0) * 0.8;
+            GameState.ball.y = GameState.ball.y * 0.2 + (Number(data.ball.y) || 11) * 0.8;
+            GameState.p1.x = GameState.p1.x * 0.3 + (Number(data.p1.x) || (-REF_W / 4)) * 0.7;
+            GameState.p1.y = GameState.p1.y * 0.3 + (Number(data.p1.y) || REF_U) * 0.7;
+          }
+          GameState.ball.vx = Number(data.ball.vx) || 0;
+          GameState.ball.vy = Number(data.ball.vy) || 0;
+          GameState.p1.vx = Number(data.p1.vx) || 0;
+          GameState.p1.vy = Number(data.p1.vy) || 0;
           GameState.p1.score = Math.max(0, Math.floor(Number(data.scores[0]) || 0));
           GameState.p2.score = Math.max(0, Math.floor(Number(data.scores[1]) || 0));
           // Guest-side match end: the host simulates scoring authoritatively
@@ -1223,10 +1247,24 @@
 
       GameState.socket.on('slime_player_input', (data) => {
         if (GameState.isHost && data.p2) {
-          GameState.p2.desiredVx = data.p2.desiredVx;
-          GameState.p2.desiredVy = data.p2.desiredVy;
-          GameState.p2.x = GameState.p2.x * 0.3 + data.p2.x * 0.7;
-          GameState.p2.y = GameState.p2.y * 0.3 + data.p2.y * 0.7;
+          GameState.p2.desiredVx = Number(data.p2.desiredVx) || 0;
+          // Apply guest jump intent: the Slime class only jumps inside
+          // setInput(), which is never called for P2 on the host in online
+          // mode.  Without this, P2 is permanently ground-locked.
+          if (data.p2.jump && GameState.p2.isGrounded) {
+            GameState.p2.vy = PLAYER_SPEED_Y;
+            GameState.p2.isGrounded = false;
+          }
+          if (GameState.syncSnapFrames > 0) {
+            GameState.p2.x = Number(data.p2.x) || (REF_W / 4);
+            GameState.p2.y = Number(data.p2.y) || REF_U;
+          } else if (GameState.serveState === 'SERVE_COUNTDOWN') {
+            GameState.p2.x = Number(data.p2.x) || (REF_W / 4);
+            GameState.p2.y = Number(data.p2.y) || REF_U;
+          } else {
+            GameState.p2.x = GameState.p2.x * 0.3 + (Number(data.p2.x) || (REF_W / 4)) * 0.7;
+            GameState.p2.y = GameState.p2.y * 0.3 + (Number(data.p2.y) || REF_U) * 0.7;
+          }
         }
       });
 
@@ -1484,7 +1522,7 @@
 
     // Rematch button
     const rematchBtn = document.getElementById('rematch-btn');
-    if (rematchBtn) rematchBtn.addEventListener('click', restartMatch);
+    if (rematchBtn) rematchBtn.addEventListener('click', () => restartMatch(false));
 
     // Automatic pause when leaving browser tab
     document.addEventListener('visibilitychange', () => {

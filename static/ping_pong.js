@@ -579,6 +579,18 @@
         state.p2.y = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, state.p2.y));
         sendPaddleSync();
       }
+      // Dead-reckoning: extrapolate ball position between host sync packets
+      // so the ball moves smoothly at 60fps instead of teleporting at ~33Hz.
+      // Wall bounces are approximated locally; the next host sync corrects drift.
+      state.ball.x += state.ball.vx;
+      state.ball.y += state.ball.vy;
+      if (state.ball.y - state.ball.radius < 0) {
+        state.ball.y = state.ball.radius;
+        state.ball.vy = -state.ball.vy;
+      } else if (state.ball.y + state.ball.radius > V_HEIGHT) {
+        state.ball.y = V_HEIGHT - state.ball.radius;
+        state.ball.vy = -state.ball.vy;
+      }
       return;
     }
 
@@ -616,11 +628,27 @@
     // Paddle collision
     let paddle = (state.ball.x < V_WIDTH / 2) ? state.p1 : state.p2;
 
+    // Latency compensation: in online mode the host's copy of the remote
+    // paddle lags ~50-120ms behind its real position.  Add a small vertical
+    // margin so collisions the guest genuinely made aren't missed due to
+    // stale position data.  The bonus is symmetric (top and bottom) and only
+    // applies to the opponent's paddle, never the local one.
+    let padY = paddle.y;
+    let padH = paddle.height;
+    if (state.mode === 'online' && state.isHost) {
+      const isRemotePaddle = (paddle === state.p2);
+      if (isRemotePaddle) {
+        const LAG_MARGIN = 12; // px, ~2 frames of fast paddle movement
+        padY = Math.max(0, padY - LAG_MARGIN);
+        padH = Math.min(V_HEIGHT - padY, padH + LAG_MARGIN * 2);
+      }
+    }
+
     if (
       state.ball.x + state.ball.radius >= paddle.x &&
       state.ball.x - state.ball.radius <= paddle.x + paddle.width &&
-      state.ball.y + state.ball.radius >= paddle.y &&
-      state.ball.y - state.ball.radius <= paddle.y + paddle.height
+      state.ball.y + state.ball.radius >= padY &&
+      state.ball.y - state.ball.radius <= padY + padH
     ) {
       // Prevent ball sticking inside paddle
       if (paddle === state.p1 && state.ball.vx < 0) {
@@ -1013,7 +1041,14 @@
           state.p1.y = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, p1Y));
         }
         const volleys = Math.floor(Number(data.volleys));
-        if (Number.isFinite(volleys) && volleys >= 0) state.consecutiveVolleys = volleys;
+        if (Number.isFinite(volleys) && volleys >= 0) {
+          state.consecutiveVolleys = volleys;
+          // Track max volleys from synced data so the guest's game-over
+          // banner shows the correct "Rally Returns" value (collision
+          // detection — where maxMatchVolleys normally increments — only
+          // runs on the host).
+          if (volleys > state.maxMatchVolleys) state.maxMatchVolleys = volleys;
+        }
       }
     });
 

@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+{% block title %}<title>Team Crossword: Daily Mini — Co-op Solving — EchoWithin</title>{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+  .xword-container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding-bottom: 2.5rem;
+  }
+  .xword-stage {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 1.25rem 0;
+  }
+  .xword-board-wrap {
+    flex: 1;
+    min-width: 320px;
+    max-width: 440px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .xword-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(5, 1fr);
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: #2c1810;
+    border: 3px solid #2c1810;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(62, 34, 23, 0.15);
+    user-select: none;
+    touch-action: none;
+  }
+  .xword-cell {
+    background: #ffffff;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #1a100b;
+    cursor: pointer;
+    border: 1px solid #ddd2c4;
+    transition: background 0.12s ease;
+  }
+  .xword-cell.block {
+    background: #2c1810 !important;
+    cursor: default;
+  }
+  .xword-cell.active-word {
+    background: #faeade;
+  }
+  .xword-cell.active-cell {
+    background: #fbd3bc !important;
+    box-shadow: inset 0 0 0 2.5px #e06a3b;
+  }
+  .xword-cell.partner-active-cell {
+    box-shadow: inset 0 0 0 2.5px #2e86ab !important;
+  }
+  .xword-cell.partner-active-word {
+    background: #e2f0f7;
+  }
+  .xword-cell-num {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #786b59;
+    line-height: 1;
+  }
+  .xword-clue-pane {
+    flex: 1.2;
+    min-width: 320px;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+  .xword-clue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 0.35rem;
+  }
+  .xword-clue-item {
+    padding: 0.35rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.84rem;
+    color: var(--text-dark-color);
+    cursor: pointer;
+    line-height: 1.35;
+    transition: background 0.12s ease;
+  }
+  .xword-clue-item:hover {
+    background: rgba(0, 0, 0, 0.04);
+  }
+  .xword-clue-item.active {
+    background: rgba(224, 106, 59, 0.15);
+    font-weight: 700;
+    color: #9c3615;
+  }
+  .xword-clue-item.completed {
+    color: #8c7d6b;
+    text-decoration: line-through;
+    opacity: 0.7;
+  }
+
+  /* Virtual Touch Keyboard for Mobile */
+  .xword-virtual-kb {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    width: 100%;
+    max-width: 460px;
+    margin-top: 1rem;
+    user-select: none;
+  }
+  @media (max-width: 768px) {
+    .xword-virtual-kb {
+      display: flex;
+    }
+  }
+  .kb-row {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+  }
+  .kb-key {
+    flex: 1;
+    min-width: 24px;
+    height: 42px;
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-dark-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+    touch-action: manipulation;
+  }
+  .kb-key:active {
+    background: #e06a3b;
+    color: #ffffff;
+    transform: scale(0.95);
+  }
+  .kb-key.action-key {
+    flex: 1.5;
+    font-size: 0.82rem;
+    background: #f0ebe1;
+  }
+</style>
+
+<div class="content-wrapper xword-container">
+  <!-- Header Row -->
+  <div class="ew-header-row" style="margin-bottom: 1rem;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <h2 style="margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--text-dark-color);">Team Crossword</h2>
+        <span class="ew-badge" style="background: rgba(46, 134, 171, 0.15); color: #2e86ab; border-color: rgba(46, 134, 171, 0.3);">Collaborative Mini</span>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+        Solve 5×5 daily mini crosswords together in real time. Dual live cursors &bull; zero lag &bull; 100% teamwork.
+      </div>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+      <button type="button" id="xword-check-btn" class="ew-btn ew-btn--sm" style="cursor: pointer; background: #e06a3b; border-color: #c95729; font-weight: 600;">
+        Check Puzzle
+      </button>
+      <select id="xword-puzzle-picker" style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; background: var(--surface-bg); color: var(--text-dark-color); font-weight: 600;">
+        <option value="0">Mini #1: Sweethearts</option>
+        <option value="1">Mini #2: Morning Coffee</option>
+        <option value="2">Mini #3: Weekend Getaway</option>
+        <option value="3">Mini #4: Starlight Walk</option>
+        <option value="4">Mini #5: Cozy Evening</option>
+        <option value="5">Mini #6: Road Trip</option>
+        <option value="6">Mini #7: Seaside Breeze</option>
+        <option value="7">Mini #8: Secret Garden</option>
+      </select>
+      <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">
+        Back to Games
+      </a>
+    </div>
+  </div>
+
+  <!-- Mode Selector Tabs -->
+  <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+    <button type="button" id="tab-xword-online" class="ew-btn ew-btn--sm mode-tab" style="cursor: pointer;">
+      Online 2-Player (Live Sync)
+    </button>
+    <button type="button" id="tab-xword-solo" class="ew-btn--outline ew-btn--sm mode-tab" style="cursor: pointer;">
+      Solo Solving
+    </button>
+  </div>
+
+  <!-- Online Room Matchmaking Panel -->
+  <div id="xword-online-panel" class="ew-card" style="display: block; margin-bottom: 1rem; padding: 1rem 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        <button type="button" id="xword-find-match-btn" class="ew-btn ew-btn--sm" style="cursor: pointer; background: #e06a3b; border-color: #c95729; font-weight: 600;">
+          Find Partner
+        </button>
+        <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); margin: 0 0.25rem;">or Room Code:</span>
+        <input type="text" id="xword-room-input" placeholder="e.g. mini55" style="width: 130px; padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; background: var(--surface-bg); color: var(--text-dark-color);">
+        <button type="button" id="xword-join-room-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Join</button>
+        <button type="button" id="xword-create-room-btn" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor: pointer;">Create Custom</button>
+      </div>
+      <div id="xword-online-status" style="font-size: 0.82rem; font-weight: 500; color: var(--text-secondary);">
+        Not connected. Use "Create Custom" or share a code with your partner!
+      </div>
+    </div>
+  </div>
+
+  <!-- Active Clue Prominent Banner -->
+  <div class="ew-card" style="padding: 0.75rem 1.25rem; margin-bottom: 1rem; background: var(--surface-bg); border-left: 4px solid #e06a3b;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+      <div style="display: flex; align-items: center; gap: 0.6rem;">
+        <span id="xword-active-clue-label" style="font-size: 0.82rem; font-weight: 800; color: #e06a3b; text-transform: uppercase;">1-ACROSS</span>
+        <span id="xword-active-clue-text" style="font-size: 1.05rem; font-weight: 700; color: var(--text-dark-color);">Deep affection and care</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 1rem; font-size: 0.82rem; color: var(--text-secondary);">
+        <div>⏱️ <span id="xword-timer" style="font-weight: 700; color: var(--text-dark-color);">00:00</span></div>
+        <div>Progress: <strong id="xword-progress" style="color: #15803d;">0 / 25</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Solving Arena -->
+  <div class="xword-stage">
+    <!-- 5x5 Crossword Grid -->
+    <div class="xword-board-wrap">
+      <div class="xword-grid" id="xword-grid">
+        <!-- 25 Cells generated dynamically in JS -->
+      </div>
+
+      <!-- Virtual Keyboard for Mobile -->
+      <div class="xword-virtual-kb" id="xword-virtual-kb">
+        <div class="kb-row">
+          <button type="button" class="kb-key" data-key="Q">Q</button>
+          <button type="button" class="kb-key" data-key="W">W</button>
+          <button type="button" class="kb-key" data-key="E">E</button>
+          <button type="button" class="kb-key" data-key="R">R</button>
+          <button type="button" class="kb-key" data-key="T">T</button>
+          <button type="button" class="kb-key" data-key="Y">Y</button>
+          <button type="button" class="kb-key" data-key="U">U</button>
+          <button type="button" class="kb-key" data-key="I">I</button>
+          <button type="button" class="kb-key" data-key="O">O</button>
+          <button type="button" class="kb-key" data-key="P">P</button>
+        </div>
+        <div class="kb-row">
+          <button type="button" class="kb-key" data-key="A">A</button>
+          <button type="button" class="kb-key" data-key="S">S</button>
+          <button type="button" class="kb-key" data-key="D">D</button>
+          <button type="button" class="kb-key" data-key="F">F</button>
+          <button type="button" class="kb-key" data-key="G">G</button>
+          <button type="button" class="kb-key" data-key="H">H</button>
+          <button type="button" class="kb-key" data-key="J">J</button>
+          <button type="button" class="kb-key" data-key="K">K</button>
+          <button type="button" class="kb-key" data-key="L">L</button>
+        </div>
+        <div class="kb-row">
+          <button type="button" class="kb-key action-key" data-key="DIR">⇄ Switch</button>
+          <button type="button" class="kb-key" data-key="Z">Z</button>
+          <button type="button" class="kb-key" data-key="X">X</button>
+          <button type="button" class="kb-key" data-key="C">C</button>
+          <button type="button" class="kb-key" data-key="V">V</button>
+          <button type="button" class="kb-key" data-key="B">B</button>
+          <button type="button" class="kb-key" data-key="N">N</button>
+          <button type="button" class="kb-key" data-key="M">M</button>
+          <button type="button" class="kb-key action-key" data-key="BACK">⌫</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Clues Pane -->
+    <div class="xword-clue-pane">
+      <!-- Across Clues -->
+      <div class="ew-card" style="padding: 1rem 1.15rem;">
+        <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; font-weight: 800; color: #5c3d2e; display: flex; align-items: center; justify-content: space-between;">
+          <span>ACROSS</span>
+          <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-secondary);">Tap to select</span>
+        </h4>
+        <div class="xword-clue-list" id="xword-across-clues">
+          <!-- Across clues rendered in JS -->
+        </div>
+      </div>
+
+      <!-- Down Clues -->
+      <div class="ew-card" style="padding: 1rem 1.15rem;">
+        <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem; font-weight: 800; color: #2e86ab; display: flex; align-items: center; justify-content: space-between;">
+          <span>DOWN</span>
+          <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-secondary);">Tap to select</span>
+        </h4>
+        <div class="xword-clue-list" id="xword-down-clues">
+          <!-- Down clues rendered in JS -->
+        </div>
+      </div>
+
+      <!-- Legend & Controls Hint -->
+      <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4; padding: 0.4rem 0.2rem;">
+        💡 <strong>Controls:</strong> Arrow keys or tap to move &bull; Space or Enter toggles Across/Down &bull; Letters auto-advance &bull; Backspace deletes.
+      </div>
+    </div>
+  </div>
+
+  {% include "partials/game_reaction_bar.html" %}
+
+  <!-- Victory Celebration Modal -->
+  <div id="xword-victory-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 99999; align-items: center; justify-content: center; backdrop-filter: blur(3px);">
+    <div style="background: var(--surface-bg, #ffffff); border: 2px solid var(--border-color); border-radius: 12px; padding: 2rem; max-width: 420px; width: 90%; text-align: center; box-shadow: 0 16px 40px rgba(0,0,0,0.3);">
+      <div style="font-size: 3rem; margin-bottom: 0.5rem;">🎉</div>
+      <h3 style="margin: 0 0 0.5rem 0; font-size: 1.5rem; font-weight: 800; color: var(--text-dark-color);">Crossword Solved!</h3>
+      <div id="xword-victory-details" style="font-size: 0.95rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1.5rem;">
+        You solved the mini crossword together in <strong id="xword-final-time" style="color: #e06a3b;">01:30</strong>!
+      </div>
+      <div style="display: flex; gap: 0.75rem; justify-content: center;">
+        <button type="button" id="xword-next-puzzle-btn" class="ew-btn" style="cursor: pointer; background: #e06a3b; border-color: #c95729; font-weight: 700;">
+          Next Mini Puzzle
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='team_crossword.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
+{% endblock %}

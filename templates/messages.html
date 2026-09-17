@@ -2069,6 +2069,46 @@
                             <i class="fas fa-play" style="font-size:0.72rem;"></i> Create Lobby & Invite to Play
                         </button>
                     </div>
+
+                    <!-- Word Bond: Duet (Co-op) -->
+                    <div style="background:#fbf8f7; border:1.5px solid #eedfd8; border-radius:12px; padding:0.75rem 0.9rem; display:flex; flex-direction:column; gap:0.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem;">
+                            <div>
+                                <div style="display:flex; align-items:center; gap:0.45rem;">
+                                    <span style="font-size:1.25rem; line-height:1;">💬</span>
+                                    <span style="font-weight:700; font-size:0.92rem; color:#3e2217;">Word Bond: Duet</span>
+                                    <span class="ew-badge" style="background:#2e86ab; color:#fff; font-size:0.65rem; padding:2px 6px; border-radius:4px; font-weight:600;">Co-op Live</span>
+                                </div>
+                                <div style="font-size:0.78rem; color:#666; margin-top:0.2rem; line-height:1.35;">
+                                    Collaborative word deduction for couples. Deduce 15 targets together.
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn" onclick="inviteWordDuet()" id="duet-auto-invite-btn"
+                            style="background:#3e2217; color:#fff; font-size:0.82rem; font-weight:600; padding:0.45rem 0.8rem; border-radius:8px; border:none; cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:0.4rem; transition:opacity 0.2s;">
+                            <i class="fas fa-play" style="font-size:0.72rem;"></i> Create Room & Invite to Play
+                        </button>
+                    </div>
+
+                    <!-- Team Crossword (Co-op) -->
+                    <div style="background:#fbf8f7; border:1.5px solid #eedfd8; border-radius:12px; padding:0.75rem 0.9rem; display:flex; flex-direction:column; gap:0.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem;">
+                            <div>
+                                <div style="display:flex; align-items:center; gap:0.45rem;">
+                                    <span style="font-size:1.25rem; line-height:1;">✏️</span>
+                                    <span style="font-weight:700; font-size:0.92rem; color:#3e2217;">Team Crossword</span>
+                                    <span class="ew-badge" style="background:#e06a3b; color:#fff; font-size:0.65rem; padding:2px 6px; border-radius:4px; font-weight:600;">Co-op Live</span>
+                                </div>
+                                <div style="font-size:0.78rem; color:#666; margin-top:0.2rem; line-height:1.35;">
+                                    5x5 bite-sized daily crossword puzzle with live dual cursors.
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn" onclick="inviteTeamCrossword()" id="xword-auto-invite-btn"
+                            style="background:#3e2217; color:#fff; font-size:0.82rem; font-weight:600; padding:0.45rem 0.8rem; border-radius:8px; border:none; cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:0.4rem; transition:opacity 0.2s;">
+                            <i class="fas fa-play" style="font-size:0.72rem;"></i> Create Room & Invite to Play
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -3103,6 +3143,9 @@
                 const isC4 = (gTypeNorm === 'connect_four' || gTypeNorm === 'connectfour');
                 const isDNB = (gTypeNorm === 'dots_and_boxes' || gTypeNorm === 'dnb' || gTypeNorm === 'dotsandboxes');
                 const isPong = (gTypeNorm === 'ping_pong' || gTypeNorm === 'pong' || gTypeNorm === 'pingpong');
+                const isDuet = (gTypeNorm === 'word_duet' || gTypeNorm === 'duet');
+                const isCrossword = (gTypeNorm === 'team_crossword' || gTypeNorm === 'crossword' || gTypeNorm === 'xword');
+                const isCoop = isDuet || isCrossword;
                 const is1v1 = isSlime || isTTT || isC4 || isDNB || isPong;
 
                 let joinUrl = gd.game_url || '';
@@ -3117,6 +3160,10 @@
                         joinUrl = `/games/dots-and-boxes?room=${encodeURIComponent(gLobby)}`;
                     } else if (isPong) {
                         joinUrl = `/games/ping-pong?room=${encodeURIComponent(gLobby)}`;
+                    } else if (isDuet) {
+                        joinUrl = `/games/word-duet?room=${encodeURIComponent(gLobby)}`;
+                    } else if (isCrossword) {
+                        joinUrl = `/games/team-crossword?room=${encodeURIComponent(gLobby)}`;
                     } else if (gLobby) {
                         joinUrl = `/g/${encodeURIComponent(gLobby)}`;
                     }
@@ -3139,8 +3186,14 @@
                 } else if (isPong) {
                     gameIcon = '🏓';
                     btnLabel = 'Enter Ping Pong';
+                } else if (isDuet) {
+                    gameIcon = '💬';
+                    btnLabel = 'Play Word Duet';
+                } else if (isCrossword) {
+                    gameIcon = '✏️';
+                    btnLabel = 'Solve Crossword';
                 }
-                const typeLabel = is1v1 ? '1v1 Online Duel' : escapeHtml(gType);
+                const typeLabel = isCoop ? 'Cooperative Live' : (is1v1 ? '1v1 Online Duel' : escapeHtml(gType));
                 contentHTML = `
                 <div class="game-invite-card" style="background: rgba(62, 34, 23, 0.05); border: 1px solid rgba(62, 34, 23, 0.15); border-radius: 12px; padding: 0.85rem; margin: 0.2rem 0; min-width: 220px; max-width: 300px;">
                     <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.6rem;">
@@ -4925,6 +4978,14 @@
             autoCreateDuelInvite('ping_pong', 'Ping Pong 1v1', '/games/ping-pong', 'pong');
         };
 
+        window.inviteWordDuet = function () {
+            autoCreateDuelInvite('word_duet', 'Word Bond: Duet', '/games/word-duet', 'duet');
+        };
+
+        window.inviteTeamCrossword = function () {
+            autoCreateDuelInvite('team_crossword', 'Team Crossword', '/games/team-crossword', 'xword');
+        };
+
         window.sendGameInvite = function (lobbyId, gameType, title, gameUrl) {
             if (!activeRecipientId) {
                 if (window.showCustomAlert) showCustomAlert('Select a conversation first.', 'warning');
@@ -4947,6 +5008,10 @@
                     cleanUrl = '/games/dots-and-boxes?room=' + encodeURIComponent(cleanLobbyId);
                 } else if (normType === 'ping_pong' || normType === 'pong' || normType === 'pingpong') {
                     cleanUrl = '/games/ping-pong?room=' + encodeURIComponent(cleanLobbyId);
+                } else if (normType === 'word_duet' || normType === 'duet') {
+                    cleanUrl = '/games/word-duet?room=' + encodeURIComponent(cleanLobbyId);
+                } else if (normType === 'team_crossword' || normType === 'crossword' || normType === 'xword') {
+                    cleanUrl = '/games/team-crossword?room=' + encodeURIComponent(cleanLobbyId);
                 } else if (cleanLobbyId) {
                     cleanUrl = '/g/' + encodeURIComponent(cleanLobbyId);
                 }
@@ -5001,6 +5066,8 @@
             const c4Match = val.match(/connect-four\?room=([a-zA-Z0-9_\-]+)/i);
             const dnbMatch = val.match(/dots-and-boxes\?room=([a-zA-Z0-9_\-]+)/i);
             const pongMatch = val.match(/ping-pong\?room=([a-zA-Z0-9_\-]+)/i);
+            const duetMatch = val.match(/word-duet\?room=([a-zA-Z0-9_\-]+)/i);
+            const xwordMatch = val.match(/team-crossword\?room=([a-zA-Z0-9_\-]+)/i);
             const gMatch = val.match(/\/g\/([a-zA-Z0-9_\-]+)/i);
 
             if (slimeMatch) {
@@ -5028,6 +5095,16 @@
                 type = 'ping_pong';
                 title = 'Ping Pong 1v1';
                 url = '/games/ping-pong?room=' + encodeURIComponent(code);
+            } else if (duetMatch) {
+                code = duetMatch[1];
+                type = 'word_duet';
+                title = 'Word Bond: Duet';
+                url = '/games/word-duet?room=' + encodeURIComponent(code);
+            } else if (xwordMatch) {
+                code = xwordMatch[1];
+                type = 'team_crossword';
+                title = 'Team Crossword';
+                url = '/games/team-crossword?room=' + encodeURIComponent(code);
             } else if (gMatch) {
                 code = gMatch[1];
                 type = 'party_game';
@@ -5053,6 +5130,14 @@
                 type = 'ping_pong';
                 title = 'Ping Pong 1v1';
                 url = '/games/ping-pong?room=' + encodeURIComponent(code);
+            } else if (/^duet-/i.test(val) || /^duet_/i.test(val)) {
+                type = 'word_duet';
+                title = 'Word Bond: Duet';
+                url = '/games/word-duet?room=' + encodeURIComponent(code);
+            } else if (/^xword-/i.test(val) || /^xword_/i.test(val) || /^cw-/i.test(val)) {
+                type = 'team_crossword';
+                title = 'Team Crossword';
+                url = '/games/team-crossword?room=' + encodeURIComponent(code);
             }
 
             window.sendGameInvite(code, type, title, url);

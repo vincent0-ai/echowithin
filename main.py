@@ -3488,6 +3488,201 @@ def handle_cancel_dnb_matchmaking(data=None, *args, **kwargs):
     broadcast_matchmaking_queue(dnb_matchmaking_queue, 'dnb_queue_updated')
     emit('dnb_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
 
+
+# --- Word Bond: Duet (Cooperative Word Deduction) Handlers ---
+
+active_duet_rooms = {}
+
+@socketio.on('join_duet_room')
+def handle_join_duet_room(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    sid = request.sid
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Partner'
+    join_room(room_id)
+
+    room_info = active_duet_rooms.get(room_id)
+    if not room_info:
+        room_info = {
+            'host_sid': sid,
+            'host_name': user_name,
+            'guest_sid': None,
+            'guest_name': None,
+            'seed': secrets.randbelow(1000000),
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        }
+        active_duet_rooms[room_id] = room_info
+        emit('duet_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'side': 'A',
+            'seed': room_info['seed'],
+            'partner_name': None
+        }, room=sid)
+    else:
+        room_info['guest_sid'] = sid
+        room_info['guest_name'] = user_name
+        active_duet_rooms[room_id] = room_info
+        emit('duet_room_joined', {
+            'room_id': room_id,
+            'is_host': False,
+            'side': 'B',
+            'seed': room_info['seed'],
+            'partner_name': room_info['host_name']
+        }, room=sid)
+        if room_info.get('host_sid'):
+            emit('duet_room_joined', {
+                'room_id': room_id,
+                'is_host': True,
+                'side': 'A',
+                'seed': room_info['seed'],
+                'partner_name': user_name
+            }, room=room_info['host_sid'])
+
+@socketio.on('duet_give_clue')
+def handle_duet_give_clue(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    clue = str(data.get('clue', '')).strip().upper()[:25]
+    count = int(data.get('count', 1))
+    if room_id and clue:
+        emit('duet_clue_given', {'clue': clue, 'count': count}, room=room_id, include_self=False)
+
+@socketio.on('duet_guess_card')
+def handle_duet_guess_card(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    card_idx = int(data.get('card_idx', 0))
+    if room_id:
+        emit('duet_card_guessed', {'card_idx': card_idx}, room=room_id, include_self=False)
+
+@socketio.on('duet_end_turn')
+def handle_duet_end_turn(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    if room_id:
+        emit('duet_turn_ended', {}, room=room_id, include_self=False)
+
+@socketio.on('duet_restart')
+def handle_duet_restart(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    seed = int(data.get('seed', secrets.randbelow(1000000)))
+    if room_id in active_duet_rooms:
+        active_duet_rooms[room_id]['seed'] = seed
+    if room_id:
+        emit('duet_restarted', {'seed': seed}, room=room_id)
+
+
+# --- Team Crossword (Collaborative Mini Crossword) Handlers ---
+
+active_crossword_rooms = {}
+
+@socketio.on('join_crossword_room')
+def handle_join_crossword_room(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    puzzle_idx = int(data.get('puzzle_idx', 0))
+    sid = request.sid
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Partner'
+    join_room(room_id)
+
+    room_info = active_crossword_rooms.get(room_id)
+    if not room_info:
+        room_info = {
+            'host_sid': sid,
+            'host_name': user_name,
+            'guest_sid': None,
+            'guest_name': None,
+            'puzzle_idx': puzzle_idx,
+            'grid': [''] * 25,
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        }
+        active_crossword_rooms[room_id] = room_info
+        emit('crossword_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'puzzle_idx': puzzle_idx,
+            'grid': room_info['grid'],
+            'partner_name': None
+        }, room=sid)
+    else:
+        room_info['guest_sid'] = sid
+        room_info['guest_name'] = user_name
+        active_crossword_rooms[room_id] = room_info
+        emit('crossword_room_joined', {
+            'room_id': room_id,
+            'is_host': False,
+            'puzzle_idx': room_info['puzzle_idx'],
+            'grid': room_info['grid'],
+            'partner_name': room_info['host_name']
+        }, room=sid)
+        if room_info.get('host_sid'):
+            emit('crossword_room_joined', {
+                'room_id': room_id,
+                'is_host': True,
+                'puzzle_idx': room_info['puzzle_idx'],
+                'grid': room_info['grid'],
+                'partner_name': user_name
+            }, room=room_info['host_sid'])
+
+@socketio.on('crossword_cell_update')
+def handle_crossword_cell_update(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    r = int(data.get('r', 0))
+    c = int(data.get('c', 0))
+    char = str(data.get('char', '')).upper()[:1]
+    if room_id in active_crossword_rooms:
+        idx = r * 5 + c
+        if 0 <= idx < 25:
+            active_crossword_rooms[room_id]['grid'][idx] = char
+    if room_id:
+        emit('crossword_cell_update', {'r': r, 'c': c, 'char': char}, room=room_id, include_self=False)
+
+@socketio.on('crossword_cursor_move')
+def handle_crossword_cursor_move(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    r = int(data.get('r', 0))
+    c = int(data.get('c', 0))
+    d = str(data.get('dir', 'across'))
+    if room_id:
+        emit('crossword_cursor_move', {'r': r, 'c': c, 'dir': d}, room=room_id, include_self=False)
+
+@socketio.on('crossword_restart')
+def handle_crossword_restart(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    p_idx = int(data.get('puzzle_idx', 0))
+    if room_id in active_crossword_rooms:
+        active_crossword_rooms[room_id]['puzzle_idx'] = p_idx
+        active_crossword_rooms[room_id]['grid'] = [''] * 25
+    if room_id:
+        emit('crossword_restarted', {'puzzle_idx': p_idx}, room=room_id)
+
+@socketio.on('crossword_solved')
+def handle_crossword_solved(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    if room_id:
+        emit('crossword_solved', {}, room=room_id, include_self=False)
+
+
 # --- Unified 1v1 Direct Game Challenge Handlers ---
 
 @socketio.on('send_game_challenge')
@@ -3876,6 +4071,18 @@ def handle_dm_disconnect(*args, **kwargs):
     # Cleanup Ping Pong Matchmaking queue on disconnect
     pong_matchmaking_queue = [q for q in pong_matchmaking_queue if q['sid'] != request.sid]
 
+    # Cleanup Word Bond: Duet rooms on disconnect
+    for room_id, rinfo in list(active_duet_rooms.items()):
+        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+            emit('duet_partner_left', {'room_id': room_id}, room=room_id)
+            active_duet_rooms.pop(room_id, None)
+
+    # Cleanup Team Crossword rooms on disconnect
+    for room_id, rinfo in list(active_crossword_rooms.items()):
+        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+            emit('crossword_partner_left', {'room_id': room_id}, room=room_id)
+            active_crossword_rooms.pop(room_id, None)
+
 
 @socketio.on('send_dm')
 @authenticated_only
@@ -4012,6 +4219,10 @@ def handle_send_dm(data=None, *args, **kwargs):
                     g_url = f"/games/dots-and-boxes?room={lobby_id}"
                 elif g_type in ('ping_pong', 'pong', 'pingpong'):
                     g_url = f"/games/ping-pong?room={lobby_id}"
+                elif g_type in ('word_duet', 'duet'):
+                    g_url = f"/games/word-duet?room={lobby_id}"
+                elif g_type in ('team_crossword', 'crossword', 'xword'):
+                    g_url = f"/games/team-crossword?room={lobby_id}"
                 elif lobby_id:
                     g_url = f"/g/{lobby_id}"
             message_doc['game_data'] = {

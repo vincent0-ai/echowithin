@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+{% block title %}<title>Word Bond: Duet — Co-op Word Clues — EchoWithin</title>{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+  .duet-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding-bottom: 2.5rem;
+  }
+  .duet-card-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.6rem;
+    margin: 1.25rem 0;
+  }
+  @media (max-width: 650px) {
+    .duet-card-grid {
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.35rem;
+    }
+    .duet-card {
+      min-height: 58px !important;
+      padding: 0.25rem !important;
+    }
+    .duet-card-word {
+      font-size: 0.72rem !important;
+    }
+  }
+  .duet-card {
+    background: #ffffff;
+    border: 2px solid var(--border-color, #e2d9cf);
+    border-radius: 8px;
+    min-height: 72px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0.5rem;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    box-shadow: 0 2px 5px rgba(62, 34, 23, 0.05);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .duet-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 12px rgba(62, 34, 23, 0.1);
+    border-color: #cbbfae;
+  }
+  .duet-card:active {
+    transform: scale(0.97);
+  }
+  .duet-card.guessed-green {
+    background: #eaf5ed !important;
+    border-color: #22c55e !important;
+    color: #15803d !important;
+    cursor: default;
+  }
+  .duet-card.guessed-bystander {
+    background: #f4efe6 !important;
+    border-color: #d5cbbe !important;
+    color: #786b59 !important;
+    cursor: default;
+  }
+  .duet-card.guessed-assassin {
+    background: #262626 !important;
+    border-color: #000000 !important;
+    color: #ffffff !important;
+    cursor: default;
+  }
+  .duet-card-word {
+    font-size: 0.88rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    word-break: break-word;
+    line-height: 1.15;
+  }
+  .duet-key-pip {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: none;
+  }
+  .show-key .duet-key-pip {
+    display: block;
+  }
+  .pip-green { background: #22c55e; box-shadow: 0 0 3px rgba(34,197,94,0.6); }
+  .pip-black { background: #18181b; box-shadow: 0 0 3px rgba(0,0,0,0.6); }
+  .pip-tan { background: #d4c7b8; }
+
+  .duet-token {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #e06a3b;
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(224, 106, 59, 0.25);
+  }
+  .duet-token.spent {
+    background: #d5cbbe;
+    color: #8c7d6b;
+    box-shadow: none;
+  }
+</style>
+
+<div class="content-wrapper duet-container">
+  <!-- Header Row -->
+  <div class="ew-header-row" style="margin-bottom: 1rem;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <h2 style="margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--text-dark-color);">Word Bond: Duet</h2>
+        <span class="ew-badge" style="background: rgba(34, 197, 94, 0.15); color: #15803d; border-color: rgba(34, 197, 94, 0.3);">Cooperative</span>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+        Work together as secret operatives. Give one-word clues to uncover all 15 agents without finding the assassin.
+      </div>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+      <button type="button" id="duet-toggle-key-btn" class="ew-btn ew-btn--sm" style="cursor: pointer; background: #5c3d2e; border-color: #3e2217;">
+        👁️ Show My Clue Key
+      </button>
+      <button type="button" id="duet-new-game-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">
+        New Board
+      </button>
+      <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">
+        Back to Games
+      </a>
+    </div>
+  </div>
+
+  <!-- Mode Selector Tabs -->
+  <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+    <button type="button" id="tab-duet-online" class="ew-btn ew-btn--sm mode-tab" style="cursor: pointer;">
+      Online 2-Player
+    </button>
+    <button type="button" id="tab-duet-pass" class="ew-btn--outline ew-btn--sm mode-tab" style="cursor: pointer;">
+      Pass &amp; Play (Same Screen)
+    </button>
+    <button type="button" id="tab-duet-solo" class="ew-btn--outline ew-btn--sm mode-tab" style="cursor: pointer;">
+      Solo Puzzle
+    </button>
+  </div>
+
+  <!-- Online Room Matchmaking Panel -->
+  <div id="duet-online-panel" class="ew-card" style="display: block; margin-bottom: 1rem; padding: 1rem 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        <button type="button" id="duet-find-match-btn" class="ew-btn ew-btn--sm" style="cursor: pointer; background: #e06a3b; border-color: #c95729; font-weight: 600;">
+          Find Partner
+        </button>
+        <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); margin: 0 0.25rem;">or Room Code:</span>
+        <input type="text" id="duet-room-input" placeholder="e.g. duet77" style="width: 130px; padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; background: var(--surface-bg); color: var(--text-dark-color);">
+        <button type="button" id="duet-join-room-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Join Room</button>
+        <button type="button" id="duet-create-room-btn" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor: pointer;">Create Room</button>
+      </div>
+      <div id="duet-online-status" style="font-size: 0.82rem; font-weight: 500; color: var(--text-secondary);">
+        Not connected. Create a room or share code with your partner.
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Status & Progress Bar -->
+  <div class="ew-card" style="padding: 1rem 1.25rem; margin-bottom: 1rem; background: var(--surface-bg);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+      <!-- Turn Indicator -->
+      <div style="display: flex; align-items: center; gap: 0.6rem;">
+        <span id="duet-turn-avatar" style="width: 12px; height: 12px; border-radius: 50%; background: #22c55e;"></span>
+        <div>
+          <div id="duet-turn-text" style="font-weight: 700; font-size: 1rem; color: var(--text-dark-color);">
+            Waiting for players...
+          </div>
+          <div id="duet-role-text" style="font-size: 0.8rem; color: var(--text-secondary);">
+            Both players must join to start.
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent Goal & Token Counters -->
+      <div style="display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;">
+        <div>
+          <span style="font-size: 0.78rem; font-weight: 600; color: var(--text-secondary);">Agents Found:</span>
+          <strong id="duet-agents-count" style="font-size: 1.05rem; color: #15803d; margin-left: 0.3rem;">0 / 15</strong>
+        </div>
+        <div>
+          <span style="font-size: 0.78rem; font-weight: 600; color: var(--text-secondary);">Turns Left:</span>
+          <span id="duet-tokens-container" style="display: inline-flex; gap: 4px; margin-left: 0.3rem; vertical-align: middle;">
+            <!-- Generated in JS -->
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Clue Banner (Visible during guessing phase) -->
+    <div id="duet-active-clue-bar" style="display: none; margin-top: 0.85rem; padding: 0.65rem 1rem; background: rgba(224, 106, 59, 0.12); border: 1px solid rgba(224, 106, 59, 0.3); border-radius: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <div>
+          <span style="font-size: 0.82rem; font-weight: 600; color: #c95729;">CURRENT CLUE:</span>
+          <strong id="duet-clue-display" style="font-size: 1.15rem; color: #9c3615; margin-left: 0.4rem;">OCEAN &bull; 2</strong>
+          <span id="duet-guesses-left" style="font-size: 0.8rem; color: var(--text-secondary); margin-left: 0.6rem;">(Guesses remaining: 3)</span>
+        </div>
+        <button type="button" id="duet-end-turn-btn" class="ew-btn ew-btn--sm" style="background: #5c3d2e; border-color: #3e2217; cursor: pointer;">
+          Pass / End Guessing
+        </button>
+      </div>
+    </div>
+
+    <!-- Clue Giving Input Bar (Visible during clue giving phase) -->
+    <div id="duet-give-clue-bar" style="display: none; margin-top: 0.85rem; padding: 0.65rem 1rem; background: rgba(46, 134, 171, 0.1); border: 1px solid rgba(46, 134, 171, 0.3); border-radius: 8px;">
+      <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        <span style="font-size: 0.85rem; font-weight: 700; color: #2e86ab;">GIVE A CLUE:</span>
+        <input type="text" id="duet-clue-word-input" placeholder="One single word (e.g. Forest)" maxlength="20" style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.88rem; font-weight: 600; text-transform: uppercase; width: 190px;">
+        <select id="duet-clue-count-input" style="padding: 0.35rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.88rem; font-weight: 600;">
+          <option value="1">1 word</option>
+          <option value="2" selected>2 words</option>
+          <option value="3">3 words</option>
+          <option value="4">4 words</option>
+          <option value="5">5 words</option>
+          <option value="0">Zero (0)</option>
+        </select>
+        <button type="button" id="duet-send-clue-btn" class="ew-btn ew-btn--sm" style="background: #2e86ab; border-color: #226f8e; cursor: pointer; font-weight: 600;">
+          Submit Clue
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5x5 Word Card Grid -->
+  <div class="duet-card-grid" id="duet-board">
+    <!-- 25 cards generated in JS -->
+  </div>
+
+  <!-- Keycard Legend -->
+  <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.78rem; color: var(--text-secondary); flex-wrap: wrap; gap: 0.5rem;">
+    <div style="display: flex; gap: 1rem; align-items: center;">
+      <span><strong>Keycard Legend:</strong></span>
+      <span style="display: flex; align-items: center; gap: 0.3rem;"><span style="width:10px; height:10px; border-radius:50%; background:#22c55e;"></span> Green = Target Agent (Hint for these!)</span>
+      <span style="display: flex; align-items: center; gap: 0.3rem;"><span style="width:10px; height:10px; border-radius:50%; background:#18181b;"></span> Black = Assassin (Instant Loss!)</span>
+      <span style="display: flex; align-items: center; gap: 0.3rem;"><span style="width:10px; height:10px; border-radius:50%; background:#d4c7b8;"></span> Tan = Bystander (Ends Turn)</span>
+    </div>
+    <div>
+      <em>Tip: Keep "Show My Clue Key" ON so you know which words to give hints for.</em>
+    </div>
+  </div>
+
+  {% include "partials/game_reaction_bar.html" %}
+
+  <!-- Game Over Modal -->
+  <div id="duet-game-over-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 99999; align-items: center; justify-content: center; backdrop-filter: blur(3px);">
+    <div style="background: var(--surface-bg, #ffffff); border: 2px solid var(--border-color); border-radius: 12px; padding: 2rem; max-width: 440px; width: 90%; text-align: center; box-shadow: 0 16px 40px rgba(0,0,0,0.3);">
+      <div id="duet-modal-icon" style="font-size: 3rem; margin-bottom: 0.5rem;">🎉</div>
+      <h3 id="duet-modal-title" style="margin: 0 0 0.5rem 0; font-size: 1.5rem; font-weight: 800; color: var(--text-dark-color);">Mission Accomplished!</h3>
+      <div id="duet-modal-body" style="font-size: 0.95rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1.5rem;">
+        You and your partner uncovered all 15 hidden agents before time ran out!
+      </div>
+      <div style="display: flex; gap: 0.75rem; justify-content: center;">
+        <button type="button" id="duet-modal-play-again-btn" class="ew-btn" style="cursor: pointer; background: #e06a3b; border-color: #c95729; font-weight: 700;">
+          Play New Mission
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='word_duet.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
+{% endblock %}

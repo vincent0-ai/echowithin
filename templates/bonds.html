@@ -2334,6 +2334,14 @@
                         <div style="font-weight: 600; font-size: 0.85rem;">Slime Volleyball</div>
                         <div style="font-size: 0.72rem; color: var(--text-secondary);" id="h2h-pill-slime_volleyball-{{ bond.id }}">Challenge</div>
                     </button>
+                    <button type="button" class="btn btn-bond-outline" style="text-align: center; padding: 0.6rem 0.4rem;" onclick="sendBondChallenge('{{ bond.id }}', 'word_duet')">
+                        <div style="font-weight: 600; font-size: 0.85rem;">Word Duet</div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary);" id="h2h-pill-word_duet-{{ bond.id }}">Play Co-op</div>
+                    </button>
+                    <button type="button" class="btn btn-bond-outline" style="text-align: center; padding: 0.6rem 0.4rem;" onclick="sendBondChallenge('{{ bond.id }}', 'team_crossword')">
+                        <div style="font-weight: 600; font-size: 0.85rem;">Crossword</div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary);" id="h2h-pill-team_crossword-{{ bond.id }}">Play Co-op</div>
+                    </button>
                 </div>
 
                 <!-- Detailed H2H History Table -->

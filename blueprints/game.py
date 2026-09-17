@@ -226,6 +226,14 @@ def ping_pong():
 def snake():
     return render_template('snake.html', active_page='games')
 
+@bp.route('/games/word-duet')
+def word_duet():
+    return render_template('word_duet.html', active_page='games')
+
+@bp.route('/games/team-crossword')
+def team_crossword():
+    return render_template('team_crossword.html', active_page='games')
+
 @bp.route('/games/create', methods=['GET', 'POST'])
 @login_required
 @limits(calls=10, period=60)

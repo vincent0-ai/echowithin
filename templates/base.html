@@ -822,20 +822,19 @@
                 {% if current_user.is_authenticated %}
                 <a href="{{ url_for('pages.home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
                 <a href="{{ url_for('profile.profile', username=current_user.username) }}"
-                    class="{{ 'active' if active_page == 'profile' }}">Profile</a>
-                <a href="{{ url_for('notes.personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">
-                    Notes</a>
+                    class="{{ 'active' if active_page == 'profile' }}"><span class="nav-full">Profile</span><span class="nav-short">Me</span></a>
+                <a href="{{ url_for('notes.personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">Notes</a>
                 <a href="{{ url_for('blog.blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('chat.messages_page') }}" class="{{ 'active' if active_page == 'messages' }}" style="position: relative;">
-                    Messages
+                    <span class="nav-full">Messages</span><span class="nav-short">Msgs</span>
                     <span id="global-unread-count" class="badge" style="display: none; background: #c62828; color: white; margin-left: 2px;">0</span>
                 </a>
                 <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Bonds</a>
-                <a href="{{ url_for('game.games_list') }}" class="{{ 'active' if active_page == 'games' }}">Games</a>
+                <a href="{{ url_for('game.games_list') }}" class="{{ 'active' if active_page == 'games' }}"><span class="nav-full">Games</span><span class="nav-short">Play</span></a>
                 <a href="{{ url_for('pages.about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
                 {% else %}
                 <a href="{{ url_for('pages.dashboard') }}" class="{{ 'active' if active_page == 'home' or active_page == 'dashboard' }}">Home</a>
-                <a href="{{ url_for('game.games_join') }}" class="{{ 'active' if active_page == 'game_join' }}">Join Game</a>
+                <a href="{{ url_for('game.games_join') }}" class="{{ 'active' if active_page == 'game_join' }}"><span class="nav-full">Join Game</span><span class="nav-short">Join</span></a>
                 <a href="{{ url_for('auth.login', next=request.path if request.path not in ['/login', '/register', '/logout'] else url_for('pages.dashboard')) }}" class="{{ 'active' if active_page == 'login' }}" rel="nofollow">Login</a>
                 <a href="{{ url_for('auth.login', next=url_for('notes.personal_space')) }}" rel="nofollow">Notes</a>
                 <a href="{{ url_for('blog.blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>

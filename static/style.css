@@ -556,10 +556,19 @@ body {
 .nav-links {
     display: flex;
     gap: 0.4rem;
+    flex-wrap: nowrap;
 }
 
 .nav-links a:hover {
     text-decoration: underline;
+}
+
+/* Short labels hidden on desktop, shown on mobile */
+.nav-short {
+    display: none;
+}
+.nav-full {
+    display: inline;
 }
 
 /* Overlay for sidebar */
@@ -1881,16 +1890,24 @@ body {
     .nav-links {
         display: flex;
         flex-direction: row;
-        gap: 0.3rem 0.4rem;
+        gap: 0.15rem 0.3rem;
         justify-content: center;
         width: 100%;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
     }
 
     .nav-links a {
         white-space: nowrap;
-        font-size: 0.82rem;
-        padding: 0.3rem 0.35rem;
+        font-size: 0.78rem;
+        padding: 0.3rem 0.25rem;
+    }
+
+    /* Swap to short labels on tablet */
+    .nav-links .nav-full {
+        display: none;
+    }
+    .nav-links .nav-short {
+        display: inline;
     }
 
     /* Spacing between brand row elements on mobile */
@@ -2107,16 +2124,24 @@ body {
     .nav-links {
         display: flex;
         flex-direction: row;
-        flex-wrap: wrap;
-        gap: 0.15rem 0.3rem;
+        flex-wrap: nowrap;
+        gap: 0.1rem 0.2rem;
         width: 100%;
         justify-content: center;
     }
 
     .nav-links a {
-        font-size: 0.72rem;
-        padding: 0.25rem 0.25rem;
+        font-size: 0.7rem;
+        padding: 0.25rem 0.2rem;
         white-space: nowrap;
+    }
+
+    /* Ensure short labels on small screens */
+    .nav-links .nav-full {
+        display: none;
+    }
+    .nav-links .nav-short {
+        display: inline;
     }
 
     /* Tab responsiveness on very small screens */

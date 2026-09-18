@@ -189,8 +189,8 @@ button.install-btn:active,
 
     /* Ensure nav items fit on very small screens */
     .nav-links a {
-        font-size: 0.8rem;
-        padding: 0.3rem 0.35rem;
+        font-size: 0.7rem;
+        padding: 0.25rem 0.2rem;
     }
 
     .nav-brand {

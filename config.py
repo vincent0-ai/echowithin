@@ -41,8 +41,10 @@ ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogg', 'mov', 'm4v', 'avi', 'mkv'}
 ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'aac', 'webm'}
 ALLOWED_DOCUMENT_EXTENSIONS = {'pdf', 'doc', 'docx', 'txt', 'rtf'}
-MAX_VIDEO_SIZE = 50 * 1024 * 1024  # 50 MB limit for uploaded videos
-MAX_IMAGE_SIZE = 5 * 1024 * 1024   # 5 MB limit per uploaded image
+MAX_VIDEO_SIZE = 100 * 1024 * 1024  # 100 MB accept limit for user-uploaded videos
+MAX_IMAGE_SIZE = 5 * 1024 * 1024    # 5 MB limit per uploaded image
+CLOUDINARY_RAW_UPLOAD_LIMIT = 10 * 1024 * 1024  # 10 MB Cloudinary free-tier raw upload ceiling
+VIDEO_COMPRESSION_TIMEOUT = 120     # seconds before FFmpeg compression is killed
 
 # --- Temporary Uploads for Background Processing ---
 TEMP_UPLOAD_FOLDER = 'temp_uploads'

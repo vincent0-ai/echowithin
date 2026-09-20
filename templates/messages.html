@@ -276,12 +276,14 @@
                             <div style="position: relative; width: 48px; height: 48px; flex-shrink: 0;">
                                 <img id="image-upload-preview" src=""
                                     style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid #eee;">
+                                <video id="video-upload-preview" src="" muted
+                                    style="display: none; width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid #eee;"></video>
                                 <div id="image-upload-spinner" class="img-upload-overlay" style="display: none;">
                                     <div class="img-upload-spinner"></div>
                                 </div>
                             </div>
                             <div style="display: flex; flex-direction: column; min-width: 0;">
-                                <span style="font-size: 0.85rem; font-weight: 600; color: #333;">Attached Image</span>
+                                <span id="image-upload-media-label" style="font-size: 0.85rem; font-weight: 600; color: #333;">Attached Media</span>
                                 <span id="image-upload-status" style="font-size: 0.75rem; color: #999;">Uploading...</span>
                             </div>
                         </div>
@@ -351,7 +353,7 @@
                                 style="width: 36px; height: 36px; min-width: 36px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; flex: 0 0 36px; touch-action: manipulation; display: flex; align-items: center; justify-content: center;">
                                 <i class="fas fa-paperclip"></i>
                             </button>
-                            <input type="file" id="dm-image-upload" accept="image/*" style="display: none;"
+                            <input type="file" id="dm-image-upload" accept="image/*,video/*" style="display: none;"
                                 onchange="handleImageSelection(event)">
 
                             <div class="message-input-wrapper" style="flex: 1 1 0; min-width: 0; max-width: 100%; position: relative;">
@@ -4398,26 +4400,45 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            if (file.size > 5 * 1024 * 1024) {
-                showToast("Image too large. Maximum 5MB.");
+            const isVideo = (file.type && file.type.startsWith('video/')) || /\.(mp4|webm|mov|ogg|m4v|avi|mkv)$/i.test(file.name || '');
+            const maxSize = isVideo ? 100 * 1024 * 1024 : 5 * 1024 * 1024;
+            if (file.size > maxSize) {
+                showToast(isVideo ? 'Video must be under 100MB' : 'Image too large. Maximum 5MB.');
                 return;
             }
 
             // Show immediate local preview before upload starts
             const localUrl = URL.createObjectURL(file);
-            document.getElementById('image-upload-preview').src = localUrl;
+            const imgPreview = document.getElementById('image-upload-preview');
+            const vidPreview = document.getElementById('video-upload-preview');
+            const mediaLabel = document.getElementById('image-upload-media-label');
+            if (isVideo) {
+                if (imgPreview) { imgPreview.style.display = 'none'; imgPreview.src = ''; }
+                if (vidPreview) { vidPreview.src = localUrl; vidPreview.style.display = 'block'; }
+                if (mediaLabel) mediaLabel.textContent = 'Attached Video';
+            } else {
+                if (vidPreview) { vidPreview.style.display = 'none'; vidPreview.src = ''; }
+                if (imgPreview) { imgPreview.src = localUrl; imgPreview.style.display = 'block'; }
+                if (mediaLabel) mediaLabel.textContent = 'Attached Image';
+            }
             document.getElementById('image-upload-banner').style.display = 'flex';
             document.getElementById('image-upload-spinner').style.display = 'flex';
-            document.getElementById('image-upload-status').textContent = 'Uploading...';
+            const statusEl = document.getElementById('image-upload-status');
+            if (isVideo && file.size > 10 * 1024 * 1024) {
+                statusEl.textContent = 'Compressing & uploading...';
+            } else {
+                statusEl.textContent = 'Uploading...';
+            }
 
             const btn = document.getElementById('send-btn');
             btn.style.opacity = '0.5';
             btn.disabled = true;
 
             const fd = new FormData();
-            fd.append('image', file);
+            fd.append(isVideo ? 'video' : 'image', file);
+            const uploadEndpoint = isVideo ? '/api/messages/upload_video' : '/api/messages/upload_image';
 
-            echoFetch('/api/messages/upload_image', {
+            echoFetch(uploadEndpoint, {
                 method: 'POST',
                 headers: { 'X-CSRFToken': csrfToken },
                 body: fd
@@ -4425,7 +4446,7 @@
                 if (d.success) {
                     document.getElementById('pending-image-url').value = d.url;
                     document.getElementById('pending-image-public-id').value = d.public_id || '';
-                    document.getElementById('pending-image-resource-type').value = 'image';
+                    document.getElementById('pending-image-resource-type').value = isVideo ? 'video' : 'image';
                     document.getElementById('pending-image-mime').value = d.mime_type || '';
                     document.getElementById('image-upload-spinner').style.display = 'none';
                     document.getElementById('image-upload-status').textContent = 'Ready to send';
@@ -4449,6 +4470,12 @@
             document.getElementById('pending-image-resource-type').value = 'image';
             document.getElementById('pending-image-mime').value = '';
             document.getElementById('image-upload-banner').style.display = 'none';
+            var imgP = document.getElementById('image-upload-preview');
+            if (imgP) { imgP.src = ''; imgP.style.display = 'block'; }
+            var vidP = document.getElementById('video-upload-preview');
+            if (vidP) { vidP.src = ''; vidP.style.display = 'none'; }
+            var lbl = document.getElementById('image-upload-media-label');
+            if (lbl) lbl.textContent = 'Attached Media';
         };
 
         let searchDebounceId;
@@ -6246,9 +6273,9 @@
         if (!input.files || !input.files[0]) return;
         const file = input.files[0];
         const isVideo = (file.type && file.type.startsWith('video/')) || /\.(mp4|webm|mov|ogg)$/i.test(file.name || '');
-        const maxSize = isVideo ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+        const maxSize = isVideo ? 100 * 1024 * 1024 : 5 * 1024 * 1024;
         if (file.size > maxSize) {
-            alert((isVideo ? 'Video' : 'Image') + ' must be under ' + (isVideo ? '50MB' : '5MB'));
+            alert((isVideo ? 'Video' : 'Image') + ' must be under ' + (isVideo ? '100MB' : '5MB'));
             input.value = '';
             return;
         }
@@ -6259,6 +6286,11 @@
         const uploading = document.getElementById('whisper-image-uploading');
         preview.style.display = 'block';
         uploading.style.display = 'block';
+        if (isVideo && file.size > 10 * 1024 * 1024) {
+            uploading.textContent = 'Compressing & uploading...';
+        } else {
+            uploading.textContent = 'Uploading...';
+        }
         const blobUrl = URL.createObjectURL(file);
         if (isVideo) {
             if (previewImg) { previewImg.style.display = 'none'; previewImg.src = ''; }

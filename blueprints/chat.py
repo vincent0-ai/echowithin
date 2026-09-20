@@ -491,17 +491,31 @@ def api_upload_dm_image():
         size = file.tell()
         file.seek(0)
         is_video = (file.mimetype or '').startswith('video/')
-        max_size = current_app.config.get('MAX_VIDEO_SIZE', 50 * 1024 * 1024) if is_video else current_app.config.get('MAX_IMAGE_SIZE', 5 * 1024 * 1024)
+        max_size = current_app.config.get('MAX_VIDEO_SIZE', 100 * 1024 * 1024) if is_video else current_app.config.get('MAX_IMAGE_SIZE', 5 * 1024 * 1024)
         if size > max_size:
             return jsonify({'error': f"{'Video' if is_video else 'Image'} exceeds allowed limit"}), 400
+
+        raw_bytes = file.read()
+        mime_type = (file.mimetype or ('video/mp4' if is_video else 'image/jpeg'))[:200]
+
+        # Compress videos that exceed Cloudinary's raw upload limit
+        if is_video:
+            cloud_limit = current_app.config.get('CLOUDINARY_RAW_UPLOAD_LIMIT', m.CLOUDINARY_RAW_UPLOAD_LIMIT)
+            comp_timeout = current_app.config.get('VIDEO_COMPRESSION_TIMEOUT', m.VIDEO_COMPRESSION_TIMEOUT)
+            if len(raw_bytes) > cloud_limit:
+                from video_utils import compress_video_if_needed
+                raw_bytes, mime_type = compress_video_if_needed(
+                    raw_bytes, cloud_limit, timeout=comp_timeout,
+                    temp_dir=current_app.config.get('TEMP_UPLOAD_FOLDER', 'temp_uploads'),
+                )
+
         upload_result = m.cloudinary.uploader.upload(
-            m.encrypt_media_bytes(file.read()),
+            m.encrypt_media_bytes(raw_bytes),
             folder='dm_videos' if is_video else 'dm_images',
             resource_type='raw',
             type='authenticated'
         )
         public_id = upload_result.get('public_id')
-        mime_type = (file.mimetype or ('video/mp4' if is_video else 'image/jpeg'))[:200]
         serve_url = m.build_media_serve_url(public_id, mime_type) if public_id else ''
         return jsonify({
             'success': True,
@@ -530,7 +544,7 @@ def api_upload_dm_video():
         file.seek(0, os.SEEK_END)
         size = file.tell()
         file.seek(0)
-        max_size = current_app.config.get('MAX_VIDEO_SIZE', 50 * 1024 * 1024)
+        max_size = current_app.config.get('MAX_VIDEO_SIZE', 100 * 1024 * 1024)
         if size > max_size:
             return jsonify({'error': f'Video exceeds {max_size // (1024 * 1024)}MB limit'}), 400
 
@@ -546,8 +560,20 @@ def api_upload_dm_video():
         else:
             mime_type = raw_mime[:200]
 
+        raw_bytes = file.read()
+
+        # Compress videos that exceed Cloudinary's raw upload limit
+        cloud_limit = current_app.config.get('CLOUDINARY_RAW_UPLOAD_LIMIT', m.CLOUDINARY_RAW_UPLOAD_LIMIT)
+        comp_timeout = current_app.config.get('VIDEO_COMPRESSION_TIMEOUT', m.VIDEO_COMPRESSION_TIMEOUT)
+        if len(raw_bytes) > cloud_limit:
+            from video_utils import compress_video_if_needed
+            raw_bytes, mime_type = compress_video_if_needed(
+                raw_bytes, cloud_limit, timeout=comp_timeout,
+                temp_dir=current_app.config.get('TEMP_UPLOAD_FOLDER', 'temp_uploads'),
+            )
+
         upload_result = m.cloudinary.uploader.upload(
-            m.encrypt_media_bytes(file.read()),
+            m.encrypt_media_bytes(raw_bytes),
             folder='dm_videos',
             resource_type='raw',
             type='authenticated'

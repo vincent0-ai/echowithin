@@ -734,6 +734,32 @@
     <div class="faq-section">
         <h2 class="faq-section-title"><i class="fas fa-shield-halved"></i> Privacy & Security</h2>
 
+        {% if current_user.is_authenticated %}
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                How do I access and use my Private Vault?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Your Private Vault is a hidden, encrypted storage space for sensitive photos, videos, and documents.
+                    <br><br>
+                    <strong>How to open it:</strong>
+                    Go to your <strong>Profile page</strong> and <strong>press and hold (long-press) your profile picture</strong> for about a second.
+                    <br><br>
+                    <strong>First-time setup:</strong>
+                    You will be prompted to create a 4-digit numeric PIN. Confirm the PIN, and your vault will be created and unlocked automatically.
+                    <br><br>
+                    <strong>Subsequent visits:</strong>
+                    Long-press your profile picture anytime to enter your 4-digit PIN and unlock the vault. The vault automatically locks after 5 minutes of inactivity, or you can tap the lock icon in the top right to lock it immediately.
+                    <br><br>
+                    <strong>Security & Limits:</strong>
+                    All files are encrypted at rest before upload, and filenames are encrypted with your personal secret key. Free accounts can store up to 20 items, while Premium accounts can store up to 200 items (up to 50MB per file).
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <div class="faq-item">
             <button class="faq-question" aria-expanded="false">
                 How is my data protected?

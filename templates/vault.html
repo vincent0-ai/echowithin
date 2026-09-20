@@ -13,6 +13,7 @@
             margin: 0 auto;
             padding: 1rem;
         }
+
         .vault-header {
             display: flex;
             align-items: center;
@@ -21,6 +22,7 @@
             border-bottom: 1px solid var(--border-color, #e8dcd5);
             margin-bottom: 1rem;
         }
+
         .vault-header h1 {
             font-size: 1.2rem;
             color: var(--primary-dark-color, #3e2217);
@@ -29,11 +31,13 @@
             align-items: center;
             gap: 0.5rem;
         }
+
         .vault-header-actions {
             display: flex;
             gap: 0.5rem;
             align-items: center;
         }
+
         .vault-btn {
             background: var(--primary-color, #3e2217);
             color: var(--text-light-color, #fff);
@@ -45,7 +49,11 @@
             cursor: pointer;
             font-family: inherit;
         }
-        .vault-btn:hover { opacity: 0.9; }
+
+        .vault-btn:hover {
+            opacity: 0.9;
+        }
+
         .vault-btn-outline {
             background: transparent;
             color: var(--primary-color, #3e2217);
@@ -56,7 +64,11 @@
             cursor: pointer;
             font-family: inherit;
         }
-        .vault-btn-outline:hover { background: var(--surface-bg, #fdfaf9); }
+
+        .vault-btn-outline:hover {
+            background: var(--surface-bg, #fdfaf9);
+        }
+
         .vault-btn-danger {
             background: transparent;
             color: #c62828;
@@ -77,11 +89,13 @@
             padding: 4rem 1rem;
             text-align: center;
         }
+
         .vault-lock-overlay i {
             font-size: 3rem;
             color: var(--primary-color, #3e2217);
             margin-bottom: 1rem;
         }
+
         .vault-lock-overlay p {
             color: var(--text-secondary, #666);
             font-size: 0.9rem;
@@ -95,6 +109,7 @@
             justify-content: center;
             margin-bottom: 1rem;
         }
+
         .pin-dot {
             width: 44px;
             height: 52px;
@@ -109,10 +124,12 @@
             outline: none;
             -webkit-text-security: disc;
         }
+
         .pin-dot:focus {
             border-color: var(--primary-color, #3e2217);
             box-shadow: 0 0 0 2px rgba(62, 34, 23, 0.15);
         }
+
         .pin-error {
             color: #c62828;
             font-size: 0.8rem;
@@ -127,9 +144,14 @@
             grid-template-columns: repeat(3, 1fr);
             gap: 4px;
         }
+
         @media (min-width: 600px) {
-            .vault-grid { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+            .vault-grid {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 6px;
+            }
         }
+
         .vault-item {
             position: relative;
             aspect-ratio: 1;
@@ -138,11 +160,14 @@
             cursor: pointer;
             background: var(--surface-bg, #f5ebe7);
         }
-        .vault-item img, .vault-item video {
+
+        .vault-item img,
+        .vault-item video {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
+
         .vault-item-overlay {
             position: absolute;
             inset: 0;
@@ -153,12 +178,16 @@
             opacity: 0;
             transition: opacity 0.2s;
         }
-        .vault-item:hover .vault-item-overlay { opacity: 1; }
+
+        .vault-item:hover .vault-item-overlay {
+            opacity: 1;
+        }
+
         .vault-item-type {
             position: absolute;
             bottom: 4px;
             left: 4px;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.5);
             color: #fff;
             font-size: 0.6rem;
             padding: 2px 5px;
@@ -171,12 +200,17 @@
             padding: 3rem 1rem;
             color: var(--text-secondary, #666);
         }
+
         .vault-empty i {
             font-size: 2.5rem;
             color: var(--border-color, #e8dcd5);
             margin-bottom: 0.75rem;
         }
-        .vault-empty p { font-size: 0.85rem; margin-bottom: 1rem; }
+
+        .vault-empty p {
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+        }
 
         /* Upload area */
         .vault-upload-area {
@@ -189,22 +223,28 @@
             margin-bottom: 1rem;
             display: none;
         }
+
         .vault-upload-area.active {
             display: block;
         }
-        .vault-upload-area:hover, .vault-upload-area.dragover {
+
+        .vault-upload-area:hover,
+        .vault-upload-area.dragover {
             border-color: var(--primary-color, #3e2217);
         }
+
         .vault-upload-area i {
             font-size: 1.5rem;
             color: var(--primary-color, #3e2217);
             margin-bottom: 0.5rem;
         }
+
         .vault-upload-area p {
             font-size: 0.8rem;
             color: var(--text-secondary, #666);
             margin: 0;
         }
+
         .vault-upload-progress {
             display: none;
             margin: 0.75rem 0;
@@ -218,13 +258,17 @@
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0,0,0,0.92);
+            background: rgba(0, 0, 0, 0.92);
             z-index: 9999;
             align-items: center;
             justify-content: center;
             flex-direction: column;
         }
-        .vault-lightbox.active { display: flex; }
+
+        .vault-lightbox.active {
+            display: flex;
+        }
+
         .vault-lightbox-close {
             position: absolute;
             top: 12px;
@@ -236,18 +280,21 @@
             cursor: pointer;
             z-index: 10001;
         }
+
         .vault-lightbox-content {
             max-width: 90vw;
             max-height: 80vh;
             border-radius: 8px;
         }
+
         .vault-lightbox-actions {
             display: flex;
             gap: 1rem;
             margin-top: 1rem;
         }
+
         .vault-lightbox-btn {
-            background: rgba(255,255,255,0.15);
+            background: rgba(255, 255, 255, 0.15);
             color: #fff;
             border: none;
             border-radius: 8px;
@@ -256,8 +303,14 @@
             cursor: pointer;
             font-family: inherit;
         }
-        .vault-lightbox-btn:hover { background: rgba(255,255,255,0.25); }
-        .vault-lightbox-btn.danger { color: #ef9a9a; }
+
+        .vault-lightbox-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .vault-lightbox-btn.danger {
+            color: #ef9a9a;
+        }
 
         /* Item count */
         .vault-count {
@@ -272,12 +325,16 @@
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.5);
             z-index: 9998;
             align-items: center;
             justify-content: center;
         }
-        .vault-modal-backdrop.active { display: flex; }
+
+        .vault-modal-backdrop.active {
+            display: flex;
+        }
+
         .vault-modal {
             background: var(--card-bg, #fff);
             border-radius: 12px;
@@ -285,6 +342,7 @@
             width: 320px;
             max-width: 90vw;
         }
+
         .vault-modal h3 {
             margin: 0 0 1rem 0;
             font-size: 1rem;
@@ -295,17 +353,19 @@
 
     <div class="vault-container">
         <div class="vault-header">
-            <h1><i class="fas fa-lock"></i> Private Vault</h1>
+            <h1> Private Vault</h1>
             <div class="vault-header-actions" id="vault-header-actions" style="display: none;">
-                <button class="vault-btn-outline" onclick="toggleUploadArea()" title="Add"><i class="fas fa-plus"></i></button>
-                <button class="vault-btn-outline" onclick="showChangePinModal()" title="Change PIN"><i class="fas fa-key"></i></button>
-                <button class="vault-btn-outline" onclick="lockVault()" title="Lock"><i class="fas fa-lock"></i></button>
+                <button class="vault-btn-outline" onclick="toggleUploadArea()" title="Add"><i
+                        class="fas fa-plus"></i></button>
+                <button class="vault-btn-outline" onclick="showChangePinModal()" title="Change PIN"><i
+                        class="fas fa-key"></i></button>
+                <button class="vault-btn-outline" onclick="lockVault()" title="Lock"><i
+                        class="fas fa-lock"></i></button>
             </div>
         </div>
 
         <!-- Lock overlay (PIN entry) -->
-        <div id="vault-lock-screen" class="vault-lock-overlay" {% if vault_unlocked %}style="display:none"{% endif %}>
-            <i class="fas fa-shield-halved"></i>
+        <div id="vault-lock-screen" class="vault-lock-overlay" {% if vault_unlocked %}style="display:none" {% endif %}>
             <p>Enter your 4-digit PIN to unlock</p>
             <div class="pin-input-row" id="unlock-pin-row">
                 <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
@@ -317,13 +377,16 @@
         </div>
 
         <!-- Vault content (shown when unlocked) -->
-        <div id="vault-content" {% if not vault_unlocked %}style="display:none"{% endif %}>
+        <div id="vault-content" {% if not vault_unlocked %}style="display:none" {% endif %}>
             <!-- Upload area (hidden by default, toggled by + button) -->
-            <div id="vault-upload-area" class="vault-upload-area" onclick="document.getElementById('vault-file-input').click()">
+            <div id="vault-upload-area" class="vault-upload-area"
+                onclick="document.getElementById('vault-file-input').click()">
                 <i class="fas fa-cloud-arrow-up"></i>
-                <p>Tap to select photos, videos, or documents<br><small>Max {{ (max_file_size / (1024*1024)) | int }}MB per file</small></p>
+                <p>Tap to select photos, videos, or documents<br><small>Max {{ (max_file_size / (1024*1024)) | int }}MB
+                        per file</small></p>
             </div>
-            <input type="file" id="vault-file-input" accept="image/*,video/*,.pdf,.doc,.docx,.txt" style="display:none" multiple>
+            <input type="file" id="vault-file-input" accept="image/*,video/*,.pdf,.doc,.docx,.txt" style="display:none"
+                multiple>
             <div class="vault-upload-progress" id="vault-upload-progress">Encrypting & uploading...</div>
 
             <!-- Items grid -->
@@ -362,21 +425,27 @@
     <div class="vault-modal-backdrop" id="change-pin-modal">
         <div class="vault-modal">
             <h3>Change Vault PIN</h3>
-            <label style="font-size:0.75rem; color: var(--text-secondary, #666); display: block; margin-bottom: 0.5rem; text-align: center;">Current PIN</label>
+            <label
+                style="font-size:0.75rem; color: var(--text-secondary, #666); display: block; margin-bottom: 0.5rem; text-align: center;">Current
+                PIN</label>
             <div class="pin-input-row" id="change-pin-current-row">
                 <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
                 <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
                 <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
                 <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
             </div>
-            <label style="font-size:0.75rem; color: var(--text-secondary, #666); display: block; margin-bottom: 0.5rem; text-align: center;">New PIN</label>
+            <label
+                style="font-size:0.75rem; color: var(--text-secondary, #666); display: block; margin-bottom: 0.5rem; text-align: center;">New
+                PIN</label>
             <div class="pin-input-row" id="change-pin-new-row">
                 <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
                 <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
                 <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
                 <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
             </div>
-            <label style="font-size:0.75rem; color: var(--text-secondary, #666); display: block; margin-bottom: 0.5rem; text-align: center;">Confirm New PIN</label>
+            <label
+                style="font-size:0.75rem; color: var(--text-secondary, #666); display: block; margin-bottom: 0.5rem; text-align: center;">Confirm
+                New PIN</label>
             <div class="pin-input-row" id="change-pin-confirm-row">
                 <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
                 <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
@@ -393,9 +462,10 @@
 </div>
 
 <script>
-(function() {
-    const csrfToken = '{{ csrf_token() }}';
-    const maxItems = {{ max_items }};
+    (function () {
+        const csrfToken = '{{ csrf_token() }}';
+        const maxItems = {{ max_items }
+    };
     let vaultItems = [];
     let currentLightboxItem = null;
 
@@ -404,32 +474,32 @@
         const row = document.getElementById(rowId);
         if (!row) return;
         const inputs = row.querySelectorAll('.pin-dot');
-        inputs.forEach(function(inp, i) {
-            inp.addEventListener('input', function() {
+        inputs.forEach(function (inp, i) {
+            inp.addEventListener('input', function () {
                 this.value = this.value.replace(/\D/g, '').slice(0, 1);
                 if (this.value && i < inputs.length - 1) {
                     inputs[i + 1].focus();
                 }
                 if (i === inputs.length - 1 && this.value) {
                     var pin = '';
-                    inputs.forEach(function(el) { pin += el.value; });
+                    inputs.forEach(function (el) { pin += el.value; });
                     if (pin.length === inputs.length && onComplete) onComplete(pin);
                 }
             });
-            inp.addEventListener('keydown', function(e) {
+            inp.addEventListener('keydown', function (e) {
                 if (e.key === 'Backspace' && !this.value && i > 0) {
                     inputs[i - 1].focus();
                     inputs[i - 1].value = '';
                 }
             });
-            inp.addEventListener('focus', function() { this.select(); });
+            inp.addEventListener('focus', function () { this.select(); });
         });
     }
 
     function clearPinRow(rowId) {
         var row = document.getElementById(rowId);
         if (!row) return;
-        row.querySelectorAll('.pin-dot').forEach(function(inp) { inp.value = ''; });
+        row.querySelectorAll('.pin-dot').forEach(function (inp) { inp.value = ''; });
         var first = row.querySelector('.pin-dot');
         if (first) first.focus();
     }
@@ -438,18 +508,18 @@
         var row = document.getElementById(rowId);
         if (!row) return '';
         var pin = '';
-        row.querySelectorAll('.pin-dot').forEach(function(inp) { pin += inp.value; });
+        row.querySelectorAll('.pin-dot').forEach(function (inp) { pin += inp.value; });
         return pin;
     }
 
     // --- Unlock ---
-    setupPinRow('unlock-pin-row', function(pin) {
+    setupPinRow('unlock-pin-row', function (pin) {
         document.getElementById('unlock-pin-error').textContent = '';
         fetch('/api/vault/unlock', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ pin: pin })
-        }).then(function(r) { return r.json(); }).then(function(d) {
+        }).then(function (r) { return r.json(); }).then(function (d) {
             if (d.success) {
                 document.getElementById('vault-lock-screen').style.display = 'none';
                 document.getElementById('vault-content').style.display = 'block';
@@ -459,7 +529,7 @@
                 document.getElementById('unlock-pin-error').textContent = d.error || 'Incorrect PIN';
                 clearPinRow('unlock-pin-row');
             }
-        }).catch(function() {
+        }).catch(function () {
             document.getElementById('unlock-pin-error').textContent = 'Network error';
             clearPinRow('unlock-pin-row');
         });
@@ -472,11 +542,11 @@
     {% endif %}
 
     // --- Lock ---
-    window.lockVault = function() {
+    window.lockVault = function () {
         fetch('/api/vault/lock', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
-        }).then(function() {
+        }).then(function () {
             window.location.href = '{{ url_for("profile.profile", username=current_user.username) }}';
         });
     };
@@ -486,7 +556,7 @@
         page = page || 1;
         fetch('/api/vault/items?page=' + page + '&per_page=50', {
             headers: { 'X-CSRFToken': csrfToken }
-        }).then(function(r) { return r.json(); }).then(function(d) {
+        }).then(function (r) { return r.json(); }).then(function (d) {
             if (d.items) {
                 vaultItems = d.items;
                 renderGrid(d.items, d.total);
@@ -508,11 +578,11 @@
         empty.style.display = 'none';
         count.textContent = total + ' of ' + maxItems + ' items';
 
-        items.forEach(function(item, idx) {
+        items.forEach(function (item, idx) {
             var div = document.createElement('div');
             div.className = 'vault-item';
             div.setAttribute('data-idx', idx);
-            div.onclick = function() { openLightbox(item); };
+            div.onclick = function () { openLightbox(item); };
 
             if (item.thumbnail && item.media_type !== 'document') {
                 var img = document.createElement('img');
@@ -548,14 +618,14 @@
     }
 
     // --- Upload ---
-    window.toggleUploadArea = function() {
+    window.toggleUploadArea = function () {
         var area = document.getElementById('vault-upload-area');
         area.classList.toggle('active');
     };
 
     var fileInput = document.getElementById('vault-file-input');
     if (fileInput) {
-        fileInput.addEventListener('change', function() {
+        fileInput.addEventListener('change', function () {
             if (!this.files || !this.files.length) return;
             uploadFiles(Array.from(this.files));
             this.value = '';
@@ -565,14 +635,14 @@
     // Drag and drop
     var uploadArea = document.getElementById('vault-upload-area');
     if (uploadArea) {
-        uploadArea.addEventListener('dragover', function(e) {
+        uploadArea.addEventListener('dragover', function (e) {
             e.preventDefault();
             this.classList.add('dragover');
         });
-        uploadArea.addEventListener('dragleave', function() {
+        uploadArea.addEventListener('dragleave', function () {
             this.classList.remove('dragover');
         });
-        uploadArea.addEventListener('drop', function(e) {
+        uploadArea.addEventListener('drop', function (e) {
             e.preventDefault();
             this.classList.remove('dragover');
             if (e.dataTransfer.files.length) uploadFiles(Array.from(e.dataTransfer.files));
@@ -585,7 +655,7 @@
         progress.style.display = 'block';
         progress.textContent = 'Encrypting & uploading ' + remaining + ' file(s)...';
 
-        files.forEach(function(file) {
+        files.forEach(function (file) {
             // Generate client-side thumbnail for images
             var thumbnailPromise;
             if (file.type && file.type.startsWith('image/')) {
@@ -596,7 +666,7 @@
                 thumbnailPromise = Promise.resolve('');
             }
 
-            thumbnailPromise.then(function(thumbData) {
+            thumbnailPromise.then(function (thumbData) {
                 var fd = new FormData();
                 fd.append('file', file);
                 if (thumbData) fd.append('thumbnail', thumbData);
@@ -606,11 +676,11 @@
                     headers: { 'X-CSRFToken': csrfToken },
                     body: fd
                 });
-            }).then(function(r) { return r.json(); }).then(function(d) {
+            }).then(function (r) { return r.json(); }).then(function (d) {
                 remaining--;
                 if (d.error) {
                     progress.textContent = d.error;
-                    setTimeout(function() { progress.style.display = 'none'; }, 3000);
+                    setTimeout(function () { progress.style.display = 'none'; }, 3000);
                 } else if (remaining <= 0) {
                     progress.style.display = 'none';
                     document.getElementById('vault-upload-area').classList.remove('active');
@@ -618,20 +688,20 @@
                 } else {
                     progress.textContent = 'Uploading ' + remaining + ' remaining...';
                 }
-            }).catch(function() {
+            }).catch(function () {
                 remaining--;
                 progress.textContent = 'Upload failed';
-                setTimeout(function() { progress.style.display = 'none'; }, 3000);
+                setTimeout(function () { progress.style.display = 'none'; }, 3000);
             });
         });
     }
 
     function generateThumbnail(file) {
-        return new Promise(function(resolve) {
+        return new Promise(function (resolve) {
             var reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = function (e) {
                 var img = new Image();
-                img.onload = function() {
+                img.onload = function () {
                     var canvas = document.createElement('canvas');
                     var size = 200;
                     var w = img.width, h = img.height;
@@ -641,24 +711,24 @@
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                     resolve(canvas.toDataURL('image/jpeg', 0.6));
                 };
-                img.onerror = function() { resolve(''); };
+                img.onerror = function () { resolve(''); };
                 img.src = e.target.result;
             };
-            reader.onerror = function() { resolve(''); };
+            reader.onerror = function () { resolve(''); };
             reader.readAsDataURL(file);
         });
     }
 
     function generateVideoThumbnail(file) {
-        return new Promise(function(resolve) {
+        return new Promise(function (resolve) {
             try {
                 var video = document.createElement('video');
                 video.preload = 'metadata';
                 video.muted = true;
-                video.onloadeddata = function() {
+                video.onloadeddata = function () {
                     video.currentTime = Math.min(1, video.duration / 4);
                 };
-                video.onseeked = function() {
+                video.onseeked = function () {
                     var canvas = document.createElement('canvas');
                     var size = 200;
                     var w = video.videoWidth, h = video.videoHeight;
@@ -669,14 +739,14 @@
                     URL.revokeObjectURL(video.src);
                     resolve(canvas.toDataURL('image/jpeg', 0.6));
                 };
-                video.onerror = function() { resolve(''); };
+                video.onerror = function () { resolve(''); };
                 video.src = URL.createObjectURL(file);
-            } catch(e) { resolve(''); }
+            } catch (e) { resolve(''); }
         });
     }
 
     // --- Lightbox ---
-    window.openLightbox = function(item) {
+    window.openLightbox = function (item) {
         currentLightboxItem = item;
         var lb = document.getElementById('vault-lightbox');
         var img = document.getElementById('vault-lightbox-img');
@@ -710,14 +780,14 @@
         document.body.style.overflow = 'hidden';
     };
 
-    window.showLightboxInfo = function() {
+    window.showLightboxInfo = function () {
         if (!currentLightboxItem) return;
         var sizeStr = currentLightboxItem.file_size ? (currentLightboxItem.file_size / (1024 * 1024) >= 1 ? (currentLightboxItem.file_size / (1024 * 1024)).toFixed(1) + ' MB' : (currentLightboxItem.file_size / 1024).toFixed(1) + ' KB') : 'Unknown size';
         var dateStr = currentLightboxItem.created_at ? new Date(currentLightboxItem.created_at).toLocaleString() : 'Unknown date';
         alert('File: ' + (currentLightboxItem.filename || 'Unnamed') + '\nType: ' + (currentLightboxItem.mime_type || currentLightboxItem.media_type) + '\nSize: ' + sizeStr + '\nUploaded: ' + dateStr);
     };
 
-    window.closeLightbox = function() {
+    window.closeLightbox = function () {
         var lb = document.getElementById('vault-lightbox');
         lb.classList.remove('active');
         document.body.style.overflow = '';
@@ -729,25 +799,25 @@
     };
 
     // Close lightbox on backdrop click
-    document.getElementById('vault-lightbox').addEventListener('click', function(e) {
+    document.getElementById('vault-lightbox').addEventListener('click', function (e) {
         if (e.target === this) closeLightbox();
     });
 
     // Close on Escape
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
             closeLightbox();
             hideChangePinModal();
         }
     });
 
-    window.deleteLightboxItem = function() {
+    window.deleteLightboxItem = function () {
         if (!currentLightboxItem) return;
         if (!confirm('Delete this item from your vault? This cannot be undone.')) return;
         fetch('/api/vault/items/' + currentLightboxItem.id, {
             method: 'DELETE',
             headers: { 'X-CSRFToken': csrfToken }
-        }).then(function(r) { return r.json(); }).then(function(d) {
+        }).then(function (r) { return r.json(); }).then(function (d) {
             if (d.success) {
                 closeLightbox();
                 loadItems();
@@ -758,7 +828,7 @@
     };
 
     // --- Change PIN ---
-    window.showChangePinModal = function() {
+    window.showChangePinModal = function () {
         document.getElementById('change-pin-modal').classList.add('active');
         document.getElementById('change-pin-error').textContent = '';
         clearPinRow('change-pin-current-row');
@@ -766,11 +836,11 @@
         clearPinRow('change-pin-confirm-row');
     };
 
-    window.hideChangePinModal = function() {
+    window.hideChangePinModal = function () {
         document.getElementById('change-pin-modal').classList.remove('active');
     };
 
-    window.submitChangePin = function() {
+    window.submitChangePin = function () {
         var currentPin = getPinValue('change-pin-current-row');
         var newPin = getPinValue('change-pin-new-row');
         var confirmPin = getPinValue('change-pin-confirm-row');
@@ -784,14 +854,14 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ current_pin: currentPin, new_pin: newPin, confirm: confirmPin })
-        }).then(function(r) { return r.json(); }).then(function(d) {
+        }).then(function (r) { return r.json(); }).then(function (d) {
             if (d.success) {
                 hideChangePinModal();
                 alert('PIN changed successfully');
             } else {
                 err.textContent = d.error || 'Failed to change PIN';
             }
-        }).catch(function() {
+        }).catch(function () {
             err.textContent = 'Network error';
         });
     };
@@ -800,6 +870,6 @@
     setupPinRow('change-pin-current-row');
     setupPinRow('change-pin-new-row');
     setupPinRow('change-pin-confirm-row');
-})();
+}) ();
 </script>
 {% endblock %}

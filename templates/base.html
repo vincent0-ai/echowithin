@@ -14,8 +14,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
         integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA=="
         crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='custom_styles.css') }}?v=1.0.5">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=1.0.5">
+    <link rel="stylesheet" href="{{ url_for('static', filename='custom_styles.css') }}?v=1.0.6">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=1.0.6">
     {% block extra_head_css %}{% endblock %}
     <script nonce="{{ csp_nonce }}">
     (function(){
@@ -821,20 +821,33 @@
             <nav class="nav-links" id="nav-links">
                 {% if current_user.is_authenticated %}
                 <a href="{{ url_for('pages.home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
-                <a href="{{ url_for('profile.profile', username=current_user.username) }}"
-                    class="{{ 'active' if active_page == 'profile' }}"><span class="nav-full">Profile</span><span class="nav-short">Me</span></a>
                 <a href="{{ url_for('notes.personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">Notes</a>
                 <a href="{{ url_for('blog.blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('chat.messages_page') }}" class="{{ 'active' if active_page == 'messages' }}" style="position: relative;">
-                    <span class="nav-full">Messages</span><span class="nav-short">Msgs</span>
+                    Messages
                     <span id="global-unread-count" class="badge" style="display: none; background: #c62828; color: white; margin-left: 2px;">0</span>
                 </a>
                 <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Bonds</a>
-                <a href="{{ url_for('game.games_list') }}" class="{{ 'active' if active_page == 'games' }}"><span class="nav-full">Games</span><span class="nav-short">Play</span></a>
-                <a href="{{ url_for('pages.about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
+                <!-- Items hidden on mobile, shown in More dropdown -->
+                <a href="{{ url_for('profile.profile', username=current_user.username) }}"
+                    class="nav-more-item {{ 'active' if active_page == 'profile' }}">Profile</a>
+                <a href="{{ url_for('game.games_list') }}" class="nav-more-item {{ 'active' if active_page == 'games' }}">Games</a>
+                <a href="{{ url_for('pages.about') }}" class="nav-more-item {{ 'active' if active_page == 'login' }}">About</a>
+                <!-- More dropdown for mobile -->
+                <div class="nav-more-dropdown" id="nav-more-dropdown">
+                    <button type="button" class="nav-more-btn" id="nav-more-btn" aria-expanded="false" aria-haspopup="true">
+                        More <span class="nav-more-arrow">&#9662;</span>
+                    </button>
+                    <div class="nav-more-menu" id="nav-more-menu">
+                        <a href="{{ url_for('profile.profile', username=current_user.username) }}"
+                            class="{{ 'active' if active_page == 'profile' }}">Profile</a>
+                        <a href="{{ url_for('game.games_list') }}" class="{{ 'active' if active_page == 'games' }}">Games</a>
+                        <a href="{{ url_for('pages.about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
+                    </div>
+                </div>
                 {% else %}
                 <a href="{{ url_for('pages.dashboard') }}" class="{{ 'active' if active_page == 'home' or active_page == 'dashboard' }}">Home</a>
-                <a href="{{ url_for('game.games_join') }}" class="{{ 'active' if active_page == 'game_join' }}"><span class="nav-full">Join Game</span><span class="nav-short">Join</span></a>
+                <a href="{{ url_for('game.games_join') }}" class="{{ 'active' if active_page == 'game_join' }}">Join Game</a>
                 <a href="{{ url_for('auth.login', next=request.path if request.path not in ['/login', '/register', '/logout'] else url_for('pages.dashboard')) }}" class="{{ 'active' if active_page == 'login' }}" rel="nofollow">Login</a>
                 <a href="{{ url_for('auth.login', next=url_for('notes.personal_space')) }}" rel="nofollow">Notes</a>
                 <a href="{{ url_for('blog.blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
@@ -843,6 +856,25 @@
 
             </nav>
         </div>
+        <script nonce="{{ csp_nonce }}">
+        (function(){
+            var btn = document.getElementById('nav-more-btn');
+            var menu = document.getElementById('nav-more-menu');
+            if (!btn || !menu) return;
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var open = menu.classList.toggle('open');
+                btn.setAttribute('aria-expanded', open);
+            });
+            document.addEventListener('click', function(e) {
+                if (!menu.classList.contains('open')) return;
+                if (!menu.contains(e.target) && e.target !== btn) {
+                    menu.classList.remove('open');
+                    btn.setAttribute('aria-expanded', 'false');
+                }
+            });
+        })();
+        </script>
         <div class="overlay" id="overlay"></div>
 
         <div class="container">

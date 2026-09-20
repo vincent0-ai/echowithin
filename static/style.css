@@ -557,18 +557,77 @@ body {
     display: flex;
     gap: 0.4rem;
     flex-wrap: nowrap;
+    align-items: center;
 }
 
 .nav-links a:hover {
     text-decoration: underline;
 }
 
-/* Short labels hidden on desktop, shown on mobile */
-.nav-short {
+/* More dropdown - hidden on desktop, all items show inline */
+.nav-more-dropdown {
     display: none;
 }
-.nav-full {
-    display: inline;
+
+/* More dropdown button (styled to match nav links) */
+.nav-more-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0.5rem 0.4rem;
+    cursor: pointer;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.nav-more-btn:hover {
+    text-decoration: underline;
+}
+
+.nav-more-arrow {
+    font-size: 0.65em;
+    transition: transform 0.2s ease;
+}
+
+/* More dropdown menu */
+.nav-more-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: var(--primary-color);
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    min-width: 130px;
+    z-index: 1000;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.nav-more-menu.open {
+    display: flex;
+}
+
+.nav-more-menu a {
+    color: white;
+    text-decoration: none;
+    padding: 0.6rem 1rem;
+    white-space: nowrap;
+    display: block;
+    font-size: 0.85rem;
+    transition: background-color 0.15s ease;
+}
+
+.nav-more-menu a:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.nav-more-menu a.active {
+    text-decoration: underline;
 }
 
 /* Overlay for sidebar */
@@ -1898,16 +1957,21 @@ body {
 
     .nav-links a {
         white-space: nowrap;
-        font-size: 0.78rem;
-        padding: 0.3rem 0.25rem;
+        font-size: 0.85rem;
+        padding: 0.3rem 0.3rem;
     }
 
-    /* Swap to short labels on tablet */
-    .nav-links .nav-full {
+    /* Hide overflow items on mobile, show More dropdown */
+    .nav-links .nav-more-item {
         display: none;
     }
-    .nav-links .nav-short {
-        display: inline;
+    .nav-more-dropdown {
+        display: block;
+        position: relative;
+    }
+    .nav-more-btn {
+        font-size: 0.85rem;
+        padding: 0.3rem 0.3rem;
     }
 
     /* Spacing between brand row elements on mobile */
@@ -2131,17 +2195,22 @@ body {
     }
 
     .nav-links a {
-        font-size: 0.7rem;
-        padding: 0.25rem 0.2rem;
+        font-size: 0.8rem;
+        padding: 0.25rem 0.25rem;
         white-space: nowrap;
     }
 
-    /* Ensure short labels on small screens */
-    .nav-links .nav-full {
+    /* Ensure More dropdown shows on small screens */
+    .nav-links .nav-more-item {
         display: none;
     }
-    .nav-links .nav-short {
-        display: inline;
+    .nav-more-dropdown {
+        display: block;
+        position: relative;
+    }
+    .nav-more-btn {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.25rem;
     }
 
     /* Tab responsiveness on very small screens */
@@ -3118,6 +3187,24 @@ body {
 
 [data-theme="dark"] .nav-links a {
     color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .nav-more-btn {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .nav-more-menu {
+    background-color: var(--background-color) !important;
+    border: 1px solid var(--card-border);
+}
+
+[data-theme="dark"] .nav-more-menu a {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .nav-more-menu a:hover {
+    background-color: var(--surface-hover-bg) !important;
+    color: var(--text-accent) !important;
 }
 
 [data-theme="dark"] .nav-logout {

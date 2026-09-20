@@ -72,6 +72,9 @@ hidden_chats_conf = None
 # --- Deleted Items Backup (3-day TTL before permanent purge) ---
 deleted_items_conf = None
 
+# --- Private Vault (PIN-protected encrypted media storage) ---
+vault_items_conf = None
+
 # --- Paystack payment grants (idempotency + audit for premium activation) ---
 payment_grants_conf = None
 

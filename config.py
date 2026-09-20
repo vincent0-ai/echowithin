@@ -80,6 +80,12 @@ BYPASS_RATE_LIMIT = _bypass_env in ('1', 'true', 'yes') and os.environ.get('FLAS
 _NOTES_KDF_ITERATIONS = 480000  # OWASP minimum for PBKDF2-HMAC-SHA256
 _NOTES_V1_SALT = b'echowithin_notes_salt_v1'  # legacy global salt
 
+# --- Private Vault ---
+VAULT_PIN_LENGTH = 4
+VAULT_AUTO_LOCK_MINUTES = 5
+VAULT_MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB per vault item
+VAULT_KDF_ITERATIONS = 480000  # PIN hashing iterations
+
 TIER_LIMITS = {
     'free': {
         'max_notes': 500,
@@ -100,6 +106,7 @@ TIER_LIMITS = {
         'max_goals_per_bond': 5,
         'max_nudges_per_day': 3,
         'max_events_per_bond': 20,
+        'max_vault_items': 20,
     },
     'premium': {
         'max_notes': 99999,               # effectively unlimited
@@ -120,6 +127,7 @@ TIER_LIMITS = {
         'max_goals_per_bond': 20,
         'max_nudges_per_day': 10,
         'max_events_per_bond': 100,
+        'max_vault_items': 200,
     }
 }
 

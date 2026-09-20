@@ -1,0 +1,805 @@
+{% extends "base.html" %}
+
+{% block title %}
+<title>Private Vault — EchoWithin</title>
+<meta name="robots" content="noindex, nofollow">
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <style>
+        .vault-container {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        .vault-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border-color, #e8dcd5);
+            margin-bottom: 1rem;
+        }
+        .vault-header h1 {
+            font-size: 1.2rem;
+            color: var(--primary-dark-color, #3e2217);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .vault-header-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .vault-btn {
+            background: var(--primary-color, #3e2217);
+            color: var(--text-light-color, #fff);
+            border: none;
+            border-radius: 8px;
+            padding: 0.4rem 0.9rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .vault-btn:hover { opacity: 0.9; }
+        .vault-btn-outline {
+            background: transparent;
+            color: var(--primary-color, #3e2217);
+            border: 1px solid var(--border-color, #e8dcd5);
+            border-radius: 8px;
+            padding: 0.4rem 0.7rem;
+            font-size: 0.8rem;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .vault-btn-outline:hover { background: var(--surface-bg, #fdfaf9); }
+        .vault-btn-danger {
+            background: transparent;
+            color: #c62828;
+            border: 1px solid #e0bfbf;
+            border-radius: 8px;
+            padding: 0.35rem 0.7rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        /* Lock overlay */
+        .vault-lock-overlay {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 4rem 1rem;
+            text-align: center;
+        }
+        .vault-lock-overlay i {
+            font-size: 3rem;
+            color: var(--primary-color, #3e2217);
+            margin-bottom: 1rem;
+        }
+        .vault-lock-overlay p {
+            color: var(--text-secondary, #666);
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* PIN input */
+        .pin-input-row {
+            display: flex;
+            gap: 0.6rem;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+        .pin-dot {
+            width: 44px;
+            height: 52px;
+            border: 2px solid var(--border-color, #e8dcd5);
+            border-radius: 10px;
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: inherit;
+            color: var(--primary-dark-color, #3e2217);
+            background: var(--card-bg, #fff);
+            outline: none;
+            -webkit-text-security: disc;
+        }
+        .pin-dot:focus {
+            border-color: var(--primary-color, #3e2217);
+            box-shadow: 0 0 0 2px rgba(62, 34, 23, 0.15);
+        }
+        .pin-error {
+            color: #c62828;
+            font-size: 0.8rem;
+            text-align: center;
+            margin-top: 0.5rem;
+            min-height: 1.2rem;
+        }
+
+        /* Grid */
+        .vault-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+        }
+        @media (min-width: 600px) {
+            .vault-grid { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        }
+        .vault-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 6px;
+            overflow: hidden;
+            cursor: pointer;
+            background: var(--surface-bg, #f5ebe7);
+        }
+        .vault-item img, .vault-item video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .vault-item-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(62, 34, 23, 0.3);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .vault-item:hover .vault-item-overlay { opacity: 1; }
+        .vault-item-type {
+            position: absolute;
+            bottom: 4px;
+            left: 4px;
+            background: rgba(0,0,0,0.5);
+            color: #fff;
+            font-size: 0.6rem;
+            padding: 2px 5px;
+            border-radius: 4px;
+        }
+
+        /* Empty state */
+        .vault-empty {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-secondary, #666);
+        }
+        .vault-empty i {
+            font-size: 2.5rem;
+            color: var(--border-color, #e8dcd5);
+            margin-bottom: 0.75rem;
+        }
+        .vault-empty p { font-size: 0.85rem; margin-bottom: 1rem; }
+
+        /* Upload area */
+        .vault-upload-area {
+            border: 2px dashed var(--border-color, #e8dcd5);
+            border-radius: 10px;
+            padding: 2rem 1rem;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        .vault-upload-area.active {
+            display: block;
+        }
+        .vault-upload-area:hover, .vault-upload-area.dragover {
+            border-color: var(--primary-color, #3e2217);
+        }
+        .vault-upload-area i {
+            font-size: 1.5rem;
+            color: var(--primary-color, #3e2217);
+            margin-bottom: 0.5rem;
+        }
+        .vault-upload-area p {
+            font-size: 0.8rem;
+            color: var(--text-secondary, #666);
+            margin: 0;
+        }
+        .vault-upload-progress {
+            display: none;
+            margin: 0.75rem 0;
+            font-size: 0.8rem;
+            color: var(--text-secondary, #666);
+            text-align: center;
+        }
+
+        /* Lightbox */
+        .vault-lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.92);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+        .vault-lightbox.active { display: flex; }
+        .vault-lightbox-close {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            color: #fff;
+            font-size: 1.5rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            z-index: 10001;
+        }
+        .vault-lightbox-content {
+            max-width: 90vw;
+            max-height: 80vh;
+            border-radius: 8px;
+        }
+        .vault-lightbox-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .vault-lightbox-btn {
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .vault-lightbox-btn:hover { background: rgba(255,255,255,0.25); }
+        .vault-lightbox-btn.danger { color: #ef9a9a; }
+
+        /* Item count */
+        .vault-count {
+            font-size: 0.75rem;
+            color: var(--text-secondary, #666);
+            text-align: center;
+            margin-top: 1rem;
+        }
+
+        /* Change PIN modal */
+        .vault-modal-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9998;
+            align-items: center;
+            justify-content: center;
+        }
+        .vault-modal-backdrop.active { display: flex; }
+        .vault-modal {
+            background: var(--card-bg, #fff);
+            border-radius: 12px;
+            padding: 1.5rem;
+            width: 320px;
+            max-width: 90vw;
+        }
+        .vault-modal h3 {
+            margin: 0 0 1rem 0;
+            font-size: 1rem;
+            color: var(--primary-dark-color, #3e2217);
+            text-align: center;
+        }
+    </style>
+
+    <div class="vault-container">
+        <div class="vault-header">
+            <h1><i class="fas fa-lock"></i> Private Vault</h1>
+            <div class="vault-header-actions" id="vault-header-actions" style="display: none;">
+                <button class="vault-btn-outline" onclick="toggleUploadArea()" title="Add"><i class="fas fa-plus"></i></button>
+                <button class="vault-btn-outline" onclick="showChangePinModal()" title="Change PIN"><i class="fas fa-key"></i></button>
+                <button class="vault-btn-outline" onclick="lockVault()" title="Lock"><i class="fas fa-lock"></i></button>
+            </div>
+        </div>
+
+        <!-- Lock overlay (PIN entry) -->
+        <div id="vault-lock-screen" class="vault-lock-overlay" {% if vault_unlocked %}style="display:none"{% endif %}>
+            <i class="fas fa-shield-halved"></i>
+            <p>Enter your 4-digit PIN to unlock</p>
+            <div class="pin-input-row" id="unlock-pin-row">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            </div>
+            <div class="pin-error" id="unlock-pin-error"></div>
+        </div>
+
+        <!-- Vault content (shown when unlocked) -->
+        <div id="vault-content" {% if not vault_unlocked %}style="display:none"{% endif %}>
+            <!-- Upload area (hidden by default, toggled by + button) -->
+            <div id="vault-upload-area" class="vault-upload-area" onclick="document.getElementById('vault-file-input').click()">
+                <i class="fas fa-cloud-arrow-up"></i>
+                <p>Tap to select photos, videos, or documents<br><small>Max {{ (max_file_size / (1024*1024)) | int }}MB per file</small></p>
+            </div>
+            <input type="file" id="vault-file-input" accept="image/*,video/*,.pdf,.doc,.docx,.txt" style="display:none" multiple>
+            <div class="vault-upload-progress" id="vault-upload-progress">Encrypting & uploading...</div>
+
+            <!-- Items grid -->
+            <div class="vault-grid" id="vault-grid"></div>
+
+            <!-- Empty state -->
+            <div class="vault-empty" id="vault-empty" style="display:none">
+                <i class="fas fa-vault"></i>
+                <p>Your vault is empty</p>
+                <button class="vault-btn" onclick="toggleUploadArea()">Add your first item</button>
+            </div>
+
+            <div class="vault-count" id="vault-count"></div>
+        </div>
+    </div>
+
+    <!-- Lightbox -->
+    <div class="vault-lightbox" id="vault-lightbox">
+        <button class="vault-lightbox-close" onclick="closeLightbox()">&times;</button>
+        <img id="vault-lightbox-img" class="vault-lightbox-content" style="display:none">
+        <video id="vault-lightbox-vid" class="vault-lightbox-content" controls style="display:none"></video>
+        <div class="vault-lightbox-actions">
+            <button class="vault-lightbox-btn" id="vault-lightbox-info-btn" onclick="showLightboxInfo()">
+                <i class="fas fa-info-circle"></i> Info
+            </button>
+            <a class="vault-lightbox-btn" id="vault-lightbox-download-btn" href="#" target="_blank" download>
+                <i class="fas fa-download"></i> Download
+            </a>
+            <button class="vault-lightbox-btn danger" id="vault-lightbox-delete-btn" onclick="deleteLightboxItem()">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+        </div>
+    </div>
+
+    <!-- Change PIN modal -->
+    <div class="vault-modal-backdrop" id="change-pin-modal">
+        <div class="vault-modal">
+            <h3>Change Vault PIN</h3>
+            <label style="font-size:0.75rem; color: var(--text-secondary, #666); display: block; margin-bottom: 0.5rem; text-align: center;">Current PIN</label>
+            <div class="pin-input-row" id="change-pin-current-row">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            </div>
+            <label style="font-size:0.75rem; color: var(--text-secondary, #666); display: block; margin-bottom: 0.5rem; text-align: center;">New PIN</label>
+            <div class="pin-input-row" id="change-pin-new-row">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            </div>
+            <label style="font-size:0.75rem; color: var(--text-secondary, #666); display: block; margin-bottom: 0.5rem; text-align: center;">Confirm New PIN</label>
+            <div class="pin-input-row" id="change-pin-confirm-row">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            </div>
+            <div class="pin-error" id="change-pin-error"></div>
+            <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem;">
+                <button class="vault-btn-outline" onclick="hideChangePinModal()">Cancel</button>
+                <button class="vault-btn" onclick="submitChangePin()">Change PIN</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const csrfToken = '{{ csrf_token() }}';
+    const maxItems = {{ max_items }};
+    let vaultItems = [];
+    let currentLightboxItem = null;
+
+    // --- PIN input auto-advance ---
+    function setupPinRow(rowId, onComplete) {
+        const row = document.getElementById(rowId);
+        if (!row) return;
+        const inputs = row.querySelectorAll('.pin-dot');
+        inputs.forEach(function(inp, i) {
+            inp.addEventListener('input', function() {
+                this.value = this.value.replace(/\D/g, '').slice(0, 1);
+                if (this.value && i < inputs.length - 1) {
+                    inputs[i + 1].focus();
+                }
+                if (i === inputs.length - 1 && this.value) {
+                    var pin = '';
+                    inputs.forEach(function(el) { pin += el.value; });
+                    if (pin.length === inputs.length && onComplete) onComplete(pin);
+                }
+            });
+            inp.addEventListener('keydown', function(e) {
+                if (e.key === 'Backspace' && !this.value && i > 0) {
+                    inputs[i - 1].focus();
+                    inputs[i - 1].value = '';
+                }
+            });
+            inp.addEventListener('focus', function() { this.select(); });
+        });
+    }
+
+    function clearPinRow(rowId) {
+        var row = document.getElementById(rowId);
+        if (!row) return;
+        row.querySelectorAll('.pin-dot').forEach(function(inp) { inp.value = ''; });
+        var first = row.querySelector('.pin-dot');
+        if (first) first.focus();
+    }
+
+    function getPinValue(rowId) {
+        var row = document.getElementById(rowId);
+        if (!row) return '';
+        var pin = '';
+        row.querySelectorAll('.pin-dot').forEach(function(inp) { pin += inp.value; });
+        return pin;
+    }
+
+    // --- Unlock ---
+    setupPinRow('unlock-pin-row', function(pin) {
+        document.getElementById('unlock-pin-error').textContent = '';
+        fetch('/api/vault/unlock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ pin: pin })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                document.getElementById('vault-lock-screen').style.display = 'none';
+                document.getElementById('vault-content').style.display = 'block';
+                document.getElementById('vault-header-actions').style.display = 'flex';
+                loadItems();
+            } else {
+                document.getElementById('unlock-pin-error').textContent = d.error || 'Incorrect PIN';
+                clearPinRow('unlock-pin-row');
+            }
+        }).catch(function() {
+            document.getElementById('unlock-pin-error').textContent = 'Network error';
+            clearPinRow('unlock-pin-row');
+        });
+    });
+
+    // If already unlocked, load items
+    {% if vault_unlocked %}
+    document.getElementById('vault-header-actions').style.display = 'flex';
+    loadItems();
+    {% endif %}
+
+    // --- Lock ---
+    window.lockVault = function() {
+        fetch('/api/vault/lock', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(function() {
+            window.location.href = '{{ url_for("profile.profile", username=current_user.username) }}';
+        });
+    };
+
+    // --- Load items ---
+    function loadItems(page) {
+        page = page || 1;
+        fetch('/api/vault/items?page=' + page + '&per_page=50', {
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.items) {
+                vaultItems = d.items;
+                renderGrid(d.items, d.total);
+            }
+        });
+    }
+
+    function renderGrid(items, total) {
+        var grid = document.getElementById('vault-grid');
+        var empty = document.getElementById('vault-empty');
+        var count = document.getElementById('vault-count');
+
+        grid.innerHTML = '';
+        if (!items || items.length === 0) {
+            empty.style.display = 'block';
+            count.textContent = '';
+            return;
+        }
+        empty.style.display = 'none';
+        count.textContent = total + ' of ' + maxItems + ' items';
+
+        items.forEach(function(item, idx) {
+            var div = document.createElement('div');
+            div.className = 'vault-item';
+            div.setAttribute('data-idx', idx);
+            div.onclick = function() { openLightbox(item); };
+
+            if (item.thumbnail && item.media_type !== 'document') {
+                var img = document.createElement('img');
+                img.src = item.thumbnail;
+                img.alt = item.filename || 'Vault item';
+                img.loading = 'lazy';
+                div.appendChild(img);
+            } else {
+                var icon = document.createElement('div');
+                icon.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;';
+                var iconClass = 'fas fa-file';
+                if (item.media_type === 'image') iconClass = 'fas fa-image';
+                else if (item.media_type === 'video') iconClass = 'fas fa-video';
+                else if (item.mime_type && item.mime_type.includes('pdf')) iconClass = 'fas fa-file-pdf';
+                icon.innerHTML = '<i class="' + iconClass + '" style="font-size:1.5rem;color:var(--primary-color,#3e2217);opacity:0.5;"></i>';
+                div.appendChild(icon);
+            }
+
+            if (item.media_type === 'video') {
+                var badge = document.createElement('span');
+                badge.className = 'vault-item-type';
+                badge.innerHTML = '<i class="fas fa-play"></i>';
+                div.appendChild(badge);
+            } else if (item.media_type === 'document') {
+                var badge2 = document.createElement('span');
+                badge2.className = 'vault-item-type';
+                badge2.textContent = item.filename ? item.filename.split('.').pop().toUpperCase() : 'DOC';
+                div.appendChild(badge2);
+            }
+
+            grid.appendChild(div);
+        });
+    }
+
+    // --- Upload ---
+    window.toggleUploadArea = function() {
+        var area = document.getElementById('vault-upload-area');
+        area.classList.toggle('active');
+    };
+
+    var fileInput = document.getElementById('vault-file-input');
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            if (!this.files || !this.files.length) return;
+            uploadFiles(Array.from(this.files));
+            this.value = '';
+        });
+    }
+
+    // Drag and drop
+    var uploadArea = document.getElementById('vault-upload-area');
+    if (uploadArea) {
+        uploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', function() {
+            this.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('dragover');
+            if (e.dataTransfer.files.length) uploadFiles(Array.from(e.dataTransfer.files));
+        });
+    }
+
+    function uploadFiles(files) {
+        var progress = document.getElementById('vault-upload-progress');
+        var remaining = files.length;
+        progress.style.display = 'block';
+        progress.textContent = 'Encrypting & uploading ' + remaining + ' file(s)...';
+
+        files.forEach(function(file) {
+            // Generate client-side thumbnail for images
+            var thumbnailPromise;
+            if (file.type && file.type.startsWith('image/')) {
+                thumbnailPromise = generateThumbnail(file);
+            } else if (file.type && file.type.startsWith('video/')) {
+                thumbnailPromise = generateVideoThumbnail(file);
+            } else {
+                thumbnailPromise = Promise.resolve('');
+            }
+
+            thumbnailPromise.then(function(thumbData) {
+                var fd = new FormData();
+                fd.append('file', file);
+                if (thumbData) fd.append('thumbnail', thumbData);
+
+                return fetch('/api/vault/upload', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken },
+                    body: fd
+                });
+            }).then(function(r) { return r.json(); }).then(function(d) {
+                remaining--;
+                if (d.error) {
+                    progress.textContent = d.error;
+                    setTimeout(function() { progress.style.display = 'none'; }, 3000);
+                } else if (remaining <= 0) {
+                    progress.style.display = 'none';
+                    document.getElementById('vault-upload-area').classList.remove('active');
+                    loadItems();
+                } else {
+                    progress.textContent = 'Uploading ' + remaining + ' remaining...';
+                }
+            }).catch(function() {
+                remaining--;
+                progress.textContent = 'Upload failed';
+                setTimeout(function() { progress.style.display = 'none'; }, 3000);
+            });
+        });
+    }
+
+    function generateThumbnail(file) {
+        return new Promise(function(resolve) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var img = new Image();
+                img.onload = function() {
+                    var canvas = document.createElement('canvas');
+                    var size = 200;
+                    var w = img.width, h = img.height;
+                    if (w > h) { canvas.width = size; canvas.height = Math.round(h * size / w); }
+                    else { canvas.height = size; canvas.width = Math.round(w * size / h); }
+                    var ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.6));
+                };
+                img.onerror = function() { resolve(''); };
+                img.src = e.target.result;
+            };
+            reader.onerror = function() { resolve(''); };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function generateVideoThumbnail(file) {
+        return new Promise(function(resolve) {
+            try {
+                var video = document.createElement('video');
+                video.preload = 'metadata';
+                video.muted = true;
+                video.onloadeddata = function() {
+                    video.currentTime = Math.min(1, video.duration / 4);
+                };
+                video.onseeked = function() {
+                    var canvas = document.createElement('canvas');
+                    var size = 200;
+                    var w = video.videoWidth, h = video.videoHeight;
+                    if (w > h) { canvas.width = size; canvas.height = Math.round(h * size / w); }
+                    else { canvas.height = size; canvas.width = Math.round(w * size / h); }
+                    var ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    URL.revokeObjectURL(video.src);
+                    resolve(canvas.toDataURL('image/jpeg', 0.6));
+                };
+                video.onerror = function() { resolve(''); };
+                video.src = URL.createObjectURL(file);
+            } catch(e) { resolve(''); }
+        });
+    }
+
+    // --- Lightbox ---
+    window.openLightbox = function(item) {
+        currentLightboxItem = item;
+        var lb = document.getElementById('vault-lightbox');
+        var img = document.getElementById('vault-lightbox-img');
+        var vid = document.getElementById('vault-lightbox-vid');
+
+        img.style.display = 'none';
+        vid.style.display = 'none';
+        img.src = '';
+        vid.src = '';
+
+        var serveUrl = '/api/vault/serve/' + item.id;
+        var dlBtn = document.getElementById('vault-lightbox-download-btn');
+        if (dlBtn) {
+            dlBtn.href = serveUrl;
+            dlBtn.setAttribute('download', item.filename || 'vault_item');
+        }
+
+        if (item.media_type === 'image') {
+            img.src = serveUrl;
+            img.style.display = 'block';
+        } else if (item.media_type === 'video') {
+            vid.src = serveUrl;
+            vid.style.display = 'block';
+        } else {
+            // Documents: open in new tab
+            window.open(serveUrl, '_blank');
+            return;
+        }
+
+        lb.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    };
+
+    window.showLightboxInfo = function() {
+        if (!currentLightboxItem) return;
+        var sizeStr = currentLightboxItem.file_size ? (currentLightboxItem.file_size / (1024 * 1024) >= 1 ? (currentLightboxItem.file_size / (1024 * 1024)).toFixed(1) + ' MB' : (currentLightboxItem.file_size / 1024).toFixed(1) + ' KB') : 'Unknown size';
+        var dateStr = currentLightboxItem.created_at ? new Date(currentLightboxItem.created_at).toLocaleString() : 'Unknown date';
+        alert('File: ' + (currentLightboxItem.filename || 'Unnamed') + '\nType: ' + (currentLightboxItem.mime_type || currentLightboxItem.media_type) + '\nSize: ' + sizeStr + '\nUploaded: ' + dateStr);
+    };
+
+    window.closeLightbox = function() {
+        var lb = document.getElementById('vault-lightbox');
+        lb.classList.remove('active');
+        document.body.style.overflow = '';
+        document.getElementById('vault-lightbox-img').src = '';
+        var vid = document.getElementById('vault-lightbox-vid');
+        vid.pause();
+        vid.src = '';
+        currentLightboxItem = null;
+    };
+
+    // Close lightbox on backdrop click
+    document.getElementById('vault-lightbox').addEventListener('click', function(e) {
+        if (e.target === this) closeLightbox();
+    });
+
+    // Close on Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeLightbox();
+            hideChangePinModal();
+        }
+    });
+
+    window.deleteLightboxItem = function() {
+        if (!currentLightboxItem) return;
+        if (!confirm('Delete this item from your vault? This cannot be undone.')) return;
+        fetch('/api/vault/items/' + currentLightboxItem.id, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                closeLightbox();
+                loadItems();
+            } else {
+                alert(d.error || 'Delete failed');
+            }
+        });
+    };
+
+    // --- Change PIN ---
+    window.showChangePinModal = function() {
+        document.getElementById('change-pin-modal').classList.add('active');
+        document.getElementById('change-pin-error').textContent = '';
+        clearPinRow('change-pin-current-row');
+        clearPinRow('change-pin-new-row');
+        clearPinRow('change-pin-confirm-row');
+    };
+
+    window.hideChangePinModal = function() {
+        document.getElementById('change-pin-modal').classList.remove('active');
+    };
+
+    window.submitChangePin = function() {
+        var currentPin = getPinValue('change-pin-current-row');
+        var newPin = getPinValue('change-pin-new-row');
+        var confirmPin = getPinValue('change-pin-confirm-row');
+        var err = document.getElementById('change-pin-error');
+
+        if (currentPin.length !== 4) { err.textContent = 'Enter your current 4-digit PIN'; return; }
+        if (newPin.length !== 4) { err.textContent = 'Enter a new 4-digit PIN'; return; }
+        if (newPin !== confirmPin) { err.textContent = 'New PINs do not match'; return; }
+
+        fetch('/api/vault/change-pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ current_pin: currentPin, new_pin: newPin, confirm: confirmPin })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                hideChangePinModal();
+                alert('PIN changed successfully');
+            } else {
+                err.textContent = d.error || 'Failed to change PIN';
+            }
+        }).catch(function() {
+            err.textContent = 'Network error';
+        });
+    };
+
+    // Setup PIN rows for change modal
+    setupPinRow('change-pin-current-row');
+    setupPinRow('change-pin-new-row');
+    setupPinRow('change-pin-confirm-row');
+})();
+</script>
+{% endblock %}

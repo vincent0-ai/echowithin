@@ -46,7 +46,8 @@
     <div class="profile-container">
         <div class="profile-sidebar">
             <img src="{{ user.profile_image_url if user.profile_image_url else url_for('static', filename='default_avatar.png') }}"
-                alt="Profile picture for {{ user.username }}" class="profile-picture">
+                alt="Profile picture for {{ user.username }}" class="profile-picture{% if current_user.is_authenticated and current_user.username == user.username %} vault-trigger{% endif %}"
+                {% if current_user.is_authenticated and current_user.username == user.username %}id="vault-profile-trigger"{% endif %}>
             <h1 class="profile-username">{{ user.username }}{% if profile_is_premium %}<span class="premium-crown" title="Premium member"><i class="fas fa-crown"></i></span>{% endif %}</h1>
             {% if user.bio %}
             <p class="profile-bio">{{ user.bio }}</p>
@@ -794,5 +795,377 @@
         transform: scale(1.15);
     }
 </style>
+
+{% if current_user.is_authenticated and current_user.username == user.username %}
+<style>
+    .vault-trigger {
+        cursor: pointer;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        transition: transform 0.3s ease;
+    }
+    .vault-trigger:active {
+        transform: scale(0.96);
+    }
+    .vault-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        z-index: 11000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+    .vault-modal-card {
+        background: var(--card-bg, #ffffff);
+        border-radius: 16px;
+        padding: 1.75rem 1.5rem;
+        max-width: 320px;
+        width: 100%;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--border-color, #e8dcd5);
+        text-align: center;
+    }
+    .vault-modal-icon {
+        font-size: 2rem;
+        color: var(--primary-color, #3e2217);
+        margin-bottom: 0.75rem;
+    }
+    .vault-modal-title {
+        margin: 0 0 0.35rem 0;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--primary-dark-color, #3e2217);
+    }
+    .vault-modal-desc {
+        font-size: 0.8rem;
+        color: var(--text-secondary, #666);
+        margin: 0 0 1.25rem 0;
+    }
+    .pin-input-row {
+        display: flex;
+        gap: 0.6rem;
+        justify-content: center;
+        margin-bottom: 0.75rem;
+    }
+    .pin-dot {
+        width: 44px;
+        height: 52px;
+        border: 2px solid var(--border-color, #e8dcd5);
+        border-radius: 10px;
+        text-align: center;
+        font-size: 1.5rem;
+        font-weight: 700;
+        font-family: inherit;
+        color: var(--primary-dark-color, #3e2217);
+        background: var(--card-bg, #fff);
+        outline: none;
+        -webkit-text-security: disc;
+    }
+    .pin-dot:focus {
+        border-color: var(--primary-color, #3e2217);
+        box-shadow: 0 0 0 2px rgba(62, 34, 23, 0.15);
+    }
+    .pin-error {
+        color: #c62828;
+        font-size: 0.8rem;
+        text-align: center;
+        margin-top: 0.25rem;
+        min-height: 1.2rem;
+    }
+    .vault-modal-actions {
+        display: flex;
+        justify-content: center;
+        margin-top: 0.75rem;
+    }
+    .vault-btn-outline {
+        background: transparent;
+        color: var(--primary-color, #3e2217);
+        border: 1px solid var(--border-color, #e8dcd5);
+        border-radius: 8px;
+        padding: 0.45rem 1.2rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        transition: background 0.2s;
+    }
+    .vault-btn-outline:hover {
+        background: var(--surface-bg, #f5ebe7);
+    }
+</style>
+
+<!-- Vault Setup Modal -->
+<div id="vault-setup-modal" class="vault-modal-overlay" style="display: none;">
+    <div class="vault-modal-card">
+        <div class="vault-modal-icon"><i class="fas fa-shield-halved"></i></div>
+        <h3 class="vault-modal-title">Create Vault PIN</h3>
+        <p class="vault-modal-desc" id="vault-setup-step-text">Set a 4-digit PIN for your private vault</p>
+        
+        <div class="pin-input-row" id="vault-setup-pin-row">
+            <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+        </div>
+        
+        <div class="pin-error" id="vault-setup-error"></div>
+        
+        <div class="vault-modal-actions">
+            <button type="button" class="vault-btn-outline" onclick="closeVaultModals()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Vault Unlock Modal -->
+<div id="vault-unlock-modal" class="vault-modal-overlay" style="display: none;">
+    <div class="vault-modal-card">
+        <div class="vault-modal-icon"><i class="fas fa-lock"></i></div>
+        <h3 class="vault-modal-title">Private Vault</h3>
+        <p class="vault-modal-desc">Enter your 4-digit PIN</p>
+        
+        <div class="pin-input-row" id="vault-unlock-pin-row">
+            <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            <input type="tel" class="pin-dot" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+        </div>
+        
+        <div class="pin-error" id="vault-unlock-error"></div>
+        
+        <div class="vault-modal-actions">
+            <button type="button" class="vault-btn-outline" onclick="closeVaultModals()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const csrfToken = '{{ csrf_token() }}';
+    const trigger = document.getElementById('vault-profile-trigger');
+    if (!trigger) return;
+
+    let pressTimer = null;
+    let isLongPress = false;
+    let startX = 0, startY = 0;
+    let setupFirstPin = null;
+
+    function startPress(e) {
+        isLongPress = false;
+        if (e.type === 'touchstart' && e.touches.length > 0) {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        }
+        trigger.style.transition = 'transform 0.4s ease';
+        trigger.style.transform = 'scale(0.95)';
+        pressTimer = setTimeout(function() {
+            isLongPress = true;
+            trigger.style.transform = 'none';
+            if (navigator.vibrate) {
+                try { navigator.vibrate(50); } catch(err) {}
+            }
+            handleVaultTrigger();
+        }, 600);
+    }
+
+    function cancelPress() {
+        if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+        }
+        trigger.style.transform = 'none';
+    }
+
+    function handleMove(e) {
+        if (e.type === 'touchmove' && pressTimer && e.touches.length > 0) {
+            const dist = Math.hypot(e.touches[0].clientX - startX, e.touches[0].clientY - startY);
+            if (dist > 10) {
+                cancelPress();
+            }
+        }
+    }
+
+    trigger.addEventListener('touchstart', startPress, { passive: true });
+    trigger.addEventListener('touchend', function(e) {
+        if (isLongPress) {
+            e.preventDefault();
+        }
+        cancelPress();
+    });
+    trigger.addEventListener('touchcancel', cancelPress);
+    trigger.addEventListener('touchmove', handleMove, { passive: true });
+
+    trigger.addEventListener('mousedown', function(e) {
+        if (e.button === 0) startPress(e);
+    });
+    trigger.addEventListener('mouseup', cancelPress);
+    trigger.addEventListener('mouseleave', cancelPress);
+    trigger.addEventListener('contextmenu', function(e) {
+        if (isLongPress) {
+            e.preventDefault();
+        }
+    });
+
+    function setupPinRow(rowId, onComplete) {
+        const row = document.getElementById(rowId);
+        if (!row) return;
+        const inputs = row.querySelectorAll('.pin-dot');
+        inputs.forEach(function(inp, i) {
+            inp.addEventListener('input', function() {
+                this.value = this.value.replace(/\D/g, '').slice(0, 1);
+                if (this.value && i < inputs.length - 1) {
+                    inputs[i + 1].focus();
+                }
+                if (i === inputs.length - 1 && this.value) {
+                    let pin = '';
+                    inputs.forEach(function(el) { pin += el.value; });
+                    if (pin.length === inputs.length && onComplete) onComplete(pin);
+                }
+            });
+            inp.addEventListener('keydown', function(e) {
+                if (e.key === 'Backspace' && !this.value && i > 0) {
+                    inputs[i - 1].focus();
+                    inputs[i - 1].value = '';
+                }
+            });
+            inp.addEventListener('focus', function() { this.select(); });
+        });
+    }
+
+    function clearPinRow(rowId) {
+        const row = document.getElementById(rowId);
+        if (!row) return;
+        row.querySelectorAll('.pin-dot').forEach(function(inp) { inp.value = ''; });
+        const first = row.querySelector('.pin-dot');
+        if (first) first.focus();
+    }
+
+    window.closeVaultModals = function() {
+        document.getElementById('vault-setup-modal').style.display = 'none';
+        document.getElementById('vault-unlock-modal').style.display = 'none';
+        setupFirstPin = null;
+        document.getElementById('vault-setup-step-text').textContent = 'Set a 4-digit PIN for your private vault';
+        document.getElementById('vault-setup-error').textContent = '';
+        document.getElementById('vault-unlock-error').textContent = '';
+        clearPinRow('vault-setup-pin-row');
+        clearPinRow('vault-unlock-pin-row');
+    };
+
+    function handleVaultTrigger() {
+        fetch('/api/vault/status', {
+            headers: { 'X-CSRFToken': csrfToken }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.unlocked) {
+                window.location.href = "{{ url_for('vault.vault_page') }}";
+            } else if (!data.has_pin) {
+                document.getElementById('vault-setup-modal').style.display = 'flex';
+                clearPinRow('vault-setup-pin-row');
+            } else {
+                document.getElementById('vault-unlock-modal').style.display = 'flex';
+                clearPinRow('vault-unlock-pin-row');
+            }
+        })
+        .catch(function() {
+            window.location.href = "{{ url_for('vault.vault_page') }}";
+        });
+    }
+
+    // Setup PIN submission flow
+    setupPinRow('vault-setup-pin-row', function(pin) {
+        const errorEl = document.getElementById('vault-setup-error');
+        const descEl = document.getElementById('vault-setup-step-text');
+        errorEl.textContent = '';
+
+        if (!setupFirstPin) {
+            setupFirstPin = pin;
+            descEl.textContent = 'Confirm your 4-digit PIN';
+            clearPinRow('vault-setup-pin-row');
+        } else {
+            if (pin !== setupFirstPin) {
+                errorEl.textContent = 'PINs do not match. Try again.';
+                setupFirstPin = null;
+                descEl.textContent = 'Set a 4-digit PIN for your private vault';
+                clearPinRow('vault-setup-pin-row');
+                return;
+            }
+
+            fetch('/api/vault/setup-pin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ pin: setupFirstPin, confirm: pin })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (res.success) {
+                    window.location.href = "{{ url_for('vault.vault_page') }}";
+                } else {
+                    errorEl.textContent = res.error || 'Failed to set PIN';
+                    setupFirstPin = null;
+                    descEl.textContent = 'Set a 4-digit PIN for your private vault';
+                    clearPinRow('vault-setup-pin-row');
+                }
+            })
+            .catch(function() {
+                errorEl.textContent = 'Network error. Try again.';
+                setupFirstPin = null;
+                descEl.textContent = 'Set a 4-digit PIN for your private vault';
+                clearPinRow('vault-setup-pin-row');
+            });
+        }
+    });
+
+    // Unlock PIN submission flow
+    setupPinRow('vault-unlock-pin-row', function(pin) {
+        const errorEl = document.getElementById('vault-unlock-error');
+        errorEl.textContent = '';
+
+        fetch('/api/vault/unlock', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ pin: pin })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (res.success) {
+                window.location.href = "{{ url_for('vault.vault_page') }}";
+            } else {
+                errorEl.textContent = res.error || 'Incorrect PIN';
+                clearPinRow('vault-unlock-pin-row');
+            }
+        })
+        .catch(function() {
+            errorEl.textContent = 'Network error. Try again.';
+            clearPinRow('vault-unlock-pin-row');
+        });
+    });
+
+    // Close on backdrop click
+    ['vault-setup-modal', 'vault-unlock-modal'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('click', function(e) {
+                if (e.target === this) closeVaultModals();
+            });
+        }
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeVaultModals();
+    });
+})();
+</script>
+{% endif %}
 
 {% endblock %}

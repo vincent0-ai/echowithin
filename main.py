@@ -135,6 +135,7 @@ from blueprints.whisper import bp as whisper_bp
 from blueprints.bonds import bp as bonds_bp
 from blueprints.forms import bp as forms_bp
 from blueprints.game import bp as game_bp
+from blueprints.vault import bp as vault_bp
 from api import api_bp
 
 from notifications import (send_code, send_reset_code, send_account_deletion_code, send_new_post_notifications,
@@ -178,6 +179,7 @@ from config import (clean_xml_text, get_env_variable, ENGAGEMENT_WEIGHTS,
     VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD,
     TIME, BYPASS_RATE_LIMIT, _NOTES_KDF_ITERATIONS, _NOTES_V1_SALT,
     TIER_LIMITS, PREMIUM_TRIAL_DAYS, PREMIUM_PRICE_KSH,
+    VAULT_PIN_LENGTH, VAULT_AUTO_LOCK_MINUTES, VAULT_MAX_FILE_SIZE, VAULT_KDF_ITERATIONS,
     PREDEFINED_TAGS, _TAG_KEYWORDS, FIREBASE_AVAILABLE)
 
 
@@ -211,6 +213,7 @@ app.register_blueprint(game_stats_bp)
 from blueprints.tournaments import bp as tournaments_bp
 app.register_blueprint(tournaments_bp)
 app.register_blueprint(api_bp, url_prefix='/api/v1')
+app.register_blueprint(vault_bp)
 
 
 @app.route('/media/<path:public_id>')
@@ -903,6 +906,10 @@ hidden_chats_conf.create_index([('user_id', 1), ('partner_id', 1)], unique=True)
 deleted_items_conf = db['deleted_items']
 deleted_items_conf.create_index('expires_at', expireAfterSeconds=0)
 
+# --- Private Vault (PIN-protected encrypted media storage) ---
+vault_items_conf = db['vault_items']
+vault_items_conf.create_index([('user_id', 1), ('created_at', -1)])
+
 # --- Paystack payment grants (idempotency + audit for premium activation) ---
 payment_grants_conf = db['payment_grants']
 payment_grants_conf.create_index('reference', unique=True)
@@ -1372,6 +1379,7 @@ def cleanup_expired_guest_sessions():
     except Exception as e:
         app.logger.error(f"Error during expired guest cleanup: {e}")
 database.deleted_items_conf = deleted_items_conf
+database.vault_items_conf = vault_items_conf
 database.payment_grants_conf = payment_grants_conf
 database.redis_cache = redis_cache
 

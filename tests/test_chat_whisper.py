@@ -758,8 +758,8 @@ class TestWhisperVideoSupport:
 
     def test_video_upload_endpoint_size_limit(self, app, auth_client):
         import io
-        # 51 MB exceeds 50 MB limit
-        large_bytes = b"0" * (51 * 1024 * 1024)
+        # 101 MB exceeds 100 MB limit
+        large_bytes = b"0" * (101 * 1024 * 1024)
         data = {
             'video': (io.BytesIO(large_bytes), 'big.mp4', 'video/mp4')
         }

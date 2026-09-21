@@ -48,7 +48,7 @@
         <div class="profile-sidebar">
             <img src="{{ user.profile_image_url if user.profile_image_url else url_for('static', filename='default_avatar.png') }}"
                 alt="Profile picture for {{ user.username }}" class="profile-picture{% if current_user.is_authenticated and current_user.username == user.username %} vault-trigger{% endif %}"
-                {% if current_user.is_authenticated and current_user.username == user.username %}id="vault-profile-trigger"{% endif %}>
+                {% if current_user.is_authenticated and current_user.username == user.username %}id="vault-profile-trigger" draggable="false"{% endif %}>
             <h1 class="profile-username">{{ user.username }}{% if profile_is_premium %}<span class="premium-crown" title="Premium member"><i class="fas fa-crown"></i></span>{% endif %}</h1>
             {% if user.bio %}
             <p class="profile-bio">{{ user.bio }}</p>
@@ -989,11 +989,12 @@
         }
     }
 
-    trigger.addEventListener('touchstart', startPress, { passive: true });
+    trigger.addEventListener('touchstart', function(e) {
+        e.preventDefault(); // suppress native long-press callout / context menu
+        startPress(e);
+    }, { passive: false });
     trigger.addEventListener('touchend', function(e) {
-        if (isLongPress) {
-            e.preventDefault();
-        }
+        e.preventDefault();
         cancelPress();
     });
     trigger.addEventListener('touchcancel', cancelPress);
@@ -1004,10 +1005,10 @@
     });
     trigger.addEventListener('mouseup', cancelPress);
     trigger.addEventListener('mouseleave', cancelPress);
+    // Always block context menu on the vault trigger to prevent browser
+    // "save image / copy link" overlay from obstructing the vault modal
     trigger.addEventListener('contextmenu', function(e) {
-        if (isLongPress) {
-            e.preventDefault();
-        }
+        e.preventDefault();
     });
 
     function setupPinRow(rowId, onComplete) {

@@ -2155,22 +2155,22 @@
         </div>
         <div class="schedule-modal-body" style="padding: 1.5rem;">
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 1.5rem;">
-                <div class="theme-option" onclick="setChatTheme('default')"
+                <div class="theme-option" data-theme="default" onclick="setChatTheme('default')"
                     style="background: #fafafa; border: 2px solid #ddd; height: 60px; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 600;">
                     Default</div>
-                <div class="theme-option" onclick="setChatTheme('sunset')"
+                <div class="theme-option" data-theme="sunset" onclick="setChatTheme('sunset')"
                     style="background: linear-gradient(135deg, #fceabb, #f8b500); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;">
                 </div>
-                <div class="theme-option" onclick="setChatTheme('ocean')"
+                <div class="theme-option" data-theme="ocean" onclick="setChatTheme('ocean')"
                     style="background: linear-gradient(135deg, #e0f2fe, #7dd3fc); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;">
                 </div>
-                <div class="theme-option" onclick="setChatTheme('forest')"
+                <div class="theme-option" data-theme="forest" onclick="setChatTheme('forest')"
                     style="background: linear-gradient(135deg, #f0fdf4, #bbf7d0); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;">
                 </div>
-                <div class="theme-option" onclick="setChatTheme('lavender')"
+                <div class="theme-option" data-theme="lavender" onclick="setChatTheme('lavender')"
                     style="background: linear-gradient(135deg, #f5f3ff, #ddd6fe); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;">
                 </div>
-                <div class="theme-option" onclick="setChatTheme('midnight')"
+                <div class="theme-option" data-theme="midnight" onclick="setChatTheme('midnight')"
                     style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;">
                 </div>
             </div>
@@ -4138,9 +4138,11 @@
         window.setChatTheme = function (theme, save = true) {
             if (chatHistory) chatHistory.setAttribute('data-theme', theme);
             if (save) {
-                try { localStorage.setItem(`chat_theme_${currentUserId}`, theme); } catch(e) {}
+                if (currentUserId) {
+                    try { localStorage.setItem(`chat_theme_${currentUserId}`, theme); } catch(e) {}
+                }
                 if (typeof showToast === 'function') showToast(`Theme updated to ${theme}`);
-                if (typeof closeThemePicker === 'function' && save) try { closeThemePicker(); } catch(e) {}
+                if (typeof closeThemePicker === 'function') try { closeThemePicker(); } catch(e) {}
             }
             // Replay any theme call that happened before this definition.
             if (window.__pendingThemeArgs) {
@@ -4149,7 +4151,7 @@
             }
             // Update selection UI
             document.querySelectorAll('.theme-option').forEach(opt => {
-                opt.style.borderColor = (opt.getAttribute('onclick').includes(theme)) ? '#3e2217' : (theme === 'default' ? '#ddd' : 'transparent');
+                opt.style.borderColor = (opt.dataset.theme === theme) ? '#3e2217' : 'transparent';
             });
         };
 

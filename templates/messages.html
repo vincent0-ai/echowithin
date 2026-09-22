@@ -4066,12 +4066,13 @@
 
         // --- Pull-to-refresh prevention: suppress overscroll at body level ---
         // On mobile, prevent default touchmove that would trigger pull-to-refresh
-        // when already at scroll boundary inside chat-history.
+        // when already at scroll boundary inside chat-history or whisper-messages.
         document.addEventListener('touchmove', function(e) {
             if (!document.body.classList.contains('mobile-chat-open')) return;
             var target = e.target;
             while (target) {
-                if (target.id === 'chat-history') return; // let chat-history scroll naturally
+                // Allow natural scrolling inside DM chat, whisper messages, and the whisper overlay
+                if (target.id === 'chat-history' || target.id === 'whisper-messages' || target.id === 'whisper-overlay') return;
                 target = target.parentElement;
             }
             e.preventDefault();
@@ -4438,30 +4439,64 @@
             fd.append(isVideo ? 'video' : 'image', file);
             const uploadEndpoint = isVideo ? '/api/messages/upload_video' : '/api/messages/upload_image';
 
-            echoFetch(uploadEndpoint, {
-                method: 'POST',
-                headers: { 'X-CSRFToken': csrfToken },
-                body: fd
-            }).then(r => r.json()).then(d => {
-                if (d.success) {
-                    document.getElementById('pending-image-url').value = d.url;
-                    document.getElementById('pending-image-public-id').value = d.public_id || '';
-                    document.getElementById('pending-image-resource-type').value = isVideo ? 'video' : 'image';
-                    document.getElementById('pending-image-mime').value = d.mime_type || '';
-                    document.getElementById('image-upload-spinner').style.display = 'none';
-                    document.getElementById('image-upload-status').textContent = 'Ready to send';
-                } else {
-                    showToast(d.error || "Upload failed");
+            // Use XHR for upload progress tracking
+            const xhr = new XMLHttpRequest();
+            window._dmActiveXhr = xhr;
+
+            xhr.upload.addEventListener('progress', function(ev) {
+                if (ev.lengthComputable) {
+                    var pct = Math.round((ev.loaded / ev.total) * 100);
+                    if (isVideo && file.size > 10 * 1024 * 1024) {
+                        statusEl.textContent = 'Compressing & uploading... ' + pct + '%';
+                    } else {
+                        statusEl.textContent = 'Uploading... ' + pct + '%';
+                    }
+                }
+            });
+
+            xhr.addEventListener('load', function() {
+                window._dmActiveXhr = null;
+                btn.style.opacity = '1';
+                btn.disabled = false;
+                document.getElementById('dm-image-upload').value = '';
+                try {
+                    var d = JSON.parse(xhr.responseText);
+                    if (d.success) {
+                        document.getElementById('pending-image-url').value = d.url;
+                        document.getElementById('pending-image-public-id').value = d.public_id || '';
+                        document.getElementById('pending-image-resource-type').value = isVideo ? 'video' : 'image';
+                        document.getElementById('pending-image-mime').value = d.mime_type || '';
+                        document.getElementById('image-upload-spinner').style.display = 'none';
+                        document.getElementById('image-upload-status').textContent = 'Ready to send';
+                    } else {
+                        showToast(d.error || "Upload failed");
+                        cancelImageUpload();
+                    }
+                } catch(e) {
+                    showToast("Upload response error");
                     cancelImageUpload();
                 }
-            }).catch(() => {
+            });
+
+            xhr.addEventListener('error', function() {
+                window._dmActiveXhr = null;
+                btn.style.opacity = '1';
+                btn.disabled = false;
+                document.getElementById('dm-image-upload').value = '';
                 showToast("Network error uploading image.");
                 cancelImageUpload();
-            }).finally(() => {
-                    btn.style.opacity = '1';
-                    btn.disabled = false;
-                    document.getElementById('dm-image-upload').value = '';
-                });
+            });
+
+            xhr.addEventListener('abort', function() {
+                window._dmActiveXhr = null;
+                btn.style.opacity = '1';
+                btn.disabled = false;
+                document.getElementById('dm-image-upload').value = '';
+            });
+
+            xhr.open('POST', uploadEndpoint);
+            xhr.setRequestHeader('X-CSRFToken', csrfToken);
+            xhr.send(fd);
         };
 
         window.cancelImageUpload = function () {
@@ -5410,6 +5445,18 @@
         background: #3e2217; border: none; color: #fff; border-radius: 50%;
         width: 38px; height: 38px; cursor: pointer; display: flex;
         align-items: center; justify-content: center;
+        transition: opacity 0.2s;
+    }
+    .whisper-send-btn:disabled {
+        opacity: 0.35; cursor: not-allowed; pointer-events: none;
+    }
+    .whisper-upload-progress {
+        display: none; height: 3px; background: rgba(255,255,255,0.15);
+        border-radius: 2px; margin-top: 0.3rem; overflow: hidden;
+    }
+    .whisper-upload-progress-fill {
+        height: 100%; width: 0%; background: #3e2217;
+        border-radius: 2px; transition: width 0.2s ease;
     }
     .whisper-warning-banner {
         display: none; background: #d32f2f; color: #fff; padding: 0.5rem 1rem;
@@ -5581,6 +5628,7 @@
         <video id="whisper-video-preview-vid" src="" style="max-height:120px;max-width:180px;border-radius:4px;display:none;" muted playsinline></video>
         <button onclick="cancelWhisperImage()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:0.7rem;">&times;</button>
         <div id="whisper-image-uploading" style="display:none;font-size:0.7rem;color:rgba(255,255,255,0.6);margin-top:0.2rem;">Uploading...</div>
+        <div class="whisper-upload-progress" id="whisper-upload-progress"><div class="whisper-upload-progress-fill" id="whisper-upload-progress-fill"></div></div>
     </div>
     <button id="whisper-scroll-fab" class="whisper-scroll-fab" onclick="scrollWhisperToBottom(true)" title="Jump to latest"><i class="fas fa-chevron-down"></i><span id="whisper-unread-badge" class="whisper-unread-badge" style="display:none;">0</span></button>
     <div class="whisper-reply-bar" id="whisper-reply-bar">
@@ -5591,7 +5639,7 @@
         <input type="file" id="whisper-image-input" accept="image/*,video/*" style="display:none;" onchange="handleWhisperImageUpload(this)">
         <button onclick="triggerWhisperImagePicker()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:1.1rem;cursor:pointer;padding:0 0.3rem;" title="Send photo or video"><i class="fas fa-camera"></i></button>
         <textarea id="whisper-input" placeholder="Type a whisper..." rows="1"></textarea>
-        <button class="whisper-send-btn" onclick="sendWhisperMessage()"><i class="fas fa-arrow-up"></i></button>
+        <button class="whisper-send-btn" id="whisper-send-btn" onclick="sendWhisperMessage()"><i class="fas fa-arrow-up"></i></button>
     </div>
 </div>
 
@@ -6188,6 +6236,8 @@
     };
 
     window.sendWhisperMessage = function() {
+        // Block sending while media is still uploading
+        if (window._whisperUploadInProgress) return;
         const input = document.getElementById('whisper-input');
         const content = input.value.trim();
         const pendingImgUrl = window._whisperPendingImageUrl || '';
@@ -6284,6 +6334,9 @@
         const previewImg = document.getElementById('whisper-image-preview-img');
         const previewVid = document.getElementById('whisper-video-preview-vid');
         const uploading = document.getElementById('whisper-image-uploading');
+        const progressBar = document.getElementById('whisper-upload-progress');
+        const progressFill = document.getElementById('whisper-upload-progress-fill');
+        const sendBtn = document.getElementById('whisper-send-btn');
         preview.style.display = 'block';
         uploading.style.display = 'block';
         if (isVideo && file.size > 10 * 1024 * 1024) {
@@ -6291,6 +6344,12 @@
         } else {
             uploading.textContent = 'Uploading...';
         }
+        // Show progress bar and disable send
+        if (progressBar) { progressBar.style.display = 'block'; }
+        if (progressFill) { progressFill.style.width = '0%'; }
+        if (sendBtn) { sendBtn.disabled = true; }
+        window._whisperUploadInProgress = true;
+
         const blobUrl = URL.createObjectURL(file);
         if (isVideo) {
             if (previewImg) { previewImg.style.display = 'none'; previewImg.src = ''; }
@@ -6301,39 +6360,87 @@
         }
         if (window.updateWhisperFabPosition) updateWhisperFabPosition();
 
-        // Upload to appropriate DM/whisper media endpoint
+        // Upload via XHR for progress tracking
         const fd = new FormData();
         fd.append(isVideo ? 'video' : 'image', file);
         const endpoint = isVideo ? '/api/messages/upload_video' : '/api/messages/upload_image';
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        echoFetch(endpoint, {
-            method: 'POST',
-            headers: { 'X-CSRFToken': csrfToken },
-            body: fd
-        }).then(r => r.json()).then(d => {
-            uploading.style.display = 'none';
-            if (d.success && d.url) {
-                window._whisperPendingImageUrl = d.url;
-                // Keep public_id/mime so the server can re-serve fresh signed
-                // URLs on history fetch (DM parity, F5).
-                window._whisperPendingImageMeta = {
-                    public_id: d.public_id || '',
-                    mime: d.mime_type || '',
-                    resource_type: isVideo ? 'video' : 'image'
-                };
-            } else {
-                cancelWhisperImage();
-                alert(d.error || 'Upload failed');
+
+        const xhr = new XMLHttpRequest();
+        // Cancel handler — abort XHR if user cancels during upload
+        window._whisperActiveXhr = xhr;
+
+        xhr.upload.addEventListener('progress', function(e) {
+            if (e.lengthComputable && progressFill) {
+                var pct = Math.round((e.loaded / e.total) * 100);
+                progressFill.style.width = pct + '%';
+                if (uploading && uploading.style.display !== 'none') {
+                    if (isVideo && file.size > 10 * 1024 * 1024) {
+                        uploading.textContent = 'Compressing & uploading... ' + pct + '%';
+                    } else {
+                        uploading.textContent = 'Uploading... ' + pct + '%';
+                    }
+                }
             }
-        }).catch(err => {
+        });
+
+        xhr.addEventListener('load', function() {
+            window._whisperActiveXhr = null;
+            window._whisperUploadInProgress = false;
+            if (progressBar) progressBar.style.display = 'none';
+            if (progressFill) progressFill.style.width = '0%';
+            try {
+                var d = JSON.parse(xhr.responseText);
+                if (d.success && d.url) {
+                    uploading.style.display = 'none';
+                    uploading.textContent = 'Ready to send';
+                    window._whisperPendingImageUrl = d.url;
+                    window._whisperPendingImageMeta = {
+                        public_id: d.public_id || '',
+                        mime: d.mime_type || '',
+                        resource_type: isVideo ? 'video' : 'image'
+                    };
+                    if (sendBtn) sendBtn.disabled = false;
+                } else {
+                    cancelWhisperImage();
+                    alert(d.error || 'Upload failed');
+                }
+            } catch(e) {
+                cancelWhisperImage();
+                console.error('Whisper upload parse error:', e);
+            }
+        });
+
+        xhr.addEventListener('error', function() {
+            window._whisperActiveXhr = null;
+            window._whisperUploadInProgress = false;
+            if (progressBar) progressBar.style.display = 'none';
+            if (progressFill) progressFill.style.width = '0%';
             uploading.style.display = 'none';
             cancelWhisperImage();
-            console.error('Whisper media upload error:', err);
+            console.error('Whisper media upload network error');
         });
+
+        xhr.addEventListener('abort', function() {
+            window._whisperActiveXhr = null;
+            window._whisperUploadInProgress = false;
+            if (progressBar) progressBar.style.display = 'none';
+            if (progressFill) progressFill.style.width = '0%';
+        });
+
+        xhr.open('POST', endpoint);
+        xhr.setRequestHeader('X-CSRFToken', csrfToken);
+        xhr.send(fd);
         input.value = '';
     };
 
     window.cancelWhisperImage = function() {
+        // Abort in-progress upload if any
+        if (window._whisperActiveXhr) {
+            window._whisperActiveXhr.abort();
+            window._whisperActiveXhr = null;
+        }
+        window._whisperUploadInProgress = false;
         window._whisperPendingImageUrl = '';
         window._whisperPendingImageMeta = null;
         var preview = document.getElementById('whisper-image-preview');
@@ -6342,6 +6449,14 @@
         if (previewImg) { previewImg.src = ''; previewImg.style.display = 'none'; }
         var previewVid = document.getElementById('whisper-video-preview-vid');
         if (previewVid) { previewVid.src = ''; previewVid.style.display = 'none'; }
+        // Hide progress bar and reset
+        var progressBar = document.getElementById('whisper-upload-progress');
+        var progressFill = document.getElementById('whisper-upload-progress-fill');
+        if (progressBar) progressBar.style.display = 'none';
+        if (progressFill) progressFill.style.width = '0%';
+        // Re-enable send button
+        var sendBtn = document.getElementById('whisper-send-btn');
+        if (sendBtn) sendBtn.disabled = false;
         if (window.updateWhisperFabPosition) updateWhisperFabPosition();
     };
 

@@ -832,6 +832,7 @@
                 <a href="{{ url_for('profile.profile', username=current_user.username) }}"
                     class="nav-more-item {{ 'active' if active_page == 'profile' }}">Profile</a>
                 <a href="{{ url_for('game.games_list') }}" class="nav-more-item {{ 'active' if active_page == 'games' }}">Games</a>
+                <a href="{{ url_for('forms.forms_list') }}" class="nav-more-item {{ 'active' if active_page == 'forms' }}">Forms</a>
                 <a href="{{ url_for('pages.about') }}" class="nav-more-item {{ 'active' if active_page == 'login' }}">About</a>
                 <!-- More dropdown for mobile -->
                 <div class="nav-more-dropdown" id="nav-more-dropdown">
@@ -842,6 +843,7 @@
                         <a href="{{ url_for('profile.profile', username=current_user.username) }}"
                             class="{{ 'active' if active_page == 'profile' }}">Profile</a>
                         <a href="{{ url_for('game.games_list') }}" class="{{ 'active' if active_page == 'games' }}">Games</a>
+                        <a href="{{ url_for('forms.forms_list') }}" class="{{ 'active' if active_page == 'forms' }}">Forms</a>
                         <a href="{{ url_for('pages.about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
                     </div>
                 </div>

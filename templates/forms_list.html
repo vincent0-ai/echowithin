@@ -39,6 +39,7 @@
         </div>
         <div class="ew-card-actions">
           <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Responses</a>
+          <a href="{{ url_for('forms.forms_edit', share_id=form.share_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Edit</a>
           <a href="{{ url_for('forms.view_form', share_id=form.share_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">View Form</a>
           <form method="POST" action="{{ url_for('forms.form_delete', share_id=form.share_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete this form and all its responses? This cannot be undone.')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

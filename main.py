@@ -143,7 +143,7 @@ from notifications import (send_code, send_reset_code, send_account_deletion_cod
     send_admin_broadcast_push, send_push_notifications_for_new_post,
     send_fcm_notification_to_user, send_fcm_notifications_batch,
     send_push_notification_for_comment, process_image_for_nsfw,
-    send_log_email_job, send_ntfy_notification)
+    send_log_email_job, send_ntfy_notification, notify_saved_note_clones)
 import secrets
 from cachetools import cached, TTLCache
 import requests

@@ -1172,6 +1172,12 @@ def edit_personal_post(post_id):
             'updated_at': now.isoformat()
         }, room=str(current_user.id))
 
+        # Notify users who saved a clone of this note
+        try:
+            m.notify_saved_note_clones(obj_id, current_user.id, getattr(current_user, 'username', 'Author'))
+        except Exception as notify_err:
+            current_app.logger.warning(f"Failed to notify saved note clones for {obj_id}: {notify_err}")
+
         result = {'success': True, 'updated_at': now.isoformat()}
         if warn_msg:
             result['warning'] = warn_msg
@@ -1380,6 +1386,12 @@ def sync_personal_post(post_id):
 
             # Broadcast update to participants in the share room
             m.socketio.emit('note_changed', {'content': decrypted}, room=source_share_id)
+
+            # Notify other users who saved a clone of this note
+            try:
+                m.notify_saved_note_clones(source_note_id, current_user.id, getattr(current_user, 'username', 'Author'))
+            except Exception as notify_err:
+                current_app.logger.warning(f"Failed to notify saved note clones on sync push for {source_note_id}: {notify_err}")
 
             return jsonify({
                 'success': True,

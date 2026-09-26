@@ -3458,6 +3458,7 @@
                 </div>
                 <div class="ew-card-actions">
                     <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Responses</a>
+                    <a href="{{ url_for('forms.forms_edit', share_id=form.share_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Edit</a>
                     <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='csv') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export CSV</a>
                     {% if not form.deactivated %}
                     <form method="POST" action="{{ url_for('forms.form_deactivate', share_id=form.share_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this form? The link will stop accepting responses.')">
@@ -5191,6 +5192,52 @@
         socket.on('note_auto_approved', (data) => {
             if (window.showToast) {
                 window.showToast(`${data.editor_name} updated your note automatically.`, 'success', 6000);
+            }
+        });
+
+        socket.on('note_update_available', (data) => {
+            if (window.showToast) {
+                window.showToast(`${data.author_name || 'Author'} updated a note you saved.`, 'info', 7000);
+            }
+            if (data.note_id) {
+                const noteCard = document.querySelector(`.note-card[data-note-id="${data.note_id}"]`);
+                if (noteCard) {
+                    const dateSpan = noteCard.querySelector('.note-date');
+                    if (dateSpan && !dateSpan.querySelector('.update-badge')) {
+                        const uBadge = document.createElement('span');
+                        uBadge.className = 'update-badge';
+                        uBadge.title = 'The original author has updated this note. Click Sync to pull updates.';
+                        uBadge.style.cssText = 'background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem; display: inline-flex; align-items: center; gap: 0.2rem;';
+                        uBadge.innerHTML = '<i class="fas fa-exclamation-circle" style="animation: pulse-orange 2s infinite;"></i> Update available';
+                        dateSpan.appendChild(uBadge);
+                    }
+                    const syncBtn = noteCard.querySelector('.sync-note-btn');
+                    if (syncBtn) {
+                        syncBtn.classList.add('update-pending-btn');
+                        const icon = syncBtn.querySelector('i');
+                        if (icon) {
+                            icon.style.color = '#e65100';
+                            icon.style.fontWeight = 'bold';
+                        }
+                        const label = syncBtn.querySelector('.action-label');
+                        if (label) {
+                            label.textContent = 'Sync Now';
+                            label.style.color = '#e65100';
+                            label.style.fontWeight = '600';
+                        }
+                    }
+                    const parent = noteCard.parentElement;
+                    if (parent && parent.firstElementChild !== noteCard) {
+                        parent.prepend(noteCard);
+                        noteCard.style.transition = 'box-shadow 0.3s ease, border-color 0.3s ease';
+                        noteCard.style.borderColor = '#e65100';
+                        noteCard.style.boxShadow = '0 0 12px rgba(230, 81, 0, 0.25)';
+                        setTimeout(() => {
+                            noteCard.style.borderColor = '';
+                            noteCard.style.boxShadow = '';
+                        }, 3000);
+                    }
+                }
             }
         });
 

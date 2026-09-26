@@ -245,6 +245,151 @@ def api_create_form():
     return jsonify({'success': True, 'share_id': share_id, 'share_url': share_url, 'form_id': str(doc['_id'])}), 201
 
 
+@bp.route('/forms/<share_id>/edit', methods=['GET', 'POST'])
+@login_required
+@limits(calls=15, period=60)
+def forms_edit(share_id):
+    import main as m
+    if getattr(current_user, 'is_guest', False):
+        flash('Sign up to edit forms — tour mode is read-only.', 'warning')
+        return redirect(url_for('auth.login'))
+
+    raw_form = m.forms_conf.find_one({'share_id': share_id})
+    if not raw_form:
+        flash('Form not found.', 'danger')
+        return redirect(url_for('forms.forms_list'))
+    if not _owner_or_404(raw_form):
+        flash('Not authorized to edit this form.', 'danger')
+        return redirect(url_for('forms.forms_list'))
+
+    form = _decrypt_form_definition(raw_form)
+    response_count = m.form_responses_conf.count_documents({'form_id': raw_form['_id']})
+
+    if request.method == 'POST':
+        title = (request.form.get('title') or '').strip()
+        description = (request.form.get('description') or '').strip()
+        expires_in = (request.form.get('expires_in') or 'keep').strip()
+        max_res_raw = (request.form.get('max_responses') or '').strip()
+
+        if not title or len(title) > 100:
+            flash('Title required (max 100).', 'danger')
+            return render_template('form_edit.html', form=form, response_count=response_count, active_page='forms')
+        if len(description) > 500:
+            flash('Description max 500.', 'danger')
+            return render_template('form_edit.html', form=form, response_count=response_count, active_page='forms')
+
+        import json
+        q_json = request.form.get('questions_json') or '[]'
+        try:
+            raw_q = json.loads(q_json)
+        except Exception:
+            flash('Invalid questions payload.', 'danger')
+            return render_template('form_edit.html', form=form, response_count=response_count, active_page='forms')
+
+        questions, err = _validate_questions(raw_q)
+        if err:
+            flash(err, 'danger')
+            return render_template('form_edit.html', form=form, response_count=response_count, active_page='forms')
+
+        max_responses = None
+        if max_res_raw:
+            try:
+                max_responses = int(max_res_raw)
+                if max_responses < 1 or max_responses > 10000:
+                    max_responses = None
+            except Exception:
+                max_responses = None
+
+        allow_anon_raw = (request.form.get('allow_anonymous') or '1').strip()
+        allow_anonymous = allow_anon_raw != '0'
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        enc_title, enc_description, enc_questions = _encrypt_form_definition(
+            str(raw_form['_id']), title, description, questions
+        )
+
+        update_fields = {
+            'title': enc_title,
+            'description': enc_description,
+            'questions': enc_questions,
+            'updated_at': now,
+            'max_responses': max_responses,
+            'allow_anonymous': allow_anonymous,
+        }
+
+        if expires_in == 'never':
+            update_fields['expires_at'] = None
+        elif expires_in in ('1h', '1d', '7d'):
+            update_fields['expires_at'] = _parse_expires(expires_in)
+
+        m.forms_conf.update_one({'_id': raw_form['_id']}, {'$set': update_fields})
+        flash('Form updated successfully.', 'success')
+        return redirect(url_for('forms.form_responses_view', share_id=share_id))
+
+    return render_template('form_edit.html', form=form, response_count=response_count, active_page='forms')
+
+
+@bp.route('/api/forms/<share_id>/edit', methods=['POST'])
+@login_required
+@limits(calls=15, period=60)
+def api_edit_form(share_id):
+    import main as m
+    if getattr(current_user, 'is_guest', False):
+        return jsonify({'error': 'Guest cannot edit forms'}), 403
+
+    raw_form = m.forms_conf.find_one({'share_id': share_id})
+    if not raw_form:
+        return jsonify({'error': 'Form not found'}), 404
+    if not _owner_or_404(raw_form):
+        return jsonify({'error': 'Not authorized'}), 403
+
+    data = request.get_json(silent=True) or {}
+    title = (data.get('title') or '').strip()
+    description = (data.get('description') or '').strip()
+    expires_in = (data.get('expires_in') or 'keep').strip()
+    max_responses = data.get('max_responses')
+    raw_q = data.get('questions') or []
+
+    if not title or len(title) > 100:
+        return jsonify({'error': 'Title required (max 100)'}), 400
+    if len(description) > 500:
+        return jsonify({'error': 'Description max 500'}), 400
+
+    questions, err = _validate_questions(raw_q)
+    if err:
+        return jsonify({'error': err}), 400
+
+    if max_responses is not None:
+        try:
+            max_responses = int(max_responses)
+            if max_responses < 1 or max_responses > 10000:
+                max_responses = None
+        except Exception:
+            max_responses = None
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    enc_title, enc_description, enc_questions = _encrypt_form_definition(
+        str(raw_form['_id']), title, description, questions
+    )
+
+    update_fields = {
+        'title': enc_title,
+        'description': enc_description,
+        'questions': enc_questions,
+        'updated_at': now,
+        'max_responses': max_responses,
+        'allow_anonymous': bool(data.get('allow_anonymous', True) if not isinstance(data.get('allow_anonymous'), str) else data.get('allow_anonymous', '1') not in ('0', 'false', 'no')),
+    }
+
+    if expires_in == 'never':
+        update_fields['expires_at'] = None
+    elif expires_in in ('1h', '1d', '7d'):
+        update_fields['expires_at'] = _parse_expires(expires_in)
+
+    m.forms_conf.update_one({'_id': raw_form['_id']}, {'$set': update_fields})
+    return jsonify({'success': True, 'share_id': share_id, 'message': 'Form updated successfully'})
+
+
 # --- Public form view/submit (no login) ---
 
 @bp.route('/f/<share_id>', methods=['GET'])

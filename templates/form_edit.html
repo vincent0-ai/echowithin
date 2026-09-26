@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}<title>Edit {{ form.title }} — EchoWithin</title>{% endblock %}
+{% block content %}
+<div class="content-wrapper" style="max-width: 780px;">
+  <div class="ew-header-row">
+    <div>
+      <h2 style="margin: 0; font-size: 1.4rem; font-weight: 700;">Edit Form</h2>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem;">Update questionnaire details, reorder, or edit questions.</div>
+    </div>
+    <div style="display:flex; gap:0.5rem; align-items:center;">
+      <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Back to Responses</a>
+      <a href="{{ url_for('notes.personal_space') }}#forms" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">All Forms</a>
+    </div>
+  </div>
+
+  {% if response_count and response_count > 0 %}
+  <div class="ew-info-banner" style="background:#fff3e0; color:#e65100; border:1px solid #ffe0b2; margin-bottom:1rem; border-radius:8px; padding:0.6rem 0.9rem; font-size:0.85rem;">
+    <strong>Note:</strong> This form currently has <strong>{{ response_count }} response{{ 's' if response_count != 1 }}</strong>. Modifying or deleting questions won't delete past submissions, but changing question text or options may alter how older answers align in exports and charts.
+  </div>
+  {% else %}
+  <div class="ew-info-banner">Form questions and responses are encrypted and only accessible by you.</div>
+  {% endif %}
+
+  <form method="POST" id="form-builder" class="ew-card">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <label class="ew-form-label">Title *</label>
+    <input type="text" name="title" maxlength="100" required class="form-input" style="margin-bottom:0.8rem;" value="{{ form.title }}" placeholder="e.g., Community Feedback Questionnaire">
+
+    <label class="ew-form-label">Description</label>
+    <textarea name="description" maxlength="500" rows="2" class="form-input" style="margin-bottom:0.8rem;" placeholder="Optional description shown to submitters">{{ form.description or '' }}</textarea>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.8rem; margin-bottom:1rem;">
+      <div>
+        <label class="ew-form-label">Expiry</label>
+        <select name="expires_in" class="form-input">
+          <option value="keep" selected>Keep current expiry ({% if form.expires_at %}{{ form.expires_at|localtime('%b %d, %Y') }}{% else %}Never{% endif %})</option>
+          <option value="never">Remove expiry (Never)</option>
+          <option value="1h">1 hour from now</option>
+          <option value="1d">1 day from now</option>
+          <option value="7d">7 days from now</option>
+        </select>
+      </div>
+      <div>
+        <label class="ew-form-label">Max responses</label>
+        <input type="number" name="max_responses" min="1" max="10000" placeholder="Unlimited" class="form-input" value="{{ form.max_responses if form.max_responses is not none else '' }}">
+      </div>
+      <div>
+        <label class="ew-form-label">Respondent Access</label>
+        <select name="allow_anonymous" class="form-input">
+          <option value="1" {% if form.allow_anonymous %}selected{% endif %}>Allow anonymous submissions</option>
+          <option value="0" {% if not form.allow_anonymous %}selected{% endif %}>Require EchoWithin account</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="border-top:1px solid var(--border-color); margin:1.2rem 0 0.8rem 0; padding-top:1rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem; flex-wrap:wrap; gap:0.5rem;">
+        <div style="font-weight:700; color:var(--text-dark-color); font-size:1.05rem;">Questions</div>
+        <div style="font-size:0.8rem; color:var(--text-secondary);">Edit question text, type, options, or order below</div>
+      </div>
+      <input type="hidden" name="questions_json" id="questions_json">
+      <div id="questions-container"></div>
+    </div>
+
+    <div style="background:var(--surface-bg); border:1px solid var(--border-color); border-radius:10px; padding:1rem; margin-bottom:1.2rem;">
+      <div style="font-size:0.85rem; font-weight:700; color:var(--text-dark-color); margin-bottom:0.5rem;">Add Question</div>
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+        <button type="button" onclick="addQuestion('short_text')" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor:pointer;">+ Short text</button>
+        <button type="button" onclick="addQuestion('paragraph')" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor:pointer;">+ Paragraph</button>
+        <button type="button" onclick="addQuestion('single_choice')" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor:pointer;">+ Single choice</button>
+        <button type="button" onclick="addQuestion('multiple_choice')" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor:pointer;">+ Multiple choice</button>
+        <button type="button" onclick="addQuestion('rating')" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor:pointer;">+ Rating (1-5)</button>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:0.6rem;">
+      <button type="submit" class="ew-btn" style="flex:1; padding:0.75rem;">Save Changes</button>
+      <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="ew-btn ew-btn--outline" style="text-decoration:none; padding:0.75rem 1.2rem;">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+let questions = {{ form.questions|tojson|safe }};
+
+// Normalize questions if needed
+if (!Array.isArray(questions)) {
+  questions = [];
+}
+questions.forEach(q => {
+  if (!q.id) q.id = Math.random().toString(36).slice(2, 6);
+  if (!Array.isArray(q.options)) q.options = [];
+  q.required = Boolean(q.required);
+});
+
+function addQuestion(type){
+  const id = Math.random().toString(36).slice(2,6);
+  const options = type.includes('choice') ? ['Option 1', 'Option 2'] : [];
+  questions.push({id, label:'', type, required:false, options});
+  render();
+}
+
+function changeQuestionType(idx, newType){
+  questions[idx].type = newType;
+  if(newType.includes('choice') && (!questions[idx].options || questions[idx].options.length < 2)){
+    questions[idx].options = ['Option 1', 'Option 2'];
+  }
+  render();
+}
+
+function moveQuestion(idx, dir){
+  const target = idx + dir;
+  if(target < 0 || target >= questions.length) return;
+  const temp = questions[idx];
+  questions[idx] = questions[target];
+  questions[target] = temp;
+  render();
+}
+
+function render(){
+  const c = document.getElementById('questions-container');
+  if(questions.length === 0){
+    c.innerHTML = '<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.9rem;">No questions added yet. Click one of the format buttons below to add a question.</div>';
+    return;
+  }
+  c.innerHTML = questions.map((q, idx)=> `
+    <div class="ew-card" style="background:var(--surface-bg); margin-bottom:1rem; border:1px solid var(--border-color); padding:1rem 1.1rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.7rem; flex-wrap:wrap; gap:0.5rem;">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <span style="font-weight:700; font-size:0.85rem; color:var(--text-dark-color);">Q${idx+1}</span>
+          <select onchange="changeQuestionType(${idx}, this.value)" class="form-input" style="padding:0.25rem 0.55rem; font-size:0.82rem; font-weight:600; border-radius:6px; cursor:pointer; width:auto; margin:0;">
+            <option value="short_text" ${q.type==='short_text'?'selected':''}>Short text (single line)</option>
+            <option value="paragraph" ${q.type==='paragraph'?'selected':''}>Paragraph (long answer)</option>
+            <option value="single_choice" ${q.type==='single_choice'?'selected':''}>Single choice (radio)</option>
+            <option value="multiple_choice" ${q.type==='multiple_choice'?'selected':''}>Multiple choice (checkboxes)</option>
+            <option value="rating" ${q.type==='rating'?'selected':''}>Rating (1 - 5 stars)</option>
+          </select>
+        </div>
+        <div style="display:flex; align-items:center; gap:0.35rem;">
+          ${idx > 0 ? `<button type="button" onclick="moveQuestion(${idx}, -1)" class="ew-nudge-btn" title="Move Up">&uarr;</button>` : ''}
+          ${idx < questions.length - 1 ? `<button type="button" onclick="moveQuestion(${idx}, 1)" class="ew-nudge-btn" title="Move Down">&darr;</button>` : ''}
+          <button type="button" onclick="questions.splice(${idx},1); render()" style="cursor:pointer; background:none; border:none; color:var(--text-muted); font-size:1.1rem; padding:0.2rem 0.5rem; line-height:1; border-radius:4px; transition:color 0.15s;" onmouseover="this.style.color='var(--danger-color, #c0392b)'" onmouseout="this.style.color='var(--text-muted)'" title="Remove question">&times;</button>
+        </div>
+      </div>
+
+      <input type="text" placeholder="Question label *" value="${(q.label || '').replace(/"/g,'&quot;')}" oninput="questions[${idx}].label=this.value" class="form-input" style="margin-bottom:0.5rem; font-weight:500;">
+
+      ${q.type === 'short_text' ? `
+        <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.5rem; padding:0.45rem 0.65rem; background:var(--card-bg); border:1px dashed var(--border-color); border-radius:6px;">
+          Preview: Short answer text field
+        </div>
+      ` : ''}
+
+      ${q.type === 'paragraph' ? `
+        <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.5rem; padding:0.55rem 0.65rem; background:var(--card-bg); border:1px dashed var(--border-color); border-radius:6px; min-height:45px;">
+          Preview: Long answer text area
+        </div>
+      ` : ''}
+
+      ${q.type === 'rating' ? `
+        <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.5rem; padding:0.45rem 0.65rem; background:var(--card-bg); border:1px dashed var(--border-color); border-radius:6px; display:flex; align-items:center; gap:0.6rem;">
+          <span>Preview: Rating</span>
+          <span style="display:inline-flex; gap:0.3rem;">
+            <span class="ew-badge">1</span><span class="ew-badge">2</span><span class="ew-badge">3</span><span class="ew-badge">4</span><span class="ew-badge">5</span>
+          </span>
+        </div>
+      ` : ''}
+
+      ${q.type.includes('choice') ? `
+        <div style="margin-top:0.6rem; background:var(--card-bg); padding:0.75rem; border-radius:8px; border:1px solid var(--border-color);">
+          <div style="font-size:0.78rem; font-weight:600; margin-bottom:0.4rem; color:var(--text-dark-color);">
+            Options (${q.type==='single_choice' ? 'Select exactly one' : 'Select one or more'}):
+          </div>
+          ${(q.options || []).map((o,oi)=> `
+            <div style="display:flex; gap:0.4rem; align-items:center; margin-bottom:0.35rem;">
+              <span style="font-size:0.8rem; color:var(--text-muted);">${q.type==='single_choice'?'&bull;':'&#9633;'}</span>
+              <input type="text" value="${(o || '').replace(/"/g,'&quot;')}" oninput="questions[${idx}].options[${oi}]=this.value" class="form-input" style="flex:1; padding:0.35rem 0.6rem; font-size:0.85rem;">
+              <button type="button" onclick="questions[${idx}].options.splice(${oi},1); render()" style="cursor:pointer; background:none; border:none; color:var(--text-muted); font-size:1.1rem; padding:0.2rem 0.5rem; line-height:1; border-radius:4px; transition:color 0.15s;" onmouseover="this.style.color='var(--danger-color, #c0392b)'" onmouseout="this.style.color='var(--text-muted)'" title="Remove option">&times;</button>
+            </div>
+          `).join('')}
+          <button type="button" onclick="if(questions[${idx}].options.length<10){questions[${idx}].options.push('Option '+(questions[${idx}].options.length+1)); render()}" class="ew-btn--outline ew-btn--sm" style="font-size:0.75rem; margin-top:0.3rem; cursor:pointer;">+ Add option</button>
+        </div>
+      ` : ''}
+
+      <div style="margin-top:0.6rem; display:flex; align-items:center; gap:0.35rem;">
+        <label style="font-size:0.78rem; color:var(--text-secondary); cursor:pointer; user-select:none; display:flex; align-items:center; gap:0.3rem;">
+          <input type="checkbox" ${q.required?'checked':''} onchange="questions[${idx}].required=this.checked">
+          Required question
+        </label>
+      </div>
+    </div>
+  `).join('');
+}
+
+document.getElementById('form-builder').addEventListener('submit', (e)=>{
+  if(questions.length===0){ e.preventDefault(); alert('Add at least one question'); return; }
+  for(const q of questions){
+    if(!q.label.trim()){ e.preventDefault(); alert('All questions need a label'); return; }
+    if(q.type.includes('choice') && (!q.options || q.options.length < 2)){ e.preventDefault(); alert('Choice questions need at least 2 options'); return; }
+  }
+  document.getElementById('questions_json').value = JSON.stringify(questions);
+});
+
+// Render existing questions on page load
+render();
+</script>
+{% endblock %}

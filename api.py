@@ -541,6 +541,15 @@ def api_edit_note(note_id):
 
     m.index_note_to_typesense(str(obj_id), decrypted_content=content)
 
+    # Invalidate decryption cache
+    m.invalidate_note_decryption_cache(note_id)
+
+    # Notify users who saved a clone of this note
+    try:
+        m.notify_saved_note_clones(obj_id, current_user.id, getattr(current_user, 'username', 'Author'))
+    except Exception as notify_err:
+        m.app.logger.warning(f"Failed to notify saved note clones for {obj_id}: {notify_err}")
+
     return jsonify({'success': True, 'id': str(obj_id)})
 
 @api_bp.route('/premium/activate', methods=['POST'])
@@ -1972,6 +1981,12 @@ def api_sync_note(note_id):
 
             # Broadcast update to participants in the share room
             m.socketio.emit('note_changed', {'content': decrypted}, room=source_share_id)
+
+            # Notify other users who saved a clone of this note
+            try:
+                m.notify_saved_note_clones(source_note_id, current_user.id, getattr(current_user, 'username', 'Author'))
+            except Exception as notify_err:
+                m.app.logger.warning(f"Failed to notify saved note clones on sync push for {source_note_id}: {notify_err}")
 
             return jsonify({
                 'success': True,

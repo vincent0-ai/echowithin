@@ -1050,3 +1050,84 @@ def send_ntfy_notification(message, title, tags=""):
             _get_app().logger.error(f"ntfy send failed for topic {ntfy_topic}: status={resp.status_code}, body={resp.text}")
     except Exception as e:
         _get_app().logger.error(f"Failed to send ntfy notification: {e}", exc_info=True)
+
+
+def notify_saved_note_clones(source_note_id, author_id, author_name=None):
+    """Notify all users who saved a clone of this note that an update is available.
+    Dispatches real-time WebSocket events and debounced push notifications (PWA + FCM).
+    """
+    try:
+        app = _get_app()
+        main_mod = _get_main()
+        if not source_note_id:
+            return
+
+        oid = ObjectId(source_note_id) if not isinstance(source_note_id, ObjectId) else source_note_id
+        author_oid = ObjectId(author_id) if (author_id and not isinstance(author_id, ObjectId)) else author_id
+
+        posts_col = database.personal_posts_conf if database.personal_posts_conf is not None else getattr(main_mod, 'personal_posts_conf', None)
+        if posts_col is None:
+            return
+
+        # Query all cloned notes owned by other users
+        clones = list(posts_col.find(
+            {
+                'source_note_id': oid,
+                'user_id': {'$ne': author_oid}
+            },
+            {'_id': 1, 'user_id': 1}
+        ))
+        if not clones:
+            return
+
+        author_display = author_name or 'Author'
+
+        for clone in clones:
+            recipient_id = str(clone['user_id'])
+            clone_id = str(clone['_id'])
+
+            # 1. Real-time WebSocket emission (delivered to active user sessions)
+            try:
+                if hasattr(main_mod, 'socketio') and main_mod.socketio:
+                    main_mod.socketio.emit('note_update_available', {
+                        'note_id': clone_id,
+                        'source_note_id': str(oid),
+                        'author_name': author_display,
+                        'message': f"{author_display} updated a note you saved."
+                    }, room=recipient_id)
+            except Exception as sock_err:
+                app.logger.warning(f"Failed to emit note_update_available to {recipient_id}: {sock_err}")
+
+            # 2. Push Notification with 15-minute debouncing per user/note
+            should_push = True
+            cache_key = f"note_update_push:{str(oid)}:{recipient_id}"
+            if hasattr(main_mod, 'redis_cache') and main_mod.redis_cache:
+                try:
+                    if main_mod.redis_cache.get(cache_key):
+                        should_push = False
+                    else:
+                        main_mod.redis_cache.setex(cache_key, 900, "1")
+                except Exception:
+                    pass
+
+            if should_push:
+                try:
+                    target_url = url_for('notes.personal_space', _external=True) + f'#note-{clone_id}'
+                except Exception:
+                    target_url = f'/personal_space#note-{clone_id}'
+
+                send_push_notification_async(
+                    recipient_id,
+                    f"{author_display} updated a saved note",
+                    "A note you saved has been updated. Open your personal space to sync the changes.",
+                    url=target_url,
+                    tag=f'note-update-{str(oid)}',
+                    extra_data={
+                        'type': 'note_update_available',
+                        'note_id': clone_id,
+                        'source_note_id': str(oid)
+                    }
+                )
+    except Exception as e:
+        _get_app().logger.error(f"Error in notify_saved_note_clones: {e}", exc_info=True)
+

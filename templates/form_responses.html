@@ -20,6 +20,7 @@ if (typeof QRCode === 'undefined') {
     </div>
     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
       <a href="{{ url_for('notes.personal_space') }}#forms" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Back to Forms</a>
+      <a href="{{ url_for('forms.forms_edit', share_id=form.share_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Edit Form</a>
       <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='csv') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export CSV</a>
       <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='json') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export JSON</a>
       {% if not form.deactivated %}

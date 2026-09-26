@@ -2337,6 +2337,13 @@
                     }
                 }
             });
+            inboxSocket.on('note_update_available', (data) => {
+                if (!window.location.pathname.startsWith('/personal_space')) {
+                    if (typeof showToast !== 'undefined') {
+                        showToast(`${data.author_name || 'Author'} updated a note you saved.`, 'info', 6000);
+                    }
+                }
+            });
         });
         {% endif %}
     })();

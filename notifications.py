@@ -793,6 +793,10 @@ def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None)
         badge_count = _get_user_badge_count(user_id_str)
 
         sent_count = 0
+        clean_data = {'url': str(url or '/'), 'click_action': str(url or '/')}
+        if data:
+            clean_data.update({str(k): str(v) for k, v in data.items()})
+
         for token_doc in tokens:
             try:
                 message = messaging.Message(
@@ -800,18 +804,14 @@ def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None)
                         title=title,
                         body=body,
                     ),
-                    data={
-                        'url': url or '/',
-                        'click_action': url or '/',
-                        **(data or {})
-                    },
+                    data=clean_data,
                     token=token_doc['token'],
                     android=messaging.AndroidConfig(
                         priority='high',
                         notification=messaging.AndroidNotification(
                             icon='ic_stat_notification',
                             color='#3e2217',
-                            channel_id='default',
+                            channel_id='echowithin_notifications',
                             notification_count=badge_count,
                         ),
                     ),
@@ -853,6 +853,10 @@ def send_fcm_notifications_batch(tokens_list, title, body, url=None, data=None):
     
     try:
         messages = []
+        batch_clean_data = {'url': str(url or '/'), 'click_action': str(url or '/')}
+        if data:
+            batch_clean_data.update({str(k): str(v) for k, v in data.items()})
+
         for token_doc in tokens_list:
             token_user_id = token_doc.get('user_id')
             badge_count = _get_user_badge_count(str(token_user_id)) if token_user_id else 1
@@ -862,18 +866,14 @@ def send_fcm_notifications_batch(tokens_list, title, body, url=None, data=None):
                     title=title,
                     body=body,
                 ),
-                data={
-                    'url': url or '/',
-                    'click_action': url or '/',
-                    **(data or {})
-                },
+                data=batch_clean_data,
                 token=token_doc['token'],
                 android=messaging.AndroidConfig(
                     priority='high',
                     notification=messaging.AndroidNotification(
                         icon='ic_stat_notification',
                         color='#3e2217',
-                        channel_id='default',
+                        channel_id='echowithin_notifications',
                         notification_count=badge_count,
                     ),
                 ),

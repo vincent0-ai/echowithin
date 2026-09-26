@@ -696,6 +696,7 @@ def api_app_lock_remove():
 
 @api_bp.route('/fcm/register', methods=['POST'])
 @login_required
+@limits(calls=20, period=60)
 def api_register_fcm():
     import main as m
     data = request.get_json(silent=True) or {}
@@ -706,22 +707,29 @@ def api_register_fcm():
 
     m.fcm_tokens_conf.update_one(
         {'user_id': ObjectId(current_user.id), 'token': token},
-        {'$set': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}},
+        {'$set': {
+            'user_id': ObjectId(current_user.id),
+            'token': token,
+            'updated_at': datetime.datetime.now(datetime.timezone.utc),
+            'platform': data.get('platform', 'android')
+        }},
         upsert=True
     )
     return jsonify({'success': True, 'message': 'FCM Token registered.'})
 
+
 @api_bp.route('/fcm/unregister', methods=['POST'])
 @login_required
+@limits(calls=20, period=60)
 def api_unregister_fcm():
     import main as m
     data = request.get_json(silent=True) or {}
     token = data.get('token', '').strip()
 
-    if not token:
-        return jsonify({'error': 'Token cannot be empty.'}), 400
-
-    m.fcm_tokens_conf.delete_one({'user_id': ObjectId(current_user.id), 'token': token})
+    if token:
+        m.fcm_tokens_conf.delete_one({'user_id': ObjectId(current_user.id), 'token': token})
+    else:
+        m.fcm_tokens_conf.delete_many({'user_id': ObjectId(current_user.id)})
     return jsonify({'success': True, 'message': 'FCM Token unregistered.'})
 
 
@@ -2090,7 +2098,4 @@ def api_export_notes():
             item['ciphertext'] = raw
         exported.append(item)
     return jsonify({'success': True, 'count': len(exported), 'notes': exported})
-
-
-
 

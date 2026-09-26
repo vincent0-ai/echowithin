@@ -13,12 +13,13 @@ bp = Blueprint('push', __name__, template_folder='templates')
 
 
 @bp.route('/api/fcm/register', methods=['POST'])
+@csrf_exempt
 @login_required
 @limits(calls=20, period=60)
 def register_fcm_token():
     import main as m
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         token = data.get('token')
         if not token:
             return jsonify({'error': 'Token is required'}), 400
@@ -40,12 +41,13 @@ def register_fcm_token():
 
 
 @bp.route('/api/fcm/unregister', methods=['POST'])
+@csrf_exempt
 @login_required
 @limits(calls=20, period=60)
 def unregister_fcm_token():
     import main as m
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         token = data.get('token')
         if token:
             m.fcm_tokens_conf.delete_one({'user_id': ObjectId(current_user.id), 'token': token})

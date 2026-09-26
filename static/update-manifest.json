@@ -1,7 +1,8 @@
 {
-  "versionCode": 41,
-  "versionName": "1.10.7",
+  "versionCode": 42,
+  "versionName": "1.10.8",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.10.7 Performance, Timezone & Games Update:\n• Fixed scrolling stutter and lag on notes list by replacing regex stripping with single-pass snippet parsing and removing animateItem\n• Instant note opening: immediate local SQLite lookup and native Compose markdown rendering for instant display without WebView blocking\n• Fixed time-unaware note display with timezone-aware local time conversion (relative & full datetime)\n• Added note creation date and last updated date display\n• Added Games & Arcade feature: interactive Tic-Tac-Toe (AI & 2P), Connect Four, Snake, plus web room launcher with PIN join",
-  "sha256": "E289FAC1BAC11AACD9AD87A72172B8DB1675F14B58FF75C8DFDD2AB99C0844CA"
+  "changelog": "v1.10.8 Android Native Push Notifications & Form Management:\n• Fixed Android FCM push notifications delivery: resolved server-side CSRF token blocking on token registration\n• Registered High-Importance notification channels on application startup with custom sound, lights, and vibration\n• Added valid status bar notification icon (ic_stat_notification) and FCM manifest metadata\n• Updated FCM payload data normalization and channel ID alignment (echowithin_notifications)\n• Form owners can now edit questions, options, settings, and form types with inline management\n• Added instant push and in-app notifications when shared notes are updated",
+  "sha256": "CBA5AEEE6CC2855D10933ABB94ADC54E7AD043045009691323454F8805C35B78"
 }
+

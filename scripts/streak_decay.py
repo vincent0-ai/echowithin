@@ -71,9 +71,23 @@ def run():
     )
 
     total_reset = len(recoverable) + result.modified_count
-    print(f"[streak_decay] {now.isoformat()} — Reset {total_reset} stale streaks "
+    print(f"[streak_decay] {now.isoformat()} -- Reset {total_reset} stale streaks "
           f"({len(recoverable)} recoverable, {result.modified_count} expired, "
           f"cutoff: {yesterday_start.isoformat()})")
+
+    # Phase 3: Clean up stale prev_streak data older than 24h
+    # If the user didn't use the shield within the recovery window, clear it
+    cleanup = m.bonds_conf.update_many(
+        {
+            'prev_streak': {'$ne': None},
+            'prev_streak.reset_at': {'$lt': yesterday_start}
+        },
+        {
+            '$set': {'prev_streak': None}
+        }
+    )
+    if cleanup.modified_count:
+        print(f"[streak_decay] Cleaned up {cleanup.modified_count} stale prev_streak record(s)")
 
 
 if __name__ == '__main__':

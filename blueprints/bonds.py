@@ -3651,6 +3651,7 @@ def api_bond_qotd_history(bond_id):
 
 @bp.route('/api/bonds/<bond_id>/streak/shield', methods=['POST'])
 @login_required
+@limits(calls=5, period=60)
 def api_bond_streak_shield(bond_id):
     """Use a streak shield to protect partner's streak (premium only, 1/week/bond)."""
     import main as m

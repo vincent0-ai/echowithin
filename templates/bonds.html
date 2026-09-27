@@ -762,6 +762,11 @@
         color: var(--primary-color);
     }
 
+    @keyframes pulse-shield {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+
     .bond-actions {
         display: flex;
         gap: 0.5rem;
@@ -1867,7 +1872,9 @@
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.3rem;">
                     {% if bond.streak_count > 0 %}
-                    <div class="bond-streak">🔥 {{ bond.streak_count }}d{% if user_tier == 'premium' %}<button class="streak-shield-btn" title="Use Streak Shield (1/week, premium)" onclick="useStreakShield('{{ bond.id }}')">🛡️</button>{% endif %}</div>
+                    <div class="bond-streak">🔥 {{ bond.streak_count }}d{% if user_tier == 'premium' and not bond.streak_shield_used_this_week %}<button class="streak-shield-btn" title="Use Streak Shield (1/week, premium)" onclick="useStreakShield('{{ bond.id }}')">🛡️</button>{% endif %}</div>
+                    {% elif bond.streak_recoverable > 0 and user_tier == 'premium' and not bond.streak_shield_used_this_week %}
+                    <div class="bond-streak" style="opacity: 0.85;"><span style="color: var(--text-muted);">💔 {{ bond.streak_recoverable }}d</span> <button class="streak-shield-btn" title="Recover your {{ bond.streak_recoverable }}-day streak with a shield!" onclick="useStreakShield('{{ bond.id }}')" style="font-size: 0.82rem; animation: pulse-shield 1.5s ease-in-out infinite;">🛡️ Save</button></div>
                     {% endif %}
                     <button class="bond-nudge-btn" title="Send a nudge" onclick="sendNudge('{{ bond.id }}', this)"><span class="nudge-icon">💭</span> <span class="nudge-count" style="font-size: 0.7rem;">({{ bond.nudge_remaining }} left)</span></button>
                 </div>
@@ -6406,6 +6413,7 @@
         }).then(r => r.json()).then(d => {
             if (d.success) {
                 if (window.showCustomToast) showCustomToast('Streak shield activated! 🛡️', 'success');
+                setTimeout(function() { window.location.reload(); }, 1200);
             } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
         });
     }

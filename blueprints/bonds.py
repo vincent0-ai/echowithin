@@ -657,6 +657,47 @@ def _get_effective_streak(bond_doc):
     return 0
 
 
+def _get_shield_recoverable_streak(bond_doc):
+    """Return the streak count that a shield could recover, or 0 if not applicable.
+
+    Two cases:
+    1. Classic: streak_count > 0 in DB but last_streak_date is exactly 2 days
+       ago (one day missed, no activity today yet).
+    2. Post-reset recovery: An activity already happened today which reset
+       streak_count to 1.  The previous streak info is in prev_streak (saved
+       by _update_bond_streak) and it was reset today.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc)
+    today = now.date()
+
+    # Case 1 — streak still stored, not yet reset by activity
+    stored_count = bond_doc.get('streak_count', 0)
+    last_streak = bond_doc.get('last_streak_date')
+    if stored_count > 0 and last_streak:
+        if isinstance(last_streak, datetime.datetime):
+            if last_streak.tzinfo is None:
+                last_streak = last_streak.replace(tzinfo=datetime.timezone.utc)
+            last_date = last_streak.date()
+        else:
+            last_date = last_streak
+        days_gap = (today - last_date).days
+        if days_gap == 2:
+            return stored_count
+
+    # Case 2 — streak was already reset today by an activity; prev_streak saved
+    prev = bond_doc.get('prev_streak')
+    if prev and prev.get('count', 0) > 0:
+        reset_at = prev.get('reset_at')
+        if reset_at:
+            if isinstance(reset_at, datetime.datetime):
+                if reset_at.tzinfo is None:
+                    reset_at = reset_at.replace(tzinfo=datetime.timezone.utc)
+                if reset_at.date() == today:
+                    return prev['count']
+
+    return 0
+
+
 def _update_bond_streak(bond_doc):
     """Update streak count for a bond based on today's activity.
     Called from any activity endpoint (checkin, journal, mood, qotd, nudge).
@@ -680,9 +721,25 @@ def _update_bond_streak(bond_doc):
                 }
             )
         else:
+            # Streak is broken — save previous streak info so the shield can
+            # restore it if the user activates the shield the same day the
+            # reset happened (only useful when exactly 1 day was missed).
+            old_count = bond_doc.get('streak_count', 0)
+            days_gap = (today - last_date).days
+            update_fields = {
+                'streak_count': 1,
+                'last_streak_date': now,
+            }
+            if old_count > 0 and days_gap == 2:
+                # Exactly 1 day missed — recoverable by shield today
+                update_fields['prev_streak'] = {
+                    'count': old_count,
+                    'last_date': last_streak,
+                    'reset_at': now,
+                }
             m.bonds_conf.update_one(
                 {'_id': bond_doc['_id']},
-                {'$set': {'streak_count': 1, 'last_streak_date': now}, '$max': {'best_streak': 1}}
+                {'$set': update_fields, '$max': {'best_streak': 1}}
             )
     else:
         m.bonds_conf.update_one(
@@ -1231,6 +1288,7 @@ def bonds_page():
             'bond_type_icon': type_info['icon'],
             'accepted_at': bond.get('accepted_at'),
             'streak_count': _get_effective_streak(bond),
+            'streak_recoverable': _get_shield_recoverable_streak(bond),
             'goal_count': goal_count,
             'anniversary': anniversary,
             'streak_shield_used_this_week': streak_shield_used_this_week,
@@ -1653,7 +1711,8 @@ def api_bonds_active():
                     'partner_avatar': partner.get('profile_image_url'),
                     'label': bond.get('label', ''),
                     'accepted_at': _format_datetime(bond.get('accepted_at')),
-                    'streak_count': _get_effective_streak(bond)
+                    'streak_count': _get_effective_streak(bond),
+                    'streak_recoverable': _get_shield_recoverable_streak(bond)
                 })
         return jsonify({'bonds': result})
     except Exception as e:
@@ -3612,50 +3671,110 @@ def api_bond_streak_shield(bond_id):
 
         # Check if shield already used this week
         now = datetime.datetime.now(datetime.timezone.utc)
+        today = now.date()
         current_week = now.strftime('%G-W%V')  # ISO week
         shield_data = bond_doc.get('streak_shield')
         if shield_data and shield_data.get('week_iso') == current_week:
             return jsonify({'error': 'Streak shield already used this week.'}), 429
 
-        # Verify the streak is actually at risk (missed yesterday but not more)
-        last_streak = bond_doc.get('last_streak_date')
-        effective = _get_effective_streak(bond_doc)
-        stored_count = bond_doc.get('streak_count', 0)
-        today = now.date()
+        # Verify the streak is actually at risk or was recently reset today
+        # Use the helper to detect both classic (gap==2) and post-reset cases
+        recoverable_count = _get_shield_recoverable_streak(bond_doc)
 
-        if stored_count == 0 or not last_streak:
+        if recoverable_count == 0:
+            # Check why — give a helpful error
+            last_streak = bond_doc.get('last_streak_date')
+            stored_count = bond_doc.get('streak_count', 0)
+
+            if stored_count == 0 and not bond_doc.get('prev_streak'):
+                return jsonify({'error': 'No active streak to shield.'}), 400
+
+            if last_streak:
+                if isinstance(last_streak, datetime.datetime):
+                    if last_streak.tzinfo is None:
+                        last_streak = last_streak.replace(tzinfo=datetime.timezone.utc)
+                    last_date = last_streak.date()
+                else:
+                    last_date = last_streak
+
+                days_gap = (today - last_date).days
+                if days_gap <= 1:
+                    return jsonify({'error': 'Your streak is still active, no shield needed.'}), 400
+                elif days_gap > 2:
+                    return jsonify({'error': 'Streak was broken more than a day ago. Shield cannot restore it.'}), 400
+
             return jsonify({'error': 'No active streak to shield.'}), 400
 
-        if isinstance(last_streak, datetime.datetime):
-            if last_streak.tzinfo is None:
-                last_streak = last_streak.replace(tzinfo=datetime.timezone.utc)
-            last_date = last_streak.date()
+        # Determine which recovery path to take
+        prev = bond_doc.get('prev_streak')
+        is_post_reset = False
+        if prev and prev.get('count', 0) > 0:
+            reset_at = prev.get('reset_at')
+            if reset_at and isinstance(reset_at, datetime.datetime):
+                if reset_at.tzinfo is None:
+                    reset_at = reset_at.replace(tzinfo=datetime.timezone.utc)
+                is_post_reset = (reset_at.date() == today)
+
+        if is_post_reset:
+            # Post-reset recovery: prev_streak was saved when the streak broke.
+            # Two sub-cases:
+            stored_count = bond_doc.get('streak_count', 0)
+            last_streak = bond_doc.get('last_streak_date')
+            activity_today = False
+            if last_streak:
+                ld = last_streak.date() if isinstance(last_streak, datetime.datetime) else last_streak
+                activity_today = (ld == today)
+
+            if activity_today and stored_count >= 1:
+                # Activity already logged today that reset streak to 1.
+                # Restore: count = old_count + 1 (today's activity counts)
+                restored_count = recoverable_count + 1
+                m.bonds_conf.update_one(
+                    {'_id': ObjectId(bond_id)},
+                    {'$set': {
+                        'streak_count': restored_count,
+                        'streak_shield': {
+                            'used_by': ObjectId(user_id_str),
+                            'used_at': now,
+                            'week_iso': current_week
+                        },
+                        'prev_streak': None,
+                    },
+                    '$max': {'best_streak': restored_count}}
+                )
+            else:
+                # Decay job zeroed it; no activity today yet.
+                # Restore old count and bridge gap via last_streak_date=yesterday
+                yesterday = now - datetime.timedelta(days=1)
+                m.bonds_conf.update_one(
+                    {'_id': ObjectId(bond_id)},
+                    {'$set': {
+                        'streak_count': recoverable_count,
+                        'last_streak_date': yesterday,
+                        'streak_shield': {
+                            'used_by': ObjectId(user_id_str),
+                            'used_at': now,
+                            'week_iso': current_week
+                        },
+                        'prev_streak': None,
+                    },
+                    '$max': {'best_streak': recoverable_count}}
+                )
         else:
-            last_date = last_streak
-
-        days_gap = (today - last_date).days
-
-        if days_gap <= 1:
-            # Streak is still alive (today or yesterday) — no shield needed
-            return jsonify({'error': 'Your streak is still active, no shield needed.'}), 400
-        elif days_gap > 2:
-            # More than 1 day missed — shield can only bridge a single day gap
-            return jsonify({'error': 'Streak was broken more than a day ago. Shield cannot restore it.'}), 400
-
-        # Shield bridges the 1-day gap: set last_streak_date to yesterday
-        # so the next activity continues the streak instead of resetting
-        yesterday = now - datetime.timedelta(days=1)
-        m.bonds_conf.update_one(
-            {'_id': ObjectId(bond_id)},
-            {'$set': {
-                'last_streak_date': yesterday,
-                'streak_shield': {
-                    'used_by': ObjectId(user_id_str),
-                    'used_at': now,
-                    'week_iso': current_week
-                }
-            }}
-        )
+            # Classic shield: bridge the 1-day gap by setting last_streak_date
+            # to yesterday so the next activity continues the streak
+            yesterday = now - datetime.timedelta(days=1)
+            m.bonds_conf.update_one(
+                {'_id': ObjectId(bond_id)},
+                {'$set': {
+                    'last_streak_date': yesterday,
+                    'streak_shield': {
+                        'used_by': ObjectId(user_id_str),
+                        'used_at': now,
+                        'week_iso': current_week
+                    }
+                }}
+            )
 
         # Notify partner
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)

@@ -4679,14 +4679,19 @@
                 body: JSON.stringify({ pin: pin })
             });
 
-            const data = await resp.json();
+            let data = {};
+            try {
+                data = await resp.json();
+            } catch (jsonErr) {
+                console.warn('Non-JSON response from PIN verification:', jsonErr);
+            }
 
             if (resp.ok) {
                 // Online success - update local cache
                 await storePinHash(pin);
                 handlePinSuccess();
             } else {
-                handlePinError(data.error);
+                handlePinError(data.error || (resp.status === 429 ? 'Too many attempts. Try again later.' : 'Verification error. Please try again.'));
             }
         } catch (e) {
             console.error('PIN verification error:', e);

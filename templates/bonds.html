@@ -7788,7 +7788,9 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ pin: pin })
-        }).then(function(r) { return r.json(); }).then(function(d) {
+        }).then(function(r) {
+            return r.json().catch(function() { return { error: 'Server error verifying PIN. Please try again.' }; });
+        }).then(function(d) {
             if (d.success) {
                 handlePinSuccess();
             } else {

@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, math, hashlib, hmac, secrets, requests
 from security import limits, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip, mask_email
+from werkzeug.security import generate_password_hash, check_password_hash
 from config import get_env_variable
 try:
     from jigsawstack import JigsawStack
@@ -757,7 +758,8 @@ def create_personal_post():
             'title_encrypted': True,
             'reference': encrypted_reference,
             'tags': encrypted_tags,
-            'created_at': datetime.datetime.now(datetime.timezone.utc)
+            'created_at': datetime.datetime.now(datetime.timezone.utc),
+            'encryption_version': 3
         })
         # Index decrypted content to Typesense for search
         m.index_note_to_typesense(str(result.inserted_id), decrypted_content=content)
@@ -805,7 +807,8 @@ def create_personal_post_json():
         'title_encrypted': True,
         'reference': encrypted_reference,
         'tags': encrypted_tags,
-        'created_at': datetime.datetime.now(datetime.timezone.utc)
+        'created_at': datetime.datetime.now(datetime.timezone.utc),
+        'encryption_version': 3
     })
     # Index decrypted content to Typesense for search
     m.index_note_to_typesense(str(result.inserted_id), decrypted_content=content)
@@ -1098,6 +1101,7 @@ def edit_personal_post(post_id):
                 'content': note['content'],
                 'content_owner_id': note.get('content_owner_id', note.get('user_id')),
                 'encrypted': note.get('encrypted', True),
+                'encryption_version': 3,
                 'event_type': 'snapshot',
                 'status': 'applied',
                 'edit_summary': edit_summary or 'Edited note',
@@ -1281,6 +1285,7 @@ def sync_personal_post(post_id):
                     'content_owner_id': ObjectId(original_owner_id),
                     'proposed_content': note.get('content'),
                     'encrypted': True,
+                    'encryption_version': 3,
                     'event_type': 'proposal',
                     'status': 'pending',
                     'edit_summary': 'Synced changes from my saved copy',
@@ -1330,6 +1335,7 @@ def sync_personal_post(post_id):
                     'content': original_note['content'],
                     'content_owner_id': original_note.get('content_owner_id', original_note.get('user_id')),
                     'encrypted': original_note.get('encrypted', True),
+                    'encryption_version': 3,
                     'created_at': now,
                     'is_read_by_owner': False if not is_owner_of_original else True,
                     'is_auto_approved': True if not is_owner_of_original else False,
@@ -1372,6 +1378,7 @@ def sync_personal_post(post_id):
                 {'$set': {
                     'content': reencrypted_content or note.get('content'),
                     'encrypted': True,
+                    'encryption_version': 3,
                     'content_owner_id': ObjectId(original_owner_id) if original_owner_id else note.get('content_owner_id', note.get('user_id')),
                     'reference': note.get('reference', ''),
                     'tags': note.get('tags', []),
@@ -1399,7 +1406,7 @@ def sync_personal_post(post_id):
                 'message': 'Your changes have been pushed to the original note.'
             })
         else:
-            # --- PULL: Original is newer ΓåÆ pull original's content to the clone ---
+            # --- PULL: Original is newer → pull original's content to the clone ---
             # Version-snapshot the clone before overwriting
             if note.get('content'):
                 m.note_versions_conf.insert_one({
@@ -1410,6 +1417,7 @@ def sync_personal_post(post_id):
                     'content': note['content'],
                     'content_owner_id': note.get('content_owner_id', note.get('user_id')),
                     'encrypted': note.get('encrypted', True),
+                    'encryption_version': 3,
                     'created_at': now,
                     'is_read_by_owner': True
                 })
@@ -1612,10 +1620,10 @@ def app_lock_setup():
     if user.get('app_lock_pin_hash'):
         if not current_pin:
             return jsonify({'error': 'Current PIN is required to change your PIN'}), 400
-        if not m.check_password_hash(user['app_lock_pin_hash'], current_pin):
+        if not check_password_hash(user['app_lock_pin_hash'], current_pin):
             return jsonify({'error': 'Current PIN is incorrect'}), 403
 
-    pin_hash = m.generate_password_hash(pin)
+    pin_hash = generate_password_hash(pin)
     m.users_conf.update_one({'_id': ObjectId(current_user.id)}, {'$set': {'app_lock_pin_hash': pin_hash}})
     session['app_lock_unlocked_at'] = datetime.datetime.now(datetime.timezone.utc)
     return jsonify({'success': True, 'message': 'App lock PIN set successfully'})
@@ -1646,7 +1654,7 @@ def app_lock_verify():
     if not user or not user.get('app_lock_pin_hash'):
         return jsonify({'error': 'No app lock PIN is set'}), 400
 
-    if m.check_password_hash(user['app_lock_pin_hash'], pin):
+    if check_password_hash(user['app_lock_pin_hash'], pin):
         brute_force_clear('pin', str(current_user.id), bf_ip)
         session['app_lock_unlocked_at'] = datetime.datetime.now(datetime.timezone.utc)
         return jsonify({'success': True})
@@ -1681,7 +1689,7 @@ def app_lock_remove():
     if not user or not user.get('app_lock_pin_hash'):
         return jsonify({'error': 'No app lock PIN is set'}), 400
 
-    if not m.check_password_hash(user['app_lock_pin_hash'], pin):
+    if not check_password_hash(user['app_lock_pin_hash'], pin):
         return jsonify({'error': 'Incorrect PIN'}), 403
 
     m.users_conf.update_one({'_id': ObjectId(current_user.id)}, {'$unset': {'app_lock_pin_hash': ''}})
@@ -1840,7 +1848,7 @@ def app_lock_reset_verify():
     brute_force_clear('pin_reset', str(current_user.id), bf_ip)
 
     # Code is valid — update the PIN
-    new_pin_hash = m.generate_password_hash(new_pin)
+    new_pin_hash = generate_password_hash(new_pin)
     m.users_conf.update_one(
         {'_id': ObjectId(current_user.id)},
         {'$set': {'app_lock_pin_hash': new_pin_hash}}

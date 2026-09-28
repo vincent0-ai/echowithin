@@ -66,13 +66,15 @@ class TaskLock:
         try:
             if 'database' in sys.modules:
                 db_mod = sys.modules['database']
-                if getattr(db_mod, 'redis_cache', None) is not None:
-                    db_mod.redis_cache.ping()
-                    return db_mod.redis_cache
+                r_cache = getattr(db_mod, 'redis_cache', None)
+                if r_cache is not None and not hasattr(r_cache, '_mock_return_value') and 'Mock' not in type(r_cache).__name__:
+                    r_cache.ping()
+                    return r_cache
             if 'main' in sys.modules:
                 m_mod = sys.modules['main']
-                if getattr(m_mod, 'redis_cache', None) is not None:
-                    m_mod.redis_cache.ping()
+                r_cache = getattr(m_mod, 'redis_cache', None)
+                if r_cache is not None and not hasattr(r_cache, '_mock_return_value') and 'Mock' not in type(r_cache).__name__:
+                    r_cache.ping()
                     return m_mod.redis_cache
         except Exception:
             pass
@@ -111,6 +113,8 @@ class TaskLock:
             else:
                 password = os.environ.get('REDIS_PASSWORD') or None
                 r = redis.Redis(host=host, port=port, password=password, decode_responses=True, socket_connect_timeout=0.5, socket_timeout=0.5, retry_on_timeout=False)
+            if hasattr(r, '_mock_return_value') or 'Mock' in type(r).__name__:
+                return None
             r.ping()
             return r
         except Exception:

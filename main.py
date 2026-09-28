@@ -122,6 +122,7 @@ import json
 from logging.handlers import RotatingFileHandler
 from pythonjsonlogger import jsonlogger
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.security import generate_password_hash, check_password_hash
 # Typesense full-text search — see typesense_client.py
 from PIL import Image
 from flask_wtf.csrf import CSRFProtect
@@ -205,7 +206,8 @@ __all__ = [
     'CLOUDINARY_RAW_UPLOAD_LIMIT', 'VIDEO_COMPRESSION_TIMEOUT', 'VAPID_PRIVATE_KEY',
     'VAPID_PUBLIC_KEY', 'TIME', '_NOTES_KDF_ITERATIONS', '_NOTES_V1_SALT',
     'PREMIUM_TRIAL_DAYS', 'VAULT_PIN_LENGTH', 'VAULT_AUTO_LOCK_MINUTES',
-    'VAULT_MAX_FILE_SIZE', 'VAULT_KDF_ITERATIONS', 'PREDEFINED_TAGS', '_TAG_KEYWORDS'
+    'VAULT_MAX_FILE_SIZE', 'VAULT_KDF_ITERATIONS', 'PREDEFINED_TAGS', '_TAG_KEYWORDS',
+    'generate_password_hash', 'check_password_hash'
 ]
 
 

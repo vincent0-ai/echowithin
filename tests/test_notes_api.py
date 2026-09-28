@@ -86,3 +86,43 @@ class TestNotesEndpointsAuthGating:
         assert res.status_code in [302, 401]
 
 
+class TestAppLockVerify:
+    """Tests for the app lock PIN verification endpoint."""
+
+    def test_app_lock_verify_requires_auth(self, client):
+        res = client.post('/api/app_lock/verify', json={'pin': '1234'})
+        assert res.status_code in [302, 401]
+
+    def test_app_lock_verify_success(self, auth_client, mock_user):
+        from werkzeug.security import generate_password_hash
+        import database
+        pin = "1234"
+        database.users_conf.find_one = MagicMock(return_value={
+            '_id': ObjectId(mock_user['_id']),
+            'app_lock_pin_hash': generate_password_hash(pin)
+        })
+        res = auth_client.post('/api/app_lock/verify', json={'pin': pin})
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data.get('success') is True
+
+    def test_app_lock_verify_wrong_pin(self, auth_client, mock_user):
+        from werkzeug.security import generate_password_hash
+        import database
+        database.users_conf.find_one = MagicMock(return_value={
+            '_id': ObjectId(mock_user['_id']),
+            'app_lock_pin_hash': generate_password_hash("1234")
+        })
+        res = auth_client.post('/api/app_lock/verify', json={'pin': "9999"})
+        assert res.status_code == 403
+        data = res.get_json()
+        assert 'Incorrect PIN' in data.get('error', '')
+
+    def test_app_lock_verify_empty_pin(self, auth_client):
+        res = auth_client.post('/api/app_lock/verify', json={'pin': ''})
+        assert res.status_code == 400
+        data = res.get_json()
+        assert 'PIN is required' in data.get('error', '')
+
+
+

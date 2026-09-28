@@ -713,6 +713,7 @@ def api_save_shared_note(share_id):
         'reference': original_note.get('reference', ''),
         'tags': original_note.get('tags', []),
         'created_at': datetime.datetime.now(datetime.timezone.utc),
+        'encryption_version': 3,
         'source_note_id': share['note_id'],
         'source_share_id': share_id,
         'surprise_theme': share.get('surprise_theme', 'none'),

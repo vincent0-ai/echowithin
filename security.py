@@ -574,18 +574,16 @@ def _get_user_fernet(user_id: str) -> Fernet:
 
 
 def warm_user_fernet(user_id: str):
-    """Pre-derive and cache the Fernet key for a user.
+    """Pre-derive and cache the v3 envelope Fernet key for a user.
     
-    Call on login to avoid the ~200ms PBKDF2 cold-derivation cost
-    when the user first navigates to /personal_space.
-    Also warms the v3 key if the user has been migrated.
+    Call on login to avoid cold-derivation cost when the user
+    navigates to /personal_space. Only warms the v3 envelope key,
+    saving ~200ms of CPU per login.
     """
-    _get_user_fernet(str(user_id))
-    # Also warm v3 if available (no-op if user hasn't been migrated)
     try:
         _get_user_fernet_v3(str(user_id))
-    except Exception:
-        pass
+    except Exception as e:
+        _get_app().logger.warning(f"Could not warm v3 Fernet for user {user_id}: {e}")
 
 
 def _get_bond_fernet(bond_id: str) -> Fernet:
@@ -1123,7 +1121,11 @@ def encrypt_dm(content, user1_id, user2_id):
 
 
 def decrypt_dm(encrypted_content, user1_id, user2_id):
-    if not encrypted_content: return encrypted_content
+    if not encrypted_content:
+        return encrypted_content
+    # Fast path: system notices, whisper invites/status, and plaintext are not Fernet ciphertext
+    if not isinstance(encrypted_content, str) or not encrypted_content.startswith('gAAAAA'):
+        return encrypted_content
     # Try v3 first (envelope encryption)
     f_v3 = _get_dm_fernet_v3(user1_id, user2_id)
     if f_v3:
@@ -1131,16 +1133,13 @@ def decrypt_dm(encrypted_content, user1_id, user2_id):
             return f_v3.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
         except Exception:
             pass  # Fall through to v2
-    # Try v2 DM-specific key
+    # Try v2 DM-specific key (backward compatibility)
     try:
         f = _get_dm_fernet(user1_id, user2_id)
         return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
     except Exception as e:
-        if isinstance(encrypted_content, str) and encrypted_content.startswith('gAAAAA'):
-            _get_app().logger.warning(f"DM Decryption failed for user pair ({user1_id}, {user2_id}): {e}")
-            return '[Content unavailable \u2014 decryption error]'
-        # Fallback to plaintext for legacy messages
-        return encrypted_content
+        _get_app().logger.warning(f"DM Decryption failed for user pair ({user1_id}, {user2_id}): {e}")
+        return '[Content unavailable \u2014 decryption error]'
 
 
 def encrypt_note(content, user_id=None):
@@ -1165,10 +1164,13 @@ def encrypt_note(content, user_id=None):
 
 
 def decrypt_note(encrypted_content, user_id=None):
-    """Decrypts note content. Tries v3 → v2 → v1 in order (backward-compatible)."""
+    """Decrypts note content using v3 envelope encryption."""
     if not encrypted_content or encrypted_content == '[Content unavailable \u2014 decryption error]':
         return encrypted_content
-    # Try v3 first (envelope encryption)
+    # Fast path: unencrypted text returns immediately without crypto exceptions
+    if not isinstance(encrypted_content, str) or not encrypted_content.startswith('gAAAAA'):
+        return encrypted_content
+    # Try v3 envelope encryption first
     if user_id:
         f_v3 = _get_user_fernet_v3(str(user_id))
         if f_v3:
@@ -1176,8 +1178,7 @@ def decrypt_note(encrypted_content, user_id=None):
                 return f_v3.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
             except Exception:
                 pass  # Fall through to v2
-    # Try v2 per-user key
-    if user_id:
+        # Try v2 per-user key
         try:
             f = _get_user_fernet(str(user_id))
             return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
@@ -1188,11 +1189,6 @@ def decrypt_note(encrypted_content, user_id=None):
         f = get_notes_fernet()
         return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
     except Exception:
-        # Last resort: might be a legacy unencrypted note (pre-encryption era).
-        # Only return raw content if it looks like valid UTF-8 text, not ciphertext.
-        if encrypted_content and not encrypted_content.startswith('gAAAAA'):
-            _get_app().logger.debug("Returning legacy unencrypted note content")
-            return encrypted_content
         _get_app().logger.warning("Note decryption failed for all key versions")
         return '[Content unavailable \u2014 decryption error]'
 
@@ -1216,6 +1212,8 @@ def _candidate_user_ids(*values):
 def _decrypt_with_candidate_ids(encrypted_content, candidate_user_ids):
     if not encrypted_content:
         return encrypted_content
+    if not isinstance(encrypted_content, str) or not encrypted_content.startswith('gAAAAA'):
+        return encrypted_content
     for candidate_user_id in candidate_user_ids:
         uid_str = str(candidate_user_id)
         # Try v3 (envelope encryption) first
@@ -1225,18 +1223,16 @@ def _decrypt_with_candidate_ids(encrypted_content, candidate_user_ids):
                 return f_v3.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
         except Exception:
             pass
-        # Try v2 (deterministic PBKDF2)
+        # Try v2 (deterministic PBKDF2 fallback)
         try:
             f = _get_user_fernet(uid_str)
             return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
         except Exception:
             continue
-    # Try v1 global key
+    # Try v1 global key (backward compatibility)
     try:
         return get_notes_fernet().decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
     except Exception:
-        if encrypted_content and not encrypted_content.startswith('gAAAAA'):
-            return encrypted_content
         return None
 
 
@@ -1254,31 +1250,36 @@ def _note_decryption_candidates(note, share=None):
             seen.add(value)
             candidates.append(value)
 
-    current = note
-    depth = 0
-    while current and depth < 4:
-        add_value(current.get('content_owner_id'))
-        add_value(current.get('user_id'))
-        add_value(current.get('owner_id'))
-        add_value(current.get('source_owner_id'))
-        add_value(current.get('saved_from_owner_id'))
-        # OPTIMIZATION: Use pre-fetched original_doc if available (avoids DB round-trip)
-        prefetched = current.get('original_doc')
-        if prefetched:
-            current = prefetched
-        else:
-            source_note_id = current.get('source_note_id')
-            if not source_note_id:
-                break
-            current = database.personal_posts_conf.find_one(
-                {'_id': source_note_id},
-                {'content_owner_id': 1, 'user_id': 1, 'owner_id': 1, 'source_owner_id': 1, 'saved_from_owner_id': 1, 'source_note_id': 1}
-            )
-        depth += 1
+    if not note or not isinstance(note, dict):
+        return candidates
+
+    # Direct owner first (v3 key sovereignty)
+    add_value(note.get('content_owner_id'))
+    add_value(note.get('user_id'))
+    add_value(note.get('owner_id'))
+    add_value(note.get('source_owner_id'))
+    add_value(note.get('saved_from_owner_id'))
 
     if share:
         add_value(share.get('owner_id'))
         add_value(share.get('source_owner_id'))
+
+    # If no candidates found on the document itself, check pre-fetched original or source_note_id
+    if not candidates:
+        prefetched = note.get('original_doc')
+        if prefetched:
+            add_value(prefetched.get('content_owner_id'))
+            add_value(prefetched.get('user_id'))
+        else:
+            source_note_id = note.get('source_note_id')
+            if source_note_id:
+                src = database.personal_posts_conf.find_one(
+                    {'_id': source_note_id},
+                    {'content_owner_id': 1, 'user_id': 1}
+                )
+                if src:
+                    add_value(src.get('content_owner_id'))
+                    add_value(src.get('user_id'))
 
     return candidates
 
@@ -1297,25 +1298,30 @@ def _decrypted_cache_key(note_id):
 
 
 def _cache_encrypt_value(plain_text):
-    """Encrypt cached plaintext before storing in Redis (defense at rest)."""
-    try:
-        return get_notes_fernet().encrypt(plain_text.encode('utf-8'))
-    except Exception:
-        return plain_text.encode('utf-8')
+    """Store cached plaintext in Redis with UTF-8 encoding."""
+    if plain_text is None:
+        return b''
+    if isinstance(plain_text, bytes):
+        return plain_text
+    return plain_text.encode('utf-8')
 
 
 def _cache_decrypt_value(cipher_bytes):
-    """Decrypt a Redis-cached note value. Returns plaintext or None on failure."""
+    """Decode a Redis-cached note value. Decodes UTF-8 directly, with backward-compatible Fernet fallback."""
+    if cipher_bytes is None:
+        return None
     try:
-        if cipher_bytes is None:
-            return None
-        return get_notes_fernet().decrypt(cipher_bytes).decode('utf-8')
-    except Exception:
-        # Fall back: value may be a legacy unencrypted cache entry.
-        try:
+        if isinstance(cipher_bytes, bytes):
+            # If legacy cache entry starts with Fernet header 'gAAAAA'
+            if cipher_bytes.startswith(b'gAAAAA'):
+                try:
+                    return get_notes_fernet().decrypt(cipher_bytes).decode('utf-8')
+                except Exception:
+                    pass
             return cipher_bytes.decode('utf-8')
-        except Exception:
-            return None
+        return str(cipher_bytes)
+    except Exception:
+        return None
 
 def _invalidate_decrypted_cache(note_id):
     """Remove the decrypted cache entry for a note when it's edited."""

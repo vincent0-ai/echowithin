@@ -237,7 +237,7 @@ def _run_backup_internal():
                 try:
                     atlas_coll.bulk_write(operations, ordered=False)
                     synced += len(batch)
-                except Exception as e:
+                except Exception:
                     # Fallback to individual replace_one if bulk_write encounters an error
                     for doc in batch:
                         try:

@@ -7,7 +7,6 @@ import sys
 # Ensure the parent directory is in python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from urllib.parse import urlparse
 import redis
 from rq import Worker, Queue
 import dotenv

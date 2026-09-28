@@ -703,7 +703,6 @@ def api_save_shared_note(share_id):
     # Clone the note for the current user
     # Note: We track source_note_id to allow original owners to "Delete for Everyone"
     # Re-encrypt with the cloning user's per-user key for data sovereignty
-    original_owner_id = str(share.get('owner_id', original_note.get('user_id', '')))
     plaintext = m._decrypt_note_record(original_note, share)
     cloned_encrypted = m.encrypt_note(plaintext, user_id=current_user.id)
     m.personal_posts_conf.insert_one({

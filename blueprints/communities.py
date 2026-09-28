@@ -1,9 +1,8 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, session, current_app
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, secrets
 from security import limits
-from config import TIME
 bp = Blueprint('communities', __name__, template_folder='templates')
 
 
@@ -359,7 +358,6 @@ def join_community_link(invite_code):
 @bp.route('/api/community/join', methods=['POST'])
 @login_required
 def api_join_community_code():
-    import main as m
     invite_code = request.form.get('invite_code', '').strip()
     if 'community/join/' in invite_code:
         invite_code = invite_code.split('community/join/')[-1].strip()

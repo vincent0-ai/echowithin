@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
-import datetime, secrets, math
+import datetime, math
 from security import limits
 
 bp = Blueprint('tournaments', __name__)

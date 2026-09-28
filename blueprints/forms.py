@@ -1,9 +1,8 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, make_response, session, current_app
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
-import datetime, secrets, hashlib, re
+import datetime, secrets, hashlib
 from security import limits, encrypt_form_response, decrypt_form_response
-import database
 
 bp = Blueprint('forms', __name__)
 
@@ -184,7 +183,7 @@ def forms_create():
             'allow_anonymous': allow_anonymous,
         }
         m.forms_conf.insert_one(doc)
-        flash(f'Form created — share link copied.', 'success')
+        flash('Form created — share link copied.', 'success')
         return redirect(url_for('forms.form_responses_view', share_id=share_id))
     return render_template('form_create.html', active_page='forms')
 
@@ -194,7 +193,6 @@ def forms_create():
 @limits(calls=10, period=60)
 def api_create_form():
     import main as m
-    import json
     if getattr(current_user, 'is_guest', False):
         return jsonify({'error': 'Guest cannot create forms'}), 403
     data = request.get_json(silent=True) or {}
@@ -689,7 +687,7 @@ def form_responses_view(share_id):
 @login_required
 def form_responses_export(share_id):
     import main as m
-    import csv, io, json
+    import csv, io
     form = _decrypt_form_definition(m.forms_conf.find_one({'share_id': share_id}))
     if not form:
         return jsonify({'error':'Form not found'}),404

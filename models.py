@@ -2,10 +2,8 @@ import datetime
 import os
 import hashlib
 from bson.objectid import ObjectId
-from flask_login import UserMixin, current_user
-from flask import request
-from cachetools import TTLCache
-from config import TIER_LIMITS, PREMIUM_TRIAL_DAYS
+from flask_login import UserMixin
+from config import TIER_LIMITS
 import database
 from utils import get_user_tier, is_on_trial, get_trial_days_remaining
 

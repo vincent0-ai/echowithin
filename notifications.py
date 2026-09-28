@@ -4,12 +4,10 @@ import json
 import time
 import hashlib
 import hmac
-import secrets
 import re
 
 from flask import render_template, url_for
-from flask_mail import Mail, Message
-from flask_rq2 import RQ
+from flask_mail import Message
 from bson.objectid import ObjectId
 from pywebpush import webpush, WebPushException
 import cloudinary
@@ -567,7 +565,7 @@ def send_push_notification_async(user_id_str, title, body, url=None, tag=None, e
                 user_id_str, title, body, url=url, tag=tag, extra_data=extra_data, category=category
             )
             return
-    except Exception as e:
+    except Exception:
         pass
     send_push_notification_to_user(
         user_id_str, title, body, url=url, tag=tag, extra_data=extra_data, category=category

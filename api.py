@@ -209,7 +209,7 @@ def api_login():
 
             # Generate persistent token for native app session revival.
             # SECURITY: only the SHA-256 hash is stored at rest.
-            from security import create_app_token, hash_app_token
+            from security import create_app_token
             _app_token = create_app_token(user['_id'])
 
             resp = make_response(jsonify({
@@ -1118,7 +1118,6 @@ def api_get_note_versions(post_id):
     if not note:
         return jsonify({'error': 'Note not found or unauthorized'}), 404
 
-    current_plain = m._decrypt_note_record(note)
     versions = list(m.note_versions_conf.find({'note_id': obj_id}).sort('created_at', -1).limit(50))
     note_candidates = m._candidate_user_ids(
         note.get('content_owner_id'),

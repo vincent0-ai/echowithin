@@ -1,9 +1,8 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, make_response, abort, current_app
 from flask_login import login_required, current_user, login_user
 from bson.objectid import ObjectId
-import datetime, math, json, os, hashlib, secrets
-from security import limits, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip, _bf_hash_for_log
-from config import TIME
+import datetime, math, json, hashlib, secrets
+from security import limits, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip
 import hmac
 bp = Blueprint('profile', __name__, template_folder='templates')
 

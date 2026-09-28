@@ -1,7 +1,6 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, send_from_directory, abort, current_app, Response
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
-from bson.son import SON
 import datetime, math, json, random, os, re, hashlib
 from security import limits
 bp = Blueprint('blog', __name__, template_folder='templates')
@@ -1860,13 +1859,13 @@ def api_vote_comment(comment_id):
 
         if is_already_voted:
             # Remove the upvote (un-vote)
-            update_result = m.comments_conf.update_one(
+            m.comments_conf.update_one(
                 {'_id': comment_oid},
                 {'$pull': {'upvoted_by': user_id}, '$inc': {'upvote_count': -1}}
             )
         else:
             # Add the upvote
-            update_result = m.comments_conf.update_one(
+            m.comments_conf.update_one(
                 {'_id': comment_oid},
                 {'$addToSet': {'upvoted_by': user_id}, '$inc': {'upvote_count': 1}}
             )

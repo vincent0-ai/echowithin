@@ -1,10 +1,8 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, make_response, send_from_directory, send_file, abort, current_app
 from flask_login import login_required, current_user
-import datetime, os, json, hashlib, math, re
-from urllib.parse import urlparse, urljoin
+import datetime, os, json, hashlib, re
 from bson.objectid import ObjectId
 from security import limits, admin_required, brute_force_check, brute_force_record_failure, _bf_get_client_ip
-from config import get_env_variable
 
 def csrf_exempt(view):
     """Mark view as exempt from CSRF protection."""
@@ -17,7 +15,6 @@ bp = Blueprint('pages', __name__, template_folder='templates')
 @bp.route('/')
 @bp.route('/dashboard')
 def dashboard():
-    import main as m
     page_title = "EchoWithin - Secure Notes, Collaboration & Community"
     page_description = "EchoWithin is a modern platform for secure private notes, collaborative idea sharing, and surprise themed notes with photos and music. Join our community to organize your thoughts and let your voice echo within."
     meta_image = url_for('static', filename='logo-512.png', _external=True)
@@ -234,7 +231,6 @@ def android_assetlinks():
 
 @bp.route('/download/note-app.apk')
 def download_note_app_apk():
-    import main as m
     apk_path = os.path.join(current_app.static_folder, 'downloads', 'app-debug.apk')
     if not os.path.exists(apk_path):
         abort(404)
@@ -335,7 +331,6 @@ def contact_developer():
 
 @bp.route('/favicon.ico')
 def favicon():
-    import main as m
     favicon_path = os.path.join(current_app.root_path, 'static', 'favicon.ico')
     if os.path.exists(favicon_path):
         return send_from_directory(os.path.join(current_app.root_path, 'static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')

@@ -45,14 +45,6 @@ def _get_typesense():
     return _typesense
 
 
-def _build_node_config():
-    return {
-        'host': TYPESENSE_HOST,
-        'port': TYPESENSE_PORT,
-        'protocol': TYPESENSE_PROTOCOL,
-    }
-
-
 def create_typesense_client(api_key=None):
     key = api_key or TYPESENSE_ADMIN_KEY
     ts = _get_typesense()
@@ -87,7 +79,6 @@ def _ts_import_documents(collection_name, docs, action='upsert'):
 def _ts_upsert_document(collection_name, doc):
     """Upsert a single document via HTTP."""
     import requests
-    import json
     url = f"{TYPESENSE_PROTOCOL}://{TYPESENSE_HOST}:{TYPESENSE_PORT}/collections/{collection_name}/documents?action=upsert"
     headers = {
         'X-TYPESENSE-API-KEY': TYPESENSE_ADMIN_KEY,
@@ -215,7 +206,7 @@ def _check_typesense_health(client):
     try:
         key_resp = requests.get(test_url, headers={'X-TYPESENSE-API-KEY': TYPESENSE_ADMIN_KEY}, timeout=5)
         key_resp.raise_for_status()
-        logger.info(f'Typesense API key verified (has access to /keys)')
+        logger.info('Typesense API key verified (has access to /keys)')
     except Exception as e:
         logger.warning(f'Typesense API key may be incorrect — cannot access /keys: {e}')
 
@@ -224,7 +215,6 @@ def _init_typesense(max_retries=3):
     global ts_client, ts_posts, ts_notes
 
     # Wire module logger to root so gunicorn sees it
-    root = logging.getLogger()
     if not logger.handlers:
         logger.addHandler(logging.StreamHandler())
     logger.setLevel(logging.INFO)
@@ -274,7 +264,6 @@ def _init_typesense(max_retries=3):
 def _ts_create_collection(schema):
     """Create a Typesense collection via HTTP."""
     import requests
-    import json
     url = f"{TYPESENSE_PROTOCOL}://{TYPESENSE_HOST}:{TYPESENSE_PORT}/collections"
     headers = {
         'X-TYPESENSE-API-KEY': TYPESENSE_ADMIN_KEY,

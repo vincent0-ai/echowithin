@@ -2999,7 +2999,6 @@ def api_bond_qotd_generate_ai(bond_id):
         type_info = BOND_TYPES.get(bond_type, BOND_TYPES['custom'])
         relationship_label = type_info['label']
 
-        force_new = request.args.get('force_new', '').lower() in ('true', '1', 'yes')
         ai_question = None
         source = 'ai'
         community_question_id = None
@@ -4049,7 +4048,6 @@ def api_bond_insights_get(bond_id):
         partner_username = partner_user['username'] if partner_user else 'Partner'
 
         today = datetime.datetime.now(datetime.timezone.utc).date()
-        first_of_month = today.replace(day=1).isoformat()
 
         # --- 1. 30-Day Mood Comparison ---
         last_30_days = [(today - datetime.timedelta(days=i)).isoformat() for i in range(29, -1, -1)]
@@ -5882,9 +5880,11 @@ def api_bond_album_collage(bond_id):
 
     try:
         user_id_str = str(current_user.id)
-        bond_doc = _get_active_bond(bond_id, user_id_str)
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
         if not bond_doc:
             return jsonify({'error': 'Bond not found or not active'}), 404
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
 
         data = request.get_json(silent=True) or {}
         photo_ids = data.get('photo_ids')
@@ -7247,7 +7247,6 @@ def api_bond_offline_sync(bond_id):
     All datetimes are timezone-aware UTC.
     """
     import main as m
-    from security import parse_iso_utc
 
     try:
         bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
@@ -7741,7 +7740,6 @@ def api_bond_h2h(bond_id):
 
     for rec in records:
         ra = str(rec.get('user_a_id', ''))
-        rb = str(rec.get('user_b_id', ''))
         if user_id_str == ra:
             my_wins = rec.get('user_a_wins', 0)
             their_wins = rec.get('user_b_wins', 0)

@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, make_response, session
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, make_response, session, current_app
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, secrets, hashlib
@@ -309,7 +309,7 @@ def games_create():
                             correct = m.encrypt_game_data(correct, lobby_id)
 
                         questions.append({'label': q_label, 'options': opts, 'correct_option': correct})
-                except Exception as e:
+                except Exception:
                     flash('Invalid questions format.', 'danger')
                     return render_template('game_create.html', active_page='games')
             else:
@@ -433,7 +433,7 @@ def games_create():
                     image_url = m.optimize_cloudinary_url(upload_result.get('secure_url'))
                     image_public_id = upload_result.get('public_id')
                 except Exception as ex:
-                    logger.warning("Cloudinary upload failed for game caption photo: %s", ex)
+                    current_app.logger.warning("Cloudinary upload failed for game caption photo: %s", ex)
 
             if not image_url and caption_image_url:
                 image_url = caption_image_url
@@ -1344,7 +1344,6 @@ def live_show_podium(lobby_id):
 @bp.route('/api/game/<lobby_id>/live_state', methods=['GET'])
 def api_game_live_state(lobby_id):
     """Sync endpoint for clients joining mid-game or recovering connection."""
-    import main as m
     lobby = _get_lobby(lobby_id)
     if not lobby or not _is_lobby_active(lobby):
         return jsonify({'error': 'Lobby not found or expired'}), 404

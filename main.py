@@ -66,59 +66,33 @@ import random
 import re
 import sys
 import time
-import threading
 import secrets
 
-from flask import Flask, g, request, jsonify, render_template, url_for, redirect, session, flash, make_response, Response, send_from_directory, send_file, abort
+from flask import Flask, g, request, jsonify, render_template, url_for, redirect, session, flash, Response, abort
 import logging
 import math
 import redis
-import bleach
 import base64
 from flask_rq2 import RQ
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_login import LoginManager, logout_user, login_required, current_user
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from functools import wraps
-from flask_mail import Mail, Message
+from flask_mail import Mail
 from concurrent.futures import ThreadPoolExecutor
 import database
 import os
 from pymongo import MongoClient
-from pymongo.errors import DuplicateKeyError
-from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
-from bson.son import SON
-from ratelimit import limits as _limits_base, RateLimitException
-from security import (is_safe_url, is_same_origin_request, parse_iso_utc,
-    build_unified_diff_text, build_merge_preview_text, get_active_achievements,
-    limits, safe_object_id, admin_required, owner_required,
-    _derive_fernet_key, _get_notes_encryption_key, get_notes_fernet,
-    _get_user_fernet, _get_dm_fernet, encrypt_dm, decrypt_dm,
-    encrypt_note, decrypt_note, encrypt_bond_data, decrypt_bond_data, encrypt_form_response, decrypt_form_response, encrypt_game_data, decrypt_game_data, generate_signed_cloudinary_url, re_sign_cloudinary_url, destroy_cloudinary_media, _candidate_user_ids,
-    encrypt_media_bytes, decrypt_media_bytes, build_media_serve_url, media_serve_token_valid, is_media_proxy_url,
-    _decrypt_with_candidate_ids, _note_decryption_candidates,
-    _decrypt_note_record, _decrypt_note_metadata, _get_community_fernet,
-    encrypt_community_note, decrypt_community_note,
-    invalidate_note_decryption_cache,
-    generate_user_envelope_keys, generate_conversation_envelope_keys,
-    _get_user_fernet_v3, _get_dm_fernet_v3, _encrypt_dek, _decrypt_dek)
-from utils import (linkify_filter, _linkify_target_blank, markdown_filter,
+from ratelimit import RateLimitException
+from security import (safe_object_id,
+    encrypt_dm, decrypt_dm, generate_signed_cloudinary_url, re_sign_cloudinary_url,
+    decrypt_media_bytes, build_media_serve_url, media_serve_token_valid, is_media_proxy_url)
+from utils import (linkify_filter, markdown_filter,
     from_timestamp_filter, to_iso_filter, to_local_filter, localtime_filter,
     optimize_cloudinary_url, extract_cloudinary_public_id,
-    cleanup_share_media, cleanup_post_media,
-    get_user_tier, get_limit, is_premium, is_on_trial, get_trial_days_remaining,
-    _note_to_typesense_doc, _is_ios_web_push_subscription,
-    _remove_stale_push_subscription, index_note_to_typesense,
-    remove_note_from_typesense, remove_notes_from_typesense,
-    reindex_user_notes_to_typesense, _post_to_typesense_doc,
     index_post_to_typesense, reindex_all_posts_to_typesense,
-    reindex_all_notes_to_typesense,
-    comment_count_cache, get_batch_comment_counts, prepare_posts,
-    get_public_posts_filter, calculate_hot_score, _serialize_comment, _get_user_badge_count,
-    _invalidate_badge_cache, _has_active_auto_approve,
-    can_dm, fetch_link_preview, _deliver_scheduled_message,
-    _nlp_suggest_tags, get_zen_quote, is_blocked_by)
-from models import User, load_user, load_user_from_request
+    _invalidate_badge_cache, can_dm, fetch_link_preview)
+from models import load_user, load_user_from_request
 # Import and register blueprints
 from blueprints.pages import bp as pages_bp
 from blueprints.auth import bp as auth_bp
@@ -138,49 +112,101 @@ from blueprints.game import bp as game_bp
 from blueprints.vault import bp as vault_bp
 from api import api_bp
 
-from notifications import (send_code, send_reset_code, send_account_deletion_code, send_new_post_notifications,
-    send_weekly_newsletter, send_push_notification_to_user, send_push_notification_async,
-    send_admin_broadcast_push, send_push_notifications_for_new_post,
-    send_fcm_notification_to_user, send_fcm_notifications_batch,
-    send_push_notification_for_comment, process_image_for_nsfw,
-    send_log_email_job, send_ntfy_notification, notify_saved_note_clones)
-import secrets
-from cachetools import cached, TTLCache
+from notifications import (send_new_post_notifications, send_push_notification_async,
+    process_image_for_nsfw, send_ntfy_notification)
+from cachetools import TTLCache
 import requests
-from werkzeug.utils import secure_filename
-import hmac
-from slugify import slugify
 import cloudinary
 import cloudinary.uploader
 import json
 from logging.handlers import RotatingFileHandler
-import markdown
-import html
-import difflib
 from pythonjsonlogger import jsonlogger
-from requests_oauthlib import OAuth2Session
 from werkzeug.middleware.proxy_fix import ProxyFix
 # Typesense full-text search — see typesense_client.py
 from PIL import Image
-from io import BytesIO
-from pywebpush import webpush, WebPushException
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from flask_wtf.csrf import CSRFProtect
-from urllib.parse import urlparse, urljoin
 
-from config import (clean_xml_text, get_env_variable, ENGAGEMENT_WEIGHTS,
-    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, UPLOAD_FOLDER,
+from config import (get_env_variable, UPLOAD_FOLDER, TEMP_UPLOAD_FOLDER,
+    BYPASS_RATE_LIMIT, PREMIUM_PRICE_KSH, FIREBASE_AVAILABLE,
+    REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, TIER_LIMITS,
+    clean_xml_text, ENGAGEMENT_WEIGHTS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
     ALLOWED_IMAGE_EXTENSIONS, ALLOWED_VIDEO_EXTENSIONS, ALLOWED_AUDIO_EXTENSIONS,
-    ALLOWED_DOCUMENT_EXTENSIONS,
-    MAX_VIDEO_SIZE, MAX_IMAGE_SIZE, TEMP_UPLOAD_FOLDER,
-    CLOUDINARY_RAW_UPLOAD_LIMIT, VIDEO_COMPRESSION_TIMEOUT,
-    VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD,
-    TIME, BYPASS_RATE_LIMIT, _NOTES_KDF_ITERATIONS, _NOTES_V1_SALT,
-    TIER_LIMITS, PREMIUM_TRIAL_DAYS, PREMIUM_PRICE_KSH,
-    VAULT_PIN_LENGTH, VAULT_AUTO_LOCK_MINUTES, VAULT_MAX_FILE_SIZE, VAULT_KDF_ITERATIONS,
-    PREDEFINED_TAGS, _TAG_KEYWORDS, FIREBASE_AVAILABLE)
+    ALLOWED_DOCUMENT_EXTENSIONS, MAX_VIDEO_SIZE, MAX_IMAGE_SIZE,
+    CLOUDINARY_RAW_UPLOAD_LIMIT, VIDEO_COMPRESSION_TIMEOUT, VAPID_PRIVATE_KEY,
+    VAPID_PUBLIC_KEY, TIME, _NOTES_KDF_ITERATIONS, _NOTES_V1_SALT,
+    PREMIUM_TRIAL_DAYS, VAULT_PIN_LENGTH, VAULT_AUTO_LOCK_MINUTES,
+    VAULT_MAX_FILE_SIZE, VAULT_KDF_ITERATIONS, PREDEFINED_TAGS, _TAG_KEYWORDS)
+
+# Re-exports for backward compatibility with existing tests and integrations
+from security import (
+    encrypt_note, decrypt_note, _derive_fernet_key, _candidate_user_ids,
+    _decrypt_note_record, _decrypt_note_metadata, encrypt_community_note,
+    decrypt_community_note, encrypt_bond_data, decrypt_bond_data,
+    encrypt_form_response, decrypt_form_response, encrypt_game_data,
+    decrypt_game_data, _get_notes_encryption_key, get_notes_fernet,
+    _get_user_fernet, _get_dm_fernet, destroy_cloudinary_media,
+    encrypt_media_bytes, _decrypt_with_candidate_ids, _note_decryption_candidates,
+    invalidate_note_decryption_cache, generate_user_envelope_keys,
+    generate_conversation_envelope_keys, _get_user_fernet_v3, _get_dm_fernet_v3,
+    _encrypt_dek, _decrypt_dek, limits, admin_required, owner_required,
+    parse_iso_utc, build_unified_diff_text, build_merge_preview_text,
+    get_active_achievements, is_safe_url, is_same_origin_request
+)
+from utils import (
+    _linkify_target_blank, cleanup_share_media, cleanup_post_media,
+    get_user_tier, get_limit, is_premium, is_on_trial, get_trial_days_remaining,
+    _note_to_typesense_doc, _is_ios_web_push_subscription, _remove_stale_push_subscription,
+    index_note_to_typesense, remove_note_from_typesense, remove_notes_from_typesense,
+    reindex_user_notes_to_typesense, _post_to_typesense_doc, reindex_all_notes_to_typesense,
+    comment_count_cache, get_batch_comment_counts, prepare_posts,
+    get_public_posts_filter, calculate_hot_score, _serialize_comment,
+    _get_user_badge_count, _has_active_auto_approve, _deliver_scheduled_message,
+    _nlp_suggest_tags, get_zen_quote, is_blocked_by
+)
+from models import User
+from notifications import (
+    send_code, send_reset_code, send_account_deletion_code,
+    send_weekly_newsletter, send_push_notification_to_user,
+    send_admin_broadcast_push, send_push_notifications_for_new_post,
+    send_fcm_notification_to_user, send_fcm_notifications_batch,
+    send_push_notification_for_comment, send_log_email_job, notify_saved_note_clones
+)
+
+__all__ = [
+    'app', 'csrf', 'User', 'clean_xml_text', 'encrypt_note', 'decrypt_note',
+    '_derive_fernet_key', '_candidate_user_ids', '_decrypt_note_record',
+    '_decrypt_note_metadata', 'encrypt_community_note', 'decrypt_community_note',
+    'encrypt_bond_data', 'decrypt_bond_data', 'encrypt_form_response',
+    'decrypt_form_response', 'encrypt_game_data', 'decrypt_game_data',
+    '_get_notes_encryption_key', 'get_notes_fernet', '_get_user_fernet',
+    '_get_dm_fernet', 'destroy_cloudinary_media', 'encrypt_media_bytes',
+    '_decrypt_with_candidate_ids', '_note_decryption_candidates',
+    'invalidate_note_decryption_cache', 'generate_user_envelope_keys',
+    'generate_conversation_envelope_keys', '_get_user_fernet_v3', '_get_dm_fernet_v3',
+    '_encrypt_dek', '_decrypt_dek', 'limits', 'admin_required', 'owner_required',
+    'parse_iso_utc', 'build_unified_diff_text', 'build_merge_preview_text',
+    'get_active_achievements', 'is_safe_url', 'is_same_origin_request',
+    '_linkify_target_blank', 'cleanup_share_media', 'cleanup_post_media',
+    'get_user_tier', 'get_limit', 'is_premium', 'is_on_trial', 'get_trial_days_remaining',
+    '_note_to_typesense_doc', '_is_ios_web_push_subscription', '_remove_stale_push_subscription',
+    'index_note_to_typesense', 'remove_note_from_typesense', 'remove_notes_from_typesense',
+    'reindex_user_notes_to_typesense', '_post_to_typesense_doc', 'reindex_all_notes_to_typesense',
+    'comment_count_cache', 'get_batch_comment_counts', 'prepare_posts',
+    'get_public_posts_filter', 'calculate_hot_score', '_serialize_comment',
+    '_get_user_badge_count', '_has_active_auto_approve', '_deliver_scheduled_message',
+    '_nlp_suggest_tags', 'get_zen_quote', 'is_blocked_by', 'send_code', 'send_reset_code',
+    'send_account_deletion_code', 'send_weekly_newsletter', 'send_push_notification_to_user',
+    'send_admin_broadcast_push', 'send_push_notifications_for_new_post',
+    'send_fcm_notification_to_user', 'send_fcm_notifications_batch',
+    'send_push_notification_for_comment', 'send_log_email_job', 'notify_saved_note_clones',
+    'ENGAGEMENT_WEIGHTS', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET',
+    'ALLOWED_IMAGE_EXTENSIONS', 'ALLOWED_VIDEO_EXTENSIONS', 'ALLOWED_AUDIO_EXTENSIONS',
+    'ALLOWED_DOCUMENT_EXTENSIONS', 'MAX_VIDEO_SIZE', 'MAX_IMAGE_SIZE',
+    'CLOUDINARY_RAW_UPLOAD_LIMIT', 'VIDEO_COMPRESSION_TIMEOUT', 'VAPID_PRIVATE_KEY',
+    'VAPID_PUBLIC_KEY', 'TIME', '_NOTES_KDF_ITERATIONS', '_NOTES_V1_SALT',
+    'PREMIUM_TRIAL_DAYS', 'VAULT_PIN_LENGTH', 'VAULT_AUTO_LOCK_MINUTES',
+    'VAULT_MAX_FILE_SIZE', 'VAULT_KDF_ITERATIONS', 'PREDEFINED_TAGS', '_TAG_KEYWORDS'
+]
 
 
 
@@ -540,7 +566,6 @@ if FIREBASE_AVAILABLE:
         if firebase_creds_json:
             # If the string doesn't start with '{', assume it's base64 encoded
             if not firebase_creds_json.strip().startswith('{'):
-                import base64
                 try:
                     firebase_creds_json = base64.b64decode(firebase_creds_json).decode('utf-8')
                 except Exception as b_err:
@@ -1733,7 +1758,6 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
                 try:
                     with Image.open(path) as im:
                         # Convert PNG with transparency to RGB if necessary for JPEG optimization
-                        im_format = im.format
                         max_size = (1600, 1600)
                         im.thumbnail(max_size, Image.Resampling.LANCZOS)
                         # Overwrite temp file with optimized WebP version (~30% smaller than JPEG)
@@ -4109,7 +4133,6 @@ def handle_send_dm(data=None, *args, **kwargs):
     reply_to_id = data.get('reply_to_id')
     image_url = data.get('image_url')
     image_public_id = data.get('image_public_id')
-    image_resource_type = data.get('image_resource_type', 'image')
     mime_type = data.get('mime_type')
     media_encrypted = is_media_proxy_url(image_url)
     message_type = data.get('message_type', 'text')

@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, math, hashlib, hmac, secrets, requests
-from security import limits, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip, _bf_hash_for_log, mask_email
+from security import limits, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip, mask_email
 from config import get_env_variable
 try:
     from jigsawstack import JigsawStack
@@ -962,7 +962,6 @@ def reindex_my_notes():
 @limits(calls=20, period=60)
 def merge_conflict_ai():
     """Uses JigsawStack AI to intelligently resolve merge conflicts between two versions."""
-    import main as m
     try:
         data = request.get_json() or {}
         current_content = data.get('current_content', '')
@@ -1699,7 +1698,6 @@ def app_lock_remove():
 @login_required
 def app_lock_check_status():
     """Check if the app lock session is still valid (for visibility change m.re-checks)."""
-    import main as m
     unlock_ts = session.get('app_lock_unlocked_at')
     if not unlock_ts:
         return jsonify({'unlocked': False})
@@ -1714,7 +1712,6 @@ def app_lock_check_status():
 @login_required
 def app_lock_relock():
     """Clear the app lock session state to relock the locked notes tab."""
-    import main as m
     session.pop('app_lock_unlocked_at', None)
     return jsonify({'success': True})
 
@@ -1749,7 +1746,7 @@ def app_lock_forgot():
 
     # Send the code via email using the pin_reset_email template
     try:
-        from notifications import _get_mail, _get_app
+        from notifications import _get_mail
         from flask_mail import Message as MailMessage
         sender = f"EchoWithin <{get_env_variable('MAIL_USERNAME')}>"
         msg = MailMessage(
@@ -1761,7 +1758,7 @@ def app_lock_forgot():
         msg.body = f"Your EchoWithin App Lock PIN reset code is: {gen_code}\n\nThis code expires in 15 minutes. If you didn't request this, please ignore this email."
         _get_mail().send(msg)
         # SECURITY: never log the verification code itself.
-        current_app.logger.info(f"PIN reset code sent to masked account.")
+        current_app.logger.info("PIN reset code sent to masked account.")
     except Exception as e:
         current_app.logger.error(f"Failed to send PIN reset email to masked account: {e}")
         return jsonify({'error': 'Failed to send verification email. Please try again.'}), 500

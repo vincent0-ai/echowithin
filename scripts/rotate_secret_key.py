@@ -60,11 +60,8 @@ import sys
 import os
 import argparse
 import time
-import base64
 import json
 import datetime
-import hmac
-import hashlib
 import getpass
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

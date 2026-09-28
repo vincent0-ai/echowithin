@@ -9,7 +9,6 @@ It is intended to be run hourly by the scheduler.py script.
 """
 
 import os
-import sys
 import datetime
 
 from dotenv import load_dotenv

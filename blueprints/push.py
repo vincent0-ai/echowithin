@@ -209,7 +209,6 @@ def get_unread_notification_count():
                 return jsonify({'unread_count': int(cached)})
         except Exception:
             pass
-    now = datetime.datetime.now(datetime.timezone.utc)
     user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)}, {'last_activity_check': 1, 'activity_check_per_post': 1})
     if not user_doc:
         return jsonify({'unread_count': 0})

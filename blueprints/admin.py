@@ -4,7 +4,6 @@ from bson.objectid import ObjectId
 from bson.son import SON
 import datetime, os, json, csv, re
 from io import StringIO
-from urllib.parse import urljoin
 from security import admin_required
 bp = Blueprint('admin', __name__, template_folder='templates')
 

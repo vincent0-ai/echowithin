@@ -10,7 +10,6 @@ so the message is never lost — the 6-second client polling will pick it up.
 """
 
 import os
-import sys
 import datetime
 import requests
 from dotenv import load_dotenv

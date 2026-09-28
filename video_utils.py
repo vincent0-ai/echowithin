@@ -10,7 +10,6 @@ import logging
 import os
 import secrets
 import subprocess
-import tempfile
 
 logger = logging.getLogger(__name__)
 

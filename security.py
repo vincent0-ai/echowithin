@@ -1,9 +1,7 @@
 import base64
-import json
 import hashlib
 import datetime
 import difflib
-import os
 import re
 import hmac
 import time as _time
@@ -20,7 +18,7 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from ratelimit import RateLimitException
-from config import BYPASS_RATE_LIMIT, _NOTES_KDF_ITERATIONS, _NOTES_V1_SALT, get_env_variable, FIREBASE_AVAILABLE
+from config import BYPASS_RATE_LIMIT, _NOTES_KDF_ITERATIONS, _NOTES_V1_SALT
 import database
 from cachetools import TTLCache
 
@@ -527,21 +525,6 @@ def brute_force_clear(kind, account, ip=None):
     """Public clear helper to call on success."""
     ip = ip or _bf_get_client_ip()
     _bf_clear(kind, account, ip)
-
-
-def _bf_is_locked(kind, account, ip=None):
-    tier, count, retry, ttl = brute_force_check(kind, account, ip)
-    return tier == 'lockout', retry, count
-
-
-def _bf_log_login_failed(account, ip, count, tier):
-    try:
-        _get_app().logger.info(
-            f"login_failed account_hash={_bf_hash_for_log(account)} ip={ip} count={count} tier={tier}",
-            extra={'event': 'login_failed', 'kind': 'login', 'account_hash': _bf_hash_for_log(account), 'ip': ip, 'count': count, 'tier': tier}
-        )
-    except Exception:
-        pass
 
 
 # --- Encryption utilities for personal notes ---
@@ -1204,13 +1187,13 @@ def decrypt_note(encrypted_content, user_id=None):
     try:
         f = get_notes_fernet()
         return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
-    except Exception as e:
+    except Exception:
         # Last resort: might be a legacy unencrypted note (pre-encryption era).
         # Only return raw content if it looks like valid UTF-8 text, not ciphertext.
         if encrypted_content and not encrypted_content.startswith('gAAAAA'):
-            _get_app().logger.debug(f"Returning legacy unencrypted note content")
+            _get_app().logger.debug("Returning legacy unencrypted note content")
             return encrypted_content
-        _get_app().logger.warning(f"Note decryption failed for all key versions")
+        _get_app().logger.warning("Note decryption failed for all key versions")
         return '[Content unavailable \u2014 decryption error]'
 
 

@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, current_app
+from flask import Blueprint, request, jsonify, render_template, url_for, current_app
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, json, os, re, secrets
@@ -915,7 +915,6 @@ def api_schedule_message():
         scheduled_at_str = data.get('scheduled_at')
         image_url = data.get('image_url')
         image_public_id = data.get('image_public_id')
-        image_resource_type = data.get('image_resource_type', 'image')
         mime_type = data.get('mime_type')
         media_encrypted = bool(mime_type) or bool(data.get('media_encrypted')) or m.is_media_proxy_url(image_url or '')
         reply_to_id = data.get('reply_to_id')

@@ -23,15 +23,23 @@ if env_file.exists():
                 k, v = line.split('=', 1)
                 os.environ.setdefault(k.strip(), v.strip())
 
-DOKPLOY_URL = os.getenv('DOKPLOY_URL', 'http://193.181.209.169:3000').rstrip('/')
+DOKPLOY_URL = os.getenv('DOKPLOY_URL', '').rstrip('/')
 DOKPLOY_API_KEY = os.getenv('DOKPLOY_API_KEY', '')
-APPLICATION_ID = os.getenv('DOKPLOY_APP_ID', '_EYWgldNC_n-ZSCJ_N6VA')
+APPLICATION_ID = os.getenv('DOKPLOY_APP_ID', '')
 
 
 def api_request(endpoint, data=None):
     """Execute an authenticated request to the Dokploy REST API."""
+    if not DOKPLOY_URL:
+        print("[ERROR] DOKPLOY_URL not set. Add it to .env or set as env var.",
+              file=sys.stderr)
+        sys.exit(1)
     if not DOKPLOY_API_KEY:
         print("[ERROR] DOKPLOY_API_KEY not set. Add it to .env or set as env var.",
+              file=sys.stderr)
+        sys.exit(1)
+    if not APPLICATION_ID:
+        print("[ERROR] DOKPLOY_APP_ID not set. Add it to .env or set as env var.",
               file=sys.stderr)
         sys.exit(1)
     url = f"{DOKPLOY_URL}{endpoint}"
@@ -92,7 +100,8 @@ def cmd_status():
             cert = d.get('certificateType')
             print(f"   - {'https://' if https else 'http://'}{host} -> port {port} (Cert: {cert})")
 
-    deployments = app.get('deployments', [])
+    deploy_list = api_request(f"/api/deployment.all?applicationId={APPLICATION_ID}")
+    deployments = deploy_list if isinstance(deploy_list, list) and deploy_list else app.get('deployments', [])
     if deployments:
         latest = deployments[0]
         print("\n Latest Deployment:")

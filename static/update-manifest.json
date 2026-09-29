@@ -1,7 +1,7 @@
 {
-  "versionCode": 43,
-  "versionName": "1.11.0",
+  "versionCode": 44,
+  "versionName": "1.12.0",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.11.0 Task Reminders, Interactive Checklists & Note Colors:\n• Exact Offline-Safe Reminders: Exact alarm scheduling, notifications with Snooze 15m and Mark Done actions, and reboot persistence\n• Interactive Checklists: 1-tap checkbox toggling (- [ ] ↔ - [x]) directly in note reading mode with haptic feedback and instant persistence\n• Smart Enter Auto-Continuation: Auto-continuation of checklists in note editor and dedicated toolbar button\n• Note Color Palette: 6 theme-adaptive pastel color tints for cards and note details\n• Quick Filter Chips: Instant filtering on home screen by All, Reminders ⏰, Tasks ☑, and Pinned 📌\n• Full offline-first sync for reminder times and note color tags",
-  "sha256": "D2F988FF9F621BD9FF5F5B9D40E2EB64204859F5883CFFF55FB473D768A71BDD"
+  "changelog": "v1.12.0 Arcade & Games Section Upgrade:\n• Tic-Tac-Toe Smart AI: Ported web heuristic engine with 3 difficulty modes (Casual, Balanced, and Unbeatable with fork creation/blocking)\n• Visual Win Highlights: Highlights winning 3-in-a-row tiles in Tic-Tac-Toe and 4 connected discs in Connect Four\n• Connect Four VS AI: Play solo against a smart AI opponent with instant win/block and column heuristics\n• Retro Snake Swipe Controls: Smooth swipe/drag gesture controls anywhere on the board\n• Tactile Haptics: Native vibrations for cell moves, disc drops, eating snake food, wins, and draws\n• Persistent Game Stats: Win/loss/draw records and high scores saved locally across sessions",
+  "sha256": "C44F92FFBA6DCB2989887ED3BA3FC13EF3EE2CB4AFBBF909341419A0E984C228"
 }

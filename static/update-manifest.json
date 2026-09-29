@@ -1,7 +1,7 @@
 {
-  "versionCode": 45,
-  "versionName": "1.13.0",
+  "versionCode": 46,
+  "versionName": "1.13.1",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.13.0 In-App Custom Tabs & Couples Co-op Games:\n• In-App Branded Tabs: Seamlessly play web arcade classics, host party lobbies, and join room PINs inside the app using Chrome Custom Tabs\n• Couples & Co-op Category: Added Word Bond: Duet and Team Crossword for live partner play\n• Caption This Party Room: Added quirky caption competition room to party games\n• One-Tap Return: Branded in-app navigation keeps users inside EchoWithin without bouncing to external browsers",
-  "sha256": "3B9D8C5498079F2EAC1CF9C5BCF6C7D5BC5C4A9690FEE423D7C99A5EADAAE348"
+  "changelog": "v1.13.1 Fix Web Arcade URLs:\n• Fixed game URLs in mobile app to accurately match website routes (/games/floppy-bird, /games/ping-pong, /games/slime-volleyball, /games/dots-and-boxes, /games/team-crossword)\n• Games now launch smoothly in full-screen without 404 errors",
+  "sha256": "9916596C266E76ED79FF40113CA162FE8ABF764BDEAD8D55D444A3450819B024"
 }

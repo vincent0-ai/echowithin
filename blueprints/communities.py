@@ -897,6 +897,7 @@ def api_delete_community_note(note_id):
 def view_shared_community_note(share_id):
     """Public view for a shared community note."""
     import main as m
+    from blueprints.sharing import _resolve_surprise_media_url
     note = m.community_notes_conf.find_one({'share_id': share_id})
     if not note:
         return render_template('shared_note.html', expired=True), 410
@@ -946,8 +947,8 @@ def view_shared_community_note(share_id):
                            reference='',
                            tags=note.get('tags', []),
                            is_valentine=(surprise_theme != 'none'),
-                           valentine_photo=m._resolve_surprise_media_url(note, 'valentine_photo', 'image/jpeg') if hasattr(m, '_resolve_surprise_media_url') else note.get('valentine_photo'),
-                           valentine_audio=m._resolve_surprise_media_url(note, 'valentine_audio', 'audio/mpeg') if hasattr(m, '_resolve_surprise_media_url') else note.get('valentine_audio'),
+                           valentine_photo=_resolve_surprise_media_url(note, 'valentine_photo', 'image/jpeg'),
+                           valentine_audio=_resolve_surprise_media_url(note, 'valentine_audio', 'audio/mpeg'),
                            use_typewriter=note.get('use_typewriter', False),
                            owner_max_chars=m.get_limit(m.users_conf.find_one({'_id': note.get('author_id')}), 'max_chars_per_note'),
                            note_attachments=[],

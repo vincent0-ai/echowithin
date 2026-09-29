@@ -77,11 +77,14 @@ from flask_rq2 import RQ
 from flask_login import LoginManager, logout_user, login_required, current_user
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from functools import wraps
-from flask_mail import Mail
+from flask_mail import Mail, Message
 from concurrent.futures import ThreadPoolExecutor
 import database
 import os
 from pymongo import MongoClient
+from pymongo.errors import DuplicateKeyError
+import bleach
+from slugify import slugify
 from bson.objectid import ObjectId
 from ratelimit import RateLimitException
 from security import (safe_object_id,
@@ -91,7 +94,8 @@ from utils import (linkify_filter, markdown_filter,
     from_timestamp_filter, to_iso_filter, to_local_filter, localtime_filter,
     optimize_cloudinary_url, extract_cloudinary_public_id,
     index_post_to_typesense, reindex_all_posts_to_typesense,
-    _invalidate_badge_cache, can_dm, fetch_link_preview)
+    _invalidate_badge_cache, can_dm, fetch_link_preview,
+    cascade_delete_user_data)
 from models import load_user, load_user_from_request
 # Import and register blueprints
 from blueprints.pages import bp as pages_bp
@@ -121,6 +125,7 @@ import cloudinary.uploader
 import json
 from logging.handlers import RotatingFileHandler
 from pythonjsonlogger import jsonlogger
+from requests_oauthlib import OAuth2Session
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash, check_password_hash
 # Typesense full-text search — see typesense_client.py
@@ -207,7 +212,9 @@ __all__ = [
     'VAPID_PUBLIC_KEY', 'TIME', '_NOTES_KDF_ITERATIONS', '_NOTES_V1_SALT',
     'PREMIUM_TRIAL_DAYS', 'VAULT_PIN_LENGTH', 'VAULT_AUTO_LOCK_MINUTES',
     'VAULT_MAX_FILE_SIZE', 'VAULT_KDF_ITERATIONS', 'PREDEFINED_TAGS', '_TAG_KEYWORDS',
-    'generate_password_hash', 'check_password_hash'
+    'generate_password_hash', 'check_password_hash',
+    'OAuth2Session', 'bleach', 'slugify', 'Message', 'DuplicateKeyError',
+    'cascade_delete_user_data'
 ]
 
 

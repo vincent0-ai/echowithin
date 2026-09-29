@@ -3313,6 +3313,7 @@
             ).join('') + '</div>';
         }
 
+        // --- Action buttons per status ---
         let actionsHtml = '';
         if (g.status === 'proposed' && g.proposed_by !== currentUserId) {
             actionsHtml = '<div class="goal-actions">' +
@@ -3326,7 +3327,17 @@
                 '<button class="btn btn-bond-secondary" onclick="abandonGoal(\'' + g.id + '\', \'' + bondId + '\')">Abandon</button></div>';
         } else if (g.status === 'proposed' && g.proposed_by === currentUserId) {
             actionsHtml = '<div class="goal-actions">' +
-                '<button class="btn btn-bond-secondary" onclick="showGoalEditForm(\'' + g.id + '\', \'' + bondId + '\')">Edit</button></div>';
+                '<button class="btn btn-bond-secondary" onclick="showGoalEditForm(\'' + g.id + '\', \'' + bondId + '\')">Edit</button>' +
+                '<button class="btn btn-bond-secondary" onclick="abandonGoal(\'' + g.id + '\', \'' + bondId + '\')">Withdraw</button></div>';
+        } else if (g.status === 'completed') {
+            actionsHtml = '<div class="goal-actions">' +
+                '<button class="btn btn-bond-primary" onclick="restartGoal(\'' + g.id + '\', \'' + bondId + '\')">Restart</button>' +
+                '<button class="btn btn-bond-secondary" onclick="deleteGoal(\'' + g.id + '\', \'' + bondId + '\')">Delete</button></div>';
+        } else if (g.status === 'abandoned') {
+            actionsHtml = '<div class="goal-actions">' +
+                '<button class="btn btn-bond-primary" onclick="reactivateGoal(\'' + g.id + '\', \'' + bondId + '\')">Reactivate</button>' +
+                '<button class="btn btn-bond-secondary" onclick="restartGoal(\'' + g.id + '\', \'' + bondId + '\')">Restart</button>' +
+                '<button class="btn btn-bond-secondary" onclick="deleteGoal(\'' + g.id + '\', \'' + bondId + '\')">Delete</button></div>';
         }
 
         let checkinForm = '';
@@ -3337,23 +3348,11 @@
                 '<button class="btn btn-bond-primary" onclick="submitCheckin(\'' + g.id + '\', \'' + bondId + '\')">Log Progress</button></div>';
         }
 
-        let myLogged = 0;
-        let partnerLogged = 0;
-        let myCheckinCount = 0;
-        let partnerCheckinCount = 0;
-
-        if (g.check_ins && g.check_ins.length > 0) {
-            g.check_ins.forEach(ci => {
-                const val = parseFloat(ci.value) || 0;
-                if (ci.user_id === currentUserId) {
-                    myLogged += val;
-                    myCheckinCount++;
-                } else {
-                    partnerLogged += val;
-                    partnerCheckinCount++;
-                }
-            });
-        }
+        // --- Use server-computed totals (from ALL check-ins) ---
+        const myLogged = g.user_total_value != null ? g.user_total_value : 0;
+        const partnerLogged = g.partner_total_value != null ? g.partner_total_value : 0;
+        const myCheckinCount = g.user_checkin_count != null ? g.user_checkin_count : 0;
+        const partnerCheckinCount = g.partner_checkin_count != null ? g.partner_checkin_count : 0;
         const totalLoggedVal = myLogged + partnerLogged;
 
         let checkinHistoryHtml = '';
@@ -3367,8 +3366,10 @@
                        (ci.note ? '<div class="checkin-history-note">' + escHtml(ci.note) + '</div>' : '') +
                        '</div>';
             }).join('');
+            const totalCount = g.total_checkin_count || g.check_ins.length;
+            const shownNote = totalCount > g.check_ins.length ? '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.3rem;">Showing last ' + g.check_ins.length + ' of ' + totalCount + ' check-ins</div>' : '';
             checkinHistoryHtml = '<div style="margin-top: 0.4rem;"><button class="btn btn-bond-secondary" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;" onclick="document.getElementById(\'history-' + g.id + '\').classList.toggle(\'active\')">History</button></div>' +
-                                 '<div class="checkin-history" id="history-' + g.id + '">' + historyItems + '</div>';
+                                 '<div class="checkin-history" id="history-' + g.id + '">' + historyItems + shownNote + '</div>';
         }
 
         let effectiveTarget = g.target_value || 0;
@@ -3382,26 +3383,35 @@
             completedMsCount = g.milestones.filter(m => m.completed).length;
         }
 
+        // --- Progress display: hide raw bars for completed goals ---
         let progressHtml = '';
-        if (effectiveTarget > 0) {
-            const pct = Math.min(100, Math.max(0, (g.current_value / effectiveTarget) * 100));
-            progressHtml = '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + pct + '%"></div></div>' +
-                '<div class="goal-progress-text">' + g.current_value + ' / ' + effectiveTarget + ' ' + escHtml(g.unit || '') + ' (' + Math.round(pct) + '%)</div>';
-        } else if (totalMsCount > 0) {
-            const msPct = Math.min(100, Math.max(0, (completedMsCount / totalMsCount) * 100));
-            progressHtml = '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + msPct + '%"></div></div>' +
-                '<div class="goal-progress-text">Checklist: ' + completedMsCount + ' / ' + totalMsCount + ' milestones completed (' + Math.round(msPct) + '%)</div>';
-        } else if (g.current_value > 0) {
-            const fillPct = Math.min(100, Math.max(10, g.current_value <= 100 ? g.current_value : 100));
-            progressHtml = '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + fillPct + '%"></div></div>' +
-                '<div class="goal-progress-text">' + g.current_value + ' ' + escHtml(g.unit || '') + ' logged so far</div>';
+        if (g.status !== 'completed') {
+            if (effectiveTarget > 0) {
+                // Cap displayed value at the target for cleaner display
+                const displayValue = Math.min(g.current_value, effectiveTarget);
+                const pct = Math.min(100, Math.max(0, (g.current_value / effectiveTarget) * 100));
+                const barOpacity = g.status === 'abandoned' ? ' opacity:0.5;' : '';
+                progressHtml = '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + pct + '%;' + barOpacity + '"></div></div>' +
+                    '<div class="goal-progress-text">' + displayValue + ' / ' + effectiveTarget + ' ' + escHtml(g.unit || '') + ' (' + Math.round(pct) + '%)' +
+                    (g.status === 'abandoned' ? ' <span style="color:var(--text-muted);font-style:italic;">— at abandonment</span>' : '') + '</div>';
+            } else if (totalMsCount > 0) {
+                const msPct = Math.min(100, Math.max(0, (completedMsCount / totalMsCount) * 100));
+                progressHtml = '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + msPct + '%"></div></div>' +
+                    '<div class="goal-progress-text">Checklist: ' + completedMsCount + ' / ' + totalMsCount + ' milestones completed (' + Math.round(msPct) + '%)</div>';
+            } else if (g.current_value > 0) {
+                const fillPct = Math.min(100, Math.max(10, g.current_value <= 100 ? g.current_value : 100));
+                progressHtml = '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + fillPct + '%"></div></div>' +
+                    '<div class="goal-progress-text">' + g.current_value + ' ' + escHtml(g.unit || '') + ' logged so far</div>';
+            }
         }
 
+        // --- Contribution split: only show for active goals or if there's logged data ---
         let contributionSplitHtml = '';
-        if (totalLoggedVal > 0) {
+        if (totalLoggedVal > 0 && g.status !== 'completed') {
             const myContribPct = Math.round((myLogged / totalLoggedVal) * 100);
             const partnerContribPct = 100 - myContribPct;
-            contributionSplitHtml = '<div class="goal-split-bar" style="display:flex; height:6px; border-radius:3px; overflow:hidden; background:#eee; margin-top:0.35rem;" title="Contribution Split">' +
+            const splitOpacity = g.status === 'abandoned' ? ' opacity:0.5;' : '';
+            contributionSplitHtml = '<div class="goal-split-bar" style="display:flex; height:6px; border-radius:3px; overflow:hidden; background:#eee; margin-top:0.35rem;' + splitOpacity + '" title="Contribution Split">' +
                 '<div style="width:' + myContribPct + '%; background:var(--primary-dark-color, #3e2217);"></div>' +
                 '<div style="width:' + partnerContribPct + '%; background:#8d5b4c;"></div>' +
                 '</div>' +
@@ -3411,9 +3421,10 @@
                 '</div>';
         }
 
+        // --- Completion badge for completed goals ---
         let completionBadgeHtml = '';
         if (g.status === 'completed') {
-            let topContributor = 'Equal Split';
+            let topContributor = 'Equal';
             if (myLogged > partnerLogged) topContributor = 'You';
             else if (partnerLogged > myLogged) topContributor = 'Partner';
 
@@ -3424,6 +3435,12 @@
                 durationDays = Math.max(1, Math.ceil((completedDate - createdDate) / (1000 * 60 * 60 * 24)));
             }
 
+            // Show target reached if applicable
+            let targetLine = '';
+            if (effectiveTarget > 0) {
+                targetLine = '<div>Target: <strong>' + effectiveTarget + ' ' + escHtml(g.unit || '') + '</strong></div>';
+            }
+
             completionBadgeHtml = '<div class="goal-completion-badge" style="background:var(--card-bg, #ffffff); border:1px solid var(--border-color, #3e2217); border-radius:8px; padding:0.65rem 0.85rem; margin:0.5rem 0;">' +
                 '<div style="font-weight:700; color:var(--primary-dark-color, #3e2217); font-size:0.88rem; margin-bottom:0.3rem;">Goal Achieved!</div>' +
                 '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.3rem; font-size:0.75rem; color:var(--text-muted);">' +
@@ -3431,6 +3448,7 @@
                 '<div>Top Contributor: <strong>' + topContributor + '</strong></div>' +
                 '<div>Your Check-ins: <strong>' + myCheckinCount + '</strong></div>' +
                 '<div>Partner Check-ins: <strong>' + partnerCheckinCount + '</strong></div>' +
+                targetLine +
                 '</div></div>';
         }
 
@@ -3449,7 +3467,10 @@
 
         const deadlineStr = g.deadline ? '<div class="goal-deadline">Deadline: ' + new Date(g.deadline).toLocaleDateString() + '</div>' : '';
 
-        return '<div class="goal-card">' +
+        // Dim completed/abandoned goal cards
+        const cardStyle = (g.status === 'completed' || g.status === 'abandoned') ? ' style="opacity:0.85;"' : '';
+
+        return '<div class="goal-card"' + cardStyle + '>' +
             '<div class="goal-title">' + escHtml(g.title) +
             '<span class="goal-category">' + escHtml(g.category) + '</span>' +
             '<span class="goal-status-badge goal-status-' + g.status + '">' + g.status + '</span></div>' +
@@ -3627,6 +3648,54 @@
                 loadGoals(bondId);
                 if (window.showCustomToast) showCustomToast('Goal updated!', 'success');
             } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    function deleteGoal(goalId, bondId) {
+        if (window.showCustomConfirm) {
+            showCustomConfirm('Permanently delete this goal? This cannot be undone.', function (ok) {
+                if (ok) doDeleteGoal(goalId, bondId);
+            });
+        } else doDeleteGoal(goalId, bondId);
+    }
+    function doDeleteGoal(goalId, bondId) {
+        echoFetch('/api/bonds/goals/' + goalId + '/delete', {
+            method: 'POST', headers: { 'X-CSRFToken': csrfToken }
+        }).then(r => r.json()).then(d => {
+            if (d.success) { loadGoals(bondId); if (window.showCustomToast) showCustomToast('Goal deleted.', 'success'); }
+            else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    function reactivateGoal(goalId, bondId) {
+        if (window.showCustomConfirm) {
+            showCustomConfirm('Reactivate this goal? It will become active again with existing progress.', function (ok) {
+                if (ok) doReactivateGoal(goalId, bondId);
+            });
+        } else doReactivateGoal(goalId, bondId);
+    }
+    function doReactivateGoal(goalId, bondId) {
+        echoFetch('/api/bonds/goals/' + goalId + '/reactivate', {
+            method: 'POST', headers: { 'X-CSRFToken': csrfToken }
+        }).then(r => r.json()).then(d => {
+            if (d.success) { loadGoals(bondId); if (window.showCustomToast) showCustomToast('Goal reactivated!', 'success'); }
+            else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    function restartGoal(goalId, bondId) {
+        if (window.showCustomConfirm) {
+            showCustomConfirm('Restart this goal as a new proposal? Progress will reset to zero.', function (ok) {
+                if (ok) doRestartGoal(goalId, bondId);
+            });
+        } else doRestartGoal(goalId, bondId);
+    }
+    function doRestartGoal(goalId, bondId) {
+        echoFetch('/api/bonds/goals/' + goalId + '/restart', {
+            method: 'POST', headers: { 'X-CSRFToken': csrfToken }
+        }).then(r => r.json()).then(d => {
+            if (d.success) { loadGoals(bondId); if (window.showCustomToast) showCustomToast('Goal restarted as a new proposal!', 'success'); }
+            else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
         });
     }
 

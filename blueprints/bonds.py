@@ -1738,11 +1738,32 @@ def api_bond_goals_list(bond_id):
             {'bond_id': ObjectId(bond_id)}
         ).sort('created_at', -1))
 
+        # Sort goals by status priority: active > proposed > completed > abandoned
+        status_order = {'active': 0, 'proposed': 1, 'completed': 2, 'abandoned': 3}
+        goals.sort(key=lambda g: status_order.get(g.get('status', 'active'), 4))
+
+        current_uid_str = str(current_user.id)
         result = []
         for g in goals:
             proposer = m.users_conf.find_one({'_id': g['proposed_by']}, {'username': 1})
             decrypted_title = m.decrypt_bond_data(g.get('title', ''), bond_id)
             decrypted_desc = m.decrypt_bond_data(g.get('description', ''), bond_id)
+
+            # Pre-compute contribution totals from ALL check-ins
+            all_check_ins = g.get('check_ins', [])
+            user_total_value = 0.0
+            partner_total_value = 0.0
+            user_checkin_count = 0
+            partner_checkin_count = 0
+            for ci in all_check_ins:
+                val = float(ci.get('value', 0) or 0)
+                if str(ci.get('user_id', '')) == current_uid_str:
+                    user_total_value += val
+                    user_checkin_count += 1
+                else:
+                    partner_total_value += val
+                    partner_checkin_count += 1
+
             result.append({
                 'id': str(g['_id']),
                 'title': decrypted_title,
@@ -1766,7 +1787,13 @@ def api_bond_goals_list(bond_id):
                     'value': ci.get('value', 0),
                     'note': m.decrypt_bond_data(ci.get('note', ''), bond_id),
                     'at': _format_datetime(ci.get('at'))
-                } for ci in g.get('check_ins', [])[-10:]],  # last 10 check-ins
+                } for ci in all_check_ins[-10:]],  # last 10 for history display
+                # Pre-computed totals from ALL check-ins
+                'user_total_value': user_total_value,
+                'partner_total_value': partner_total_value,
+                'user_checkin_count': user_checkin_count,
+                'partner_checkin_count': partner_checkin_count,
+                'total_checkin_count': len(all_check_ins),
                 'created_at': _format_datetime(g.get('created_at')),
                 'completed_at': _format_datetime(g.get('completed_at'))
             })
@@ -2258,6 +2285,170 @@ def api_bond_goal_abandon(goal_id):
     except Exception as e:
         current_app.logger.error(f"Bond goal abandon error: {e}")
         return jsonify({'error': 'Failed to abandon goal'}), 500
+
+
+@bp.route('/api/bonds/goals/<goal_id>/delete', methods=['POST'])
+@login_required
+def api_bond_goal_delete(goal_id):
+    """Delete a completed or abandoned goal."""
+    import main as m
+    try:
+        goal = m.bond_goals_conf.find_one({
+            '_id': ObjectId(goal_id),
+            'status': {'$in': ['completed', 'abandoned']}
+        })
+        if not goal:
+            return jsonify({'error': 'Goal not found or not deletable'}), 404
+
+        bond = m.bonds_conf.find_one({'_id': goal['bond_id'], 'status': {'$in': ['active', 'broken']}})
+        if not bond or not _is_bond_participant(bond, str(current_user.id)):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        m.bond_goals_conf.delete_one({'_id': ObjectId(goal_id)})
+
+        partner_id = _get_partner_id_from_bond(bond, str(current_user.id))
+        goal_title = m.decrypt_bond_data(goal.get('title', ''), goal['bond_id'])
+        m.socketio.emit('bond_goal_deleted', {
+            'goal_id': goal_id,
+            'title': goal_title,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        current_app.logger.error(f"Bond goal delete error: {e}")
+        return jsonify({'error': 'Failed to delete goal'}), 500
+
+
+@bp.route('/api/bonds/goals/<goal_id>/reactivate', methods=['POST'])
+@login_required
+def api_bond_goal_reactivate(goal_id):
+    """Reactivate an abandoned goal back to active status."""
+    import main as m
+    try:
+        goal = m.bond_goals_conf.find_one({
+            '_id': ObjectId(goal_id),
+            'status': 'abandoned'
+        })
+        if not goal:
+            return jsonify({'error': 'Goal not found or not abandoned'}), 404
+
+        bond = m.bonds_conf.find_one({'_id': goal['bond_id'], 'status': 'active'})
+        if not bond or not _is_bond_participant(bond, str(current_user.id)):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        m.bond_goals_conf.update_one(
+            {'_id': ObjectId(goal_id)},
+            {'$set': {'status': 'active'}}
+        )
+
+        partner_id = _get_partner_id_from_bond(bond, str(current_user.id))
+        goal_title = m.decrypt_bond_data(goal.get('title', ''), goal['bond_id'])
+        m.socketio.emit('bond_goal_reactivated', {
+            'goal_id': goal_id,
+            'title': goal_title,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} reactivated a goal",
+            f'"{goal_title}" is active again.',
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-goal-reactivate-{goal_id}'
+        )
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        current_app.logger.error(f"Bond goal reactivate error: {e}")
+        return jsonify({'error': 'Failed to reactivate goal'}), 500
+
+
+@bp.route('/api/bonds/goals/<goal_id>/restart', methods=['POST'])
+@login_required
+def api_bond_goal_restart(goal_id):
+    """Restart a completed or abandoned goal as a new proposal with fresh progress."""
+    import main as m
+    try:
+        goal = m.bond_goals_conf.find_one({
+            '_id': ObjectId(goal_id),
+            'status': {'$in': ['completed', 'abandoned']}
+        })
+        if not goal:
+            return jsonify({'error': 'Goal not found or not restartable'}), 404
+
+        bond = m.bonds_conf.find_one({'_id': goal['bond_id'], 'status': 'active'})
+        if not bond or not _is_bond_participant(bond, str(current_user.id)):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        bond_id = str(goal['bond_id'])
+
+        # Check goal limit
+        user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
+        tier = m.get_user_tier(user_doc)
+        max_goals = m.TIER_LIMITS.get(tier, m.TIER_LIMITS['free']).get('max_goals_per_bond', 5)
+        active_goals = m.bond_goals_conf.count_documents({
+            'bond_id': ObjectId(bond_id),
+            'status': {'$in': ['proposed', 'active']}
+        })
+        if active_goals >= max_goals:
+            return jsonify({'error': f'Goal limit reached ({max_goals} per bond).'}), 400
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        # Clone milestones with reset state
+        new_milestones = []
+        for ms in goal.get('milestones', []):
+            new_milestones.append({
+                'title': ms.get('title', ''),
+                'completed': False,
+                'completed_by': None,
+                'completed_at': None
+            })
+
+        new_goal_doc = {
+            'bond_id': ObjectId(bond_id),
+            'title': goal.get('title', ''),
+            'description': goal.get('description', ''),
+            'category': goal.get('category', 'Custom'),
+            'target_value': goal.get('target_value', 0),
+            'current_value': 0,
+            'unit': goal.get('unit', ''),
+            'deadline': None,
+            'status': 'proposed',
+            'proposed_by': ObjectId(current_user.id),
+            'milestones': new_milestones,
+            'encrypted': goal.get('encrypted', True),
+            'check_ins': [],
+            'created_at': now,
+            'completed_at': None
+        }
+        result = m.bond_goals_conf.insert_one(new_goal_doc)
+
+        partner_id = _get_partner_id_from_bond(bond, str(current_user.id))
+        goal_title = m.decrypt_bond_data(goal.get('title', ''), bond_id)
+        m.socketio.emit('bond_goal_proposed', {
+            'bond_id': bond_id,
+            'goal_id': str(result.inserted_id),
+            'title': goal_title,
+            'proposed_by': current_user.username
+        }, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} restarted a goal",
+            f'"{goal_title}" — Approve it on Bonds',
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-goal-restart-{result.inserted_id}'
+        )
+
+        return jsonify({'success': True, 'goal_id': str(result.inserted_id)})
+
+    except Exception as e:
+        current_app.logger.error(f"Bond goal restart error: {e}")
+        return jsonify({'error': 'Failed to restart goal'}), 500
 
 
 # --- Journal ---

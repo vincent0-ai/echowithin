@@ -332,6 +332,8 @@ def api_get_notes():
             'tags': note.get('tags', []),
             'is_locked': note.get('is_locked', False),
             'is_pinned': note.get('is_pinned', False),
+            'reminder_at': note.get('reminder_at'),
+            'color_tag': note.get('color_tag', 'default'),
             'update_available': update_available,
             'source_note_id': str(note['source_note_id']) if note.get('source_note_id') else None,
             'source_share_id': note.get('source_share_id'),
@@ -392,6 +394,8 @@ def api_get_note(note_id):
         'tags': note.get('tags', []),
         'is_locked': note.get('is_locked', False),
         'is_pinned': note.get('is_pinned', False),
+        'reminder_at': note.get('reminder_at'),
+        'color_tag': note.get('color_tag', 'default'),
         'update_available': update_available,
         'source_note_id': str(note['source_note_id']) if note.get('source_note_id') else None,
         'source_share_id': note.get('source_share_id'),
@@ -460,7 +464,7 @@ def api_create_note():
         m.app.logger.warning(f"API note truncated for user {current_user.id} (tier={current_user.account_tier}): {raw_len} -> {max_chars} chars")
     encrypted_content = m.encrypt_note(content, user_id=current_user.id)
     
-    result = m.personal_posts_conf.insert_one({
+    insert_doc = {
         'user_id': ObjectId(current_user.id),
         'content_owner_id': ObjectId(current_user.id),
         'content': encrypted_content,
@@ -468,7 +472,15 @@ def api_create_note():
         'reference': reference,
         'tags': tags,
         'created_at': datetime.datetime.now(datetime.timezone.utc)
-    })
+    }
+    reminder_at = data.get('reminder_at')
+    if reminder_at is not None:
+        insert_doc['reminder_at'] = reminder_at
+    color_tag = data.get('color_tag')
+    if color_tag and color_tag != 'default':
+        insert_doc['color_tag'] = color_tag
+
+    result = m.personal_posts_conf.insert_one(insert_doc)
     
     m.index_note_to_typesense(str(result.inserted_id), decrypted_content=content)
     
@@ -527,16 +539,22 @@ def api_edit_note(note_id):
 
     encrypted_content = m.encrypt_note(content, user_id=current_user.id)
     now = datetime.datetime.now(datetime.timezone.utc)
+    update_fields = {
+        'content': encrypted_content,
+        'encrypted': True,
+        'content_owner_id': ObjectId(current_user.id),
+        'reference': reference,
+        'tags': tags,
+        'updated_at': now
+    }
+    if 'reminder_at' in data:
+        update_fields['reminder_at'] = data.get('reminder_at')
+    if 'color_tag' in data:
+        update_fields['color_tag'] = data.get('color_tag')
+
     m.personal_posts_conf.update_one(
         {'_id': obj_id},
-        {'$set': {
-            'content': encrypted_content,
-            'encrypted': True,
-            'content_owner_id': ObjectId(current_user.id),
-            'reference': reference,
-            'tags': tags,
-            'updated_at': now
-        }}
+        {'$set': update_fields}
     )
 
     m.index_note_to_typesense(str(obj_id), decrypted_content=content)
@@ -1446,6 +1464,54 @@ def api_toggle_note_pin(post_id):
         {'$set': {'is_pinned': new_pinned}}
     )
     return jsonify({'success': True, 'is_pinned': new_pinned})
+
+
+@api_bp.route('/notes/<note_id>/reminder', methods=['POST'])
+@login_required
+def api_set_note_reminder(note_id):
+    import main as m
+    obj_id = safe_obj_id(note_id)
+    if not obj_id:
+        return jsonify({'error': 'Invalid note ID'}), 400
+
+    note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+    data = request.get_json(silent=True) or {}
+    reminder_at = data.get('reminder_at')
+    if reminder_at is not None:
+        reminder_at = str(reminder_at).strip()
+        if not reminder_at:
+            reminder_at = None
+
+    m.personal_posts_conf.update_one(
+        {'_id': obj_id},
+        {'$set': {'reminder_at': reminder_at}}
+    )
+    return jsonify({'success': True, 'reminder_at': reminder_at})
+
+
+@api_bp.route('/notes/<note_id>/color', methods=['POST'])
+@login_required
+def api_set_note_color(note_id):
+    import main as m
+    obj_id = safe_obj_id(note_id)
+    if not obj_id:
+        return jsonify({'error': 'Invalid note ID'}), 400
+
+    note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+    data = request.get_json(silent=True) or {}
+    color_tag = (data.get('color_tag') or 'default').strip()[:30]
+
+    m.personal_posts_conf.update_one(
+        {'_id': obj_id},
+        {'$set': {'color_tag': color_tag}}
+    )
+    return jsonify({'success': True, 'color_tag': color_tag})
 
 
 @api_bp.route('/notes/proposals', methods=['GET'])

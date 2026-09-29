@@ -1,8 +1,7 @@
 {
-  "versionCode": 42,
-  "versionName": "1.10.8",
+  "versionCode": 43,
+  "versionName": "1.11.0",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.10.8 Android Native Push Notifications & Form Management:\n• Fixed Android FCM push notifications delivery: resolved server-side CSRF token blocking on token registration\n• Registered High-Importance notification channels on application startup with custom sound, lights, and vibration\n• Added valid status bar notification icon (ic_stat_notification) and FCM manifest metadata\n• Updated FCM payload data normalization and channel ID alignment (echowithin_notifications)\n• Form owners can now edit questions, options, settings, and form types with inline management\n• Added instant push and in-app notifications when shared notes are updated",
-  "sha256": "CBA5AEEE6CC2855D10933ABB94ADC54E7AD043045009691323454F8805C35B78"
+  "changelog": "v1.11.0 Task Reminders, Interactive Checklists & Note Colors:\n• Exact Offline-Safe Reminders: Exact alarm scheduling, notifications with Snooze 15m and Mark Done actions, and reboot persistence\n• Interactive Checklists: 1-tap checkbox toggling (- [ ] ↔ - [x]) directly in note reading mode with haptic feedback and instant persistence\n• Smart Enter Auto-Continuation: Auto-continuation of checklists in note editor and dedicated toolbar button\n• Note Color Palette: 6 theme-adaptive pastel color tints for cards and note details\n• Quick Filter Chips: Instant filtering on home screen by All, Reminders ⏰, Tasks ☑, and Pinned 📌\n• Full offline-first sync for reminder times and note color tags",
+  "sha256": "D2F988FF9F621BD9FF5F5B9D40E2EB64204859F5883CFFF55FB473D768A71BDD"
 }
-

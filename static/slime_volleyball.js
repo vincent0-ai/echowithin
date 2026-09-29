@@ -1401,7 +1401,7 @@
     }
 
     if (roomId) {
-      GameState.socket.emit('join_slime_room', { room_id: roomId });
+      GameState.socket.emit('join_slime_room', { room_id: roomId, bond_id: new URLSearchParams(window.location.search).get('bond_id') || undefined });
     }
   }
 

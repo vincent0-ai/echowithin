@@ -7832,7 +7832,9 @@ BOND_GAME_LABELS = {
     'dots_and_boxes': 'Dots & Boxes',
     'ping_pong': 'Ping Pong',
     'slime_volleyball': 'Slime Volleyball',
-    'word_duet': 'Word Bond: Duet',
+    'emoji_decoder': 'Emoji Decoder',
+    'memory_match': 'Memory Match',
+    'this_or_that': 'This or That',
     'team_crossword': 'Team Crossword',
 }
 
@@ -7869,7 +7871,9 @@ def api_bond_challenge(bond_id):
         'dots_and_boxes': '/games/dots-and-boxes',
         'ping_pong': '/games/ping-pong',
         'slime_volleyball': '/games/slime-volleyball',
-        'word_duet': '/games/word-duet',
+        'emoji_decoder': '/games/emoji-decoder',
+        'memory_match': '/games/memory-match',
+        'this_or_that': '/games/this-or-that',
         'team_crossword': '/games/team-crossword',
     }
     room_id = f"bond_{game[:3]}_{str(bond_id)[-6:]}"

@@ -228,11 +228,23 @@ def snake():
 
 @bp.route('/games/word-duet')
 def word_duet():
-    return render_template('word_duet.html', active_page='games')
+    return redirect(url_for('games.emoji_decoder', **request.args))
+
+@bp.route('/games/emoji-decoder')
+def emoji_decoder():
+    return render_template('emoji_decoder.html', active_page='games')
 
 @bp.route('/games/team-crossword')
 def team_crossword():
     return render_template('team_crossword.html', active_page='games')
+
+@bp.route('/games/memory-match')
+def memory_match():
+    return render_template('memory_match.html', active_page='games')
+
+@bp.route('/games/this-or-that')
+def this_or_that():
+    return render_template('this_or_that.html', active_page='games')
 
 @bp.route('/games/create', methods=['GET', 'POST'])
 @login_required

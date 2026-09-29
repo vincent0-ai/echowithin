@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}Memory Match{% endblock %}
+
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+    :root {
+        --primary-color: #5D3A2E;
+        --surface-bg: #fff;
+        --card-bg: #f8f9fa;
+        --border-color: #e0e0e0;
+        --text-dark-color: #333;
+        --text-secondary: #666;
+        --text-muted: #999;
+        --success-color: #28a745;
+        --hover-bg: #f0f0f0;
+    }
+
+    /* Hide mobile reload button */
+    #mobile-reload-btn, .mobile-fab { display: none !important; }
+
+    .memory-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        font-family: sans-serif;
+        color: var(--text-dark-color);
+        text-align: center;
+    }
+
+    .setup-panel {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .setup-panel select, .setup-panel button {
+        padding: 10px;
+        margin: 5px;
+        border-radius: 4px;
+        border: 1px solid var(--border-color);
+        font-size: 16px;
+    }
+
+    .setup-panel button {
+        background-color: var(--primary-color);
+        color: white;
+        cursor: pointer;
+        border: none;
+    }
+
+    .setup-panel button:hover {
+        opacity: 0.9;
+    }
+
+    .game-info {
+        display: none;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        font-size: 18px;
+        font-weight: bold;
+    }
+
+    .grid-container {
+        display: none;
+        grid-gap: 10px;
+        justify-content: center;
+        perspective: 1000px;
+    }
+
+    .grid-container.size-4x4 {
+        grid-template-columns: repeat(4, 1fr);
+        max-width: 400px;
+        margin: 0 auto;
+    }
+
+    .grid-container.size-6x6 {
+        grid-template-columns: repeat(6, 1fr);
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .card {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        position: relative;
+        cursor: pointer;
+        transform-style: preserve-3d;
+        transition: transform 0.4s;
+    }
+
+    .card.flipped {
+        transform: rotateY(180deg);
+    }
+
+    .card.matched .card-front {
+        border-color: var(--success-color);
+        box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+    }
+
+    .card-face {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        backface-visibility: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        font-size: 2rem;
+        user-select: none;
+    }
+
+    @media (max-width: 600px) {
+        .card-face { font-size: 1.5rem; }
+    }
+
+    .card-back {
+        background-color: var(--primary-color);
+        border: 2px solid var(--border-color);
+    }
+
+    .card-front {
+        background-color: var(--surface-bg);
+        border: 2px solid var(--border-color);
+        transform: rotateY(180deg);
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.5);
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .modal-content {
+        background: var(--surface-bg);
+        padding: 30px;
+        border-radius: 8px;
+        text-align: center;
+        max-width: 400px;
+        width: 90%;
+    }
+
+    .modal-content h2 { margin-top: 0; }
+    .modal-content button {
+        margin-top: 20px;
+        padding: 10px 20px;
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    #turn-indicator {
+        color: var(--primary-color);
+    }
+</style>
+
+<div class="memory-container">
+    <h1>Memory Match</h1>
+    
+    <div class="setup-panel" id="setup-panel">
+        <select id="mode-select">
+            <option value="solo">Solo (Time Attack)</option>
+            <option value="local">Local (Pass & Play)</option>
+            <option value="online">Online (1v1)</option>
+        </select>
+        <select id="size-select">
+            <option value="16">4x4 (Easy, 8 pairs)</option>
+            <option value="36">6x6 (Hard, 18 pairs)</option>
+        </select>
+        <button id="start-btn">Start Game</button>
+        <div id="online-status" style="margin-top: 10px; font-size: 14px; color: var(--text-secondary);"></div>
+    </div>
+
+    <div class="game-info" id="game-info">
+        <div id="score-p1">P1: 0</div>
+        <div id="turn-indicator">Your Turn</div>
+        <div id="score-p2">P2: 0</div>
+        <div id="timer" style="display: none;">Time: 0s</div>
+    </div>
+
+    <div class="grid-container" id="grid-container"></div>
+</div>
+
+<div class="modal" id="game-over-modal">
+    <div class="modal-content">
+        <h2 id="winner-text">Game Over</h2>
+        <p id="stats-text"></p>
+        <button id="replay-btn">Play Again</button>
+    </div>
+</div>
+
+<script nonce="{{ csp_nonce }}" src="/static/memory_match.js"></script>
+{% endblock %}

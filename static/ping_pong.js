@@ -1421,7 +1421,7 @@
         if (state.roomId === roomId) return;
         const statusEl = document.getElementById('online-status');
         if (statusEl) statusEl.textContent = `Connecting to room ${roomId}...`;
-        state.socket.emit('join_pong_room', { room_id: roomId });
+        state.socket.emit('join_pong_room', { room_id: roomId, bond_id: new URLSearchParams(window.location.search).get('bond_id') || undefined });
       }
     },
     toggleMute: () => {
@@ -1450,7 +1450,7 @@
     state.mode = 'online';
     initSocket();
     if (state.socket) {
-      state.socket.emit('join_pong_room', { room_id: pongUrlRoom });
+      state.socket.emit('join_pong_room', { room_id: pongUrlRoom, bond_id: new URLSearchParams(window.location.search).get('bond_id') || undefined });
     }
   }
 

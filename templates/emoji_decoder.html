@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Emoji Decoder{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+    #mobile-reload-btn, .mobile-fab { display: none !important; }
+    
+    .game-container { 
+        max-width: 800px; 
+        margin: 0 auto; 
+        text-align: center; 
+        padding: 20px; 
+        font-family: sans-serif; 
+        color: var(--text-dark-color); 
+    }
+    .screen { display: none; }
+    .screen.active { display: block; }
+    
+    .btn { 
+        background: var(--primary-color); 
+        color: white; 
+        border: none; 
+        padding: 10px 20px; 
+        font-size: 16px; 
+        cursor: pointer; 
+        border-radius: 5px; 
+        margin: 5px; 
+    }
+    .btn:hover { background: var(--hover-bg); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .emoji-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fill, minmax(45px, 1fr)); 
+        gap: 5px; 
+        margin: 20px 0; 
+        max-height: 300px; 
+        overflow-y: auto; 
+        background: var(--surface-bg); 
+        padding: 10px; 
+        border-radius: 8px; 
+        border: 1px solid var(--border-color); 
+    }
+    .emoji-btn { 
+        font-size: 28px; 
+        background: var(--card-bg); 
+        border: 1px solid var(--border-color); 
+        border-radius: 4px; 
+        padding: 5px; 
+        cursor: pointer; 
+    }
+    .emoji-btn:hover { background: var(--hover-bg); }
+    
+    .clue-display { 
+        font-size: 40px; 
+        margin: 20px 0; 
+        min-height: 60px; 
+        letter-spacing: 10px; 
+    }
+    
+    input[type="text"] { 
+        padding: 10px; 
+        font-size: 16px; 
+        border: 1px solid var(--border-color); 
+        border-radius: 5px; 
+        width: 60%; 
+        max-width: 300px; 
+    }
+    
+    .status-msg { color: var(--text-muted); margin: 10px 0; }
+    .error-msg { color: red; }
+    .success-msg { color: var(--success-color); }
+    .game-stats {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        font-weight: bold;
+        background: var(--surface-bg);
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px solid var(--border-color);
+    }
+</style>
+
+<div class="game-container">
+    <h1>Emoji Decoder</h1>
+    
+    <div id="stats-bar" class="game-stats" style="display:none;">
+        <span id="stat-round">Round: 1/10</span>
+        <span id="stat-score">Score: 0</span>
+    </div>
+    
+    <!-- Mode Selection Screen -->
+    <div id="screen-menu" class="screen active">
+        <p>Describe a secret word using ONLY emojis, or guess what the emojis mean!</p>
+        <button class="btn" id="btn-solo">Solo Practice</button>
+        <button class="btn" id="btn-local">Local Pass & Play</button>
+        <button class="btn" id="btn-online">Online Multiplayer</button>
+        <div id="room-info" style="display:none; margin-top: 10px;">
+            Waiting for opponent... Room Code: <span id="room-code-display" style="font-weight:bold;"></span>
+        </div>
+    </div>
+    
+    <!-- Game Screen: Clue Giver -->
+    <div id="screen-giver" class="screen">
+        <h2>You are the Clue Giver!</h2>
+        <p>Secret Word:</p>
+        <h3 id="secret-word" style="font-size: 28px; color: var(--primary-color);"></h3>
+        <p>Select 1-5 emojis to describe this word:</p>
+        
+        <div class="clue-display" id="current-clue-builder"></div>
+        <button class="btn" id="btn-clear-clue">Clear</button>
+        <button class="btn" id="btn-submit-clue" disabled>Submit Clue</button>
+        
+        <div id="emoji-picker-container" class="emoji-grid"></div>
+    </div>
+    
+    <!-- Game Screen: Guesser -->
+    <div id="screen-guesser" class="screen">
+        <h2>You are the Guesser!</h2>
+        <p>What word do these emojis represent?</p>
+        <div class="clue-display" id="received-clue"></div>
+        
+        <div id="guess-form">
+            <input type="text" id="guess-input" placeholder="Type your guess here..." autocomplete="off">
+            <button class="btn" id="btn-submit-guess">Guess</button>
+        </div>
+        <p id="guess-feedback" class="status-msg"></p>
+        <p>Attempts left: <span id="attempts-left">3</span></p>
+    </div>
+    
+    <!-- Wait Screen -->
+    <div id="screen-wait" class="screen">
+        <h2 id="wait-msg">Waiting for other player...</h2>
+    </div>
+    
+    <!-- Result Screen -->
+    <div id="screen-result" class="screen">
+        <h2 id="result-title">Round Over!</h2>
+        <p id="result-word-reveal" style="font-size: 24px; font-weight: bold;"></p>
+        <p id="result-points" class="success-msg" style="font-size: 20px;"></p>
+        <button class="btn" id="btn-next-round">Next Round</button>
+    </div>
+    
+    <!-- End Screen -->
+    <div id="screen-end" class="screen">
+        <h2>Game Over!</h2>
+        <p id="final-score-display" style="font-size: 28px; font-weight: bold;"></p>
+        <button class="btn" onclick="location.reload()">Play Again</button>
+    </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script nonce="{{ csp_nonce }}" src="/static/emoji_decoder.js"></script>
+{% endblock %}

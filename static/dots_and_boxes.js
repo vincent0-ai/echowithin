@@ -950,7 +950,7 @@
   function joinRoom(roomId) {
     if (!state.socket) initOnlineSocket();
     if (!state.socket || !roomId) return;
-    state.socket.emit('join_dnb_room', { room_id: roomId });
+    state.socket.emit('join_dnb_room', { room_id: roomId, bond_id: new URLSearchParams(window.location.search).get('bond_id') || undefined });
     const input = document.getElementById('room-code-input');
     if (input) input.value = roomId;
   }

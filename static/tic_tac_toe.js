@@ -792,7 +792,7 @@
   function joinRoom(roomId) {
     if (!state.socket) initOnlineSocket();
     if (!state.socket || !roomId) return;
-    state.socket.emit('join_ttt_room', { room_id: roomId });
+    state.socket.emit('join_ttt_room', { room_id: roomId, bond_id: new URLSearchParams(window.location.search).get('bond_id') || undefined });
     if (els.roomCodeInput) els.roomCodeInput.value = roomId;
   }
 

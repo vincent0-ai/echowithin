@@ -1002,14 +1002,21 @@ def cascade_delete_user_data(user_id):
         destroy_cloudinary_media(user_doc['profile_image_public_id'], resource_type='image', delivery_type='upload')
 
     # Blog content
-    my_posts = list(m.posts_conf.find({'author_id': uid}, {'_id': 1, 'image_public_id': 1, 'image_public_ids': 1, 'video_public_id': 1}))
+    my_posts = list(m.posts_conf.find({'author_id': uid}, {'_id': 1, 'image_public_id': 1, 'image_public_ids': 1, 'video_public_id': 1, 'slug': 1}))
     m.posts_conf.delete_many({'author_id': uid})
+    post_slugs = [p.get('slug') for p in my_posts if p.get('slug')]
+    if post_slugs:
+        m.comments_conf.delete_many({'post_slug': {'$in': post_slugs}})
     for p in my_posts:
         for pid in [p.get('image_public_id')] + list(p.get('image_public_ids', [])):
             if pid:
                 destroy_cloudinary_media(pid, resource_type='image', delivery_type='upload')
         if p.get('video_public_id'):
             destroy_cloudinary_media(p['video_public_id'], resource_type='video', delivery_type='upload')
+        try:
+            _get_t()._ts_delete_document('posts', str(p['_id']))
+        except Exception:
+            pass
     m.comments_conf.delete_many({'author_id': uid})
     m.comment_votes_conf.delete_many({'user_id': uid})
     m.user_post_views_conf.delete_many({'user_id': uid})
@@ -1020,6 +1027,7 @@ def cascade_delete_user_data(user_id):
     for post in my_personal_posts:
         try:
             cleanup_post_media(post)
+            _get_t()._ts_delete_document('personal_notes', str(post['_id']))
         except Exception:
             pass
     m.personal_posts_conf.delete_many({'user_id': uid})

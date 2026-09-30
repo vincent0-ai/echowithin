@@ -420,6 +420,16 @@ Sitemap: https://echowithin.xyz/sitemap_index.xml
     return response
 
 
+@bp.route('/a1bfa401-22fa-430b-b8d0-570bc961eb8e.txt')
+def probely_verification_file():
+    txt_path = os.path.join(current_app.root_path, 'static', 'a1bfa401-22fa-430b-b8d0-570bc961eb8e.txt')
+    if os.path.exists(txt_path):
+        return send_from_directory(os.path.join(current_app.root_path, 'static'), 'a1bfa401-22fa-430b-b8d0-570bc961eb8e.txt', mimetype='text/plain')
+    response = make_response('Probely')
+    response.headers['Content-Type'] = 'text/plain; charset=utf-8'
+    return response
+
+
 @bp.route('/sitemap.xml')
 def sitemap_legacy_redirect():
     return redirect(url_for('pages.sitemap_index'), code=301)

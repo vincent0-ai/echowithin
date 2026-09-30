@@ -1481,7 +1481,7 @@ def update_last_active():
     # /api/sessions covers the active sessions validation check
     if request.path.startswith(('/api/messages/unread_count', '/api/notifications/badge-counts',
                                 '/api/notifications/unread-count', '/api/push/',
-                                '/api/sessions', '/socket.io/', '/static/', '/favicon.ico')):
+                                '/api/sessions', '/socket.io/', '/static/', '/favicon.ico', '/a1bfa401-22fa-430b-b8d0-570bc961eb8e.txt')):
         return
     if current_user.is_authenticated:
         user_id = current_user.id
@@ -1528,7 +1528,7 @@ def update_last_active():
 def enforce_canonical_domain_and_https():
     # Skip for API calls and static assets — they're already on the canonical domain
     # and don't benefit from a redirect (saves CPU on high-frequency polling endpoints)
-    if request.path.startswith(('/api/', '/static/', '/favicon.ico', '/socket.io/')):
+    if request.path.startswith(('/api/', '/static/', '/favicon.ico', '/socket.io/', '/a1bfa401-22fa-430b-b8d0-570bc961eb8e.txt')):
         return
 
     host = request.headers.get('X-Forwarded-Host', request.host)

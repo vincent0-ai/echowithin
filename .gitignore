@@ -31,6 +31,7 @@ fix_routes.py
 /.idea/
 /.agents/
 *.txt
+!static/a1bfa401-22fa-430b-b8d0-570bc961eb8e.txt
 *_test.py
 perf_test.py
 AGENTS.md

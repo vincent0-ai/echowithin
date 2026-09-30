@@ -142,6 +142,18 @@ class TestStaticPages:
         assert 'Disallow: /search' not in text
         assert 'Disallow: /dashboard' not in text
 
+    def test_probely_verification_file(self, https_client):
+        """Probely verification text file must be served at document root."""
+        resp = https_client.get('/a1bfa401-22fa-430b-b8d0-570bc961eb8e.txt')
+        assert resp.status_code == 200
+        assert 'Probely' in resp.get_data(as_text=True)
+
+    def test_probely_verification_meta_tag(self, https_client):
+        """Probely verification meta tag must be present in HTML head."""
+        resp = https_client.get('/dashboard')
+        assert resp.status_code == 200
+        assert '<meta name="probely-verification" content="a1bfa401-22fa-430b-b8d0-570bc961eb8e"' in resp.get_data(as_text=True)
+
     def test_noindex_headers_on_private_routes(self, https_client):
         """Private, auth, and search routes must carry X-Robots-Tag: noindex, nofollow."""
         for path in ('/login', '/register', '/search', '/forgot_password', '/tour'):

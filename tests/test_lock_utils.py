@@ -74,3 +74,82 @@ def test_calendar_reminders_skips_when_locked():
             mock_internal.assert_not_called()
     finally:
         outer_lock.release()
+
+
+def test_send_ntfy_alert_sanitizes_title(monkeypatch):
+    from scripts.backup_to_atlas import send_ntfy_alert
+    monkeypatch.setenv("NTFY_TOPIC", "test-topic")
+    with patch("requests.post") as mock_post:
+        mock_post.return_value = MagicMock(ok=True)
+        send_ntfy_alert("Test body", title="🚨 CRITICAL: Test Alert 🚨")
+        mock_post.assert_called_once()
+        headers = mock_post.call_args[1]["headers"]
+        # Title must be pure ASCII without unicode emoji to prevent latin-1 encoding errors
+        assert "🚨" not in headers["Title"]
+        assert "CRITICAL: Test Alert" in headers["Title"]
+
+
+def test_circuit_breaker_notices_account_deletion(monkeypatch):
+    from bson.objectid import ObjectId
+    from scripts.backup_to_atlas import _run_backup_internal
+
+    monkeypatch.setenv("MONGODB_CONNECTION", "mongodb://mock-local:27017")
+    monkeypatch.setenv("ATLAS_MONGODB_CONNECTION", "mongodb://mock-atlas:27017")
+
+    user_a = ObjectId()
+    user_deleted = ObjectId()
+
+    mock_local_client = MagicMock()
+    mock_atlas_client = MagicMock()
+
+    mock_local_db = MagicMock()
+    mock_atlas_db = MagicMock()
+
+    mock_local_client.__getitem__.return_value = mock_local_db
+    mock_atlas_client.__getitem__.return_value = mock_atlas_db
+
+    mock_users_l = MagicMock()
+    mock_posts_l = MagicMock()
+    mock_comments_l = MagicMock()
+    colls_l = {'users': mock_users_l, 'posts': mock_posts_l, 'comments': mock_comments_l}
+    mock_local_db.__getitem__.side_effect = lambda k: colls_l[k]
+
+    mock_users_a = MagicMock()
+    mock_posts_a = MagicMock()
+    mock_comments_a = MagicMock()
+    colls_a = {'users': mock_users_a, 'posts': mock_posts_a, 'comments': mock_comments_a, '_backup_meta': MagicMock()}
+    mock_atlas_db.__getitem__.side_effect = lambda k: colls_a[k]
+
+    mock_local_db.list_collection_names.return_value = ['users', 'posts', 'comments']
+    mock_atlas_db.list_collection_names.return_value = ['users', 'posts', 'comments']
+
+    # Local has 1 user, Atlas had 2 users (user_deleted was deleted!)
+    mock_users_l.find.return_value = [{'_id': user_a}]
+    mock_users_a.find.return_value = [{'_id': user_a}, {'_id': user_deleted}]
+
+    # Total local docs = 40 (dropped > 50%), Total Atlas docs = 100
+    mock_users_l.count_documents.return_value = 1
+    mock_posts_l.count_documents.return_value = 19
+    mock_comments_l.count_documents.return_value = 20
+
+    mock_users_a.count_documents.return_value = 2
+    mock_posts_a.count_documents.return_value = 48
+    mock_comments_a.count_documents.return_value = 50
+
+    mock_posts_l.find.return_value = []
+    mock_comments_l.find.return_value = []
+    mock_posts_a.find.return_value = []
+    mock_comments_a.find.return_value = []
+
+    colls_a['_backup_meta'].find_one.return_value = None
+
+    with patch("pymongo.MongoClient", side_effect=[mock_local_client, mock_atlas_client]), \
+         patch("scripts.backup_to_atlas.send_ntfy_alert") as mock_alert:
+
+        result = _run_backup_internal()
+        # Since an account deletion was detected, backup must proceed without breaking!
+        assert result is True
+        # Informational alert sent, not critical failure
+        mock_alert.assert_called_once()
+        assert "Account Deletion" in mock_alert.call_args[1]["title"]
+

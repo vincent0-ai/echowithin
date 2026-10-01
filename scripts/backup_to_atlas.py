@@ -108,6 +108,7 @@ TIMESTAMP_FIELDS = {
     'app_updates':              ['release_date', 'created_at'],
     'auth':                     ['created_at'],
     'revoked_push_endpoints':   ['revoked_at', 'created_at'],
+    'account_deletions':        ['deleted_at'],
 }
 
 
@@ -196,17 +197,49 @@ def _run_backup_internal():
             '--force' in sys.argv
         )
 
+        # Detect whether the document drop is due to legitimate account deletion(s)
+        local_user_ids = {u['_id'] for u in local_db['users'].find({}, {'_id': 1})} if 'users' in collections else set()
+        atlas_user_ids = {u['_id'] for u in atlas_db['users'].find({'_deleted_at': {'$exists': False}}, {'_id': 1})} if 'users' in atlas_colls else set()
+        deleted_user_ids = atlas_user_ids - local_user_ids
+
+        has_deletion_events = False
+        if 'account_deletions' in collections:
+            q = {'deleted_at': {'$gte': last_backup}} if last_backup else {}
+            try:
+                has_deletion_events = local_db['account_deletions'].count_documents(q) > 0
+            except Exception:
+                has_deletion_events = False
+
+        # Account deletion is recognized when accounts are deleted AND the local users collection is intact (not wiped)
+        account_deletion_detected = (len(deleted_user_ids) > 0 or has_deletion_events) and len(local_user_ids) > 0
+
         if total_atlas_docs >= 20 and total_local_docs < (total_atlas_docs * 0.5):
-            alert_msg = (
-                f"🚨 BACKUP ABORTED! Circuit Breaker Triggered.\n"
-                f"Local DB document count ({total_local_docs}) is less than 50% of Atlas DB count ({total_atlas_docs}).\n"
-                f"Atlas backup is locked to prevent data destruction. Inspect local MongoDB immediately!"
-            )
-            print(f"[{now}] {alert_msg}")
-            send_ntfy_alert(alert_msg)
-            if not allow_override:
-                return False
-            print(f"[{now}] [OVERRIDE ACTIVE] OVERRIDE_BACKUP_CIRCUIT_BREAKER / --force enabled. Proceeding with backup.")
+            if account_deletion_detected:
+                del_count = len(deleted_user_ids) or 1
+                info_msg = (
+                    f"[INFO] Notice: Document count dropped from {total_atlas_docs} to {total_local_docs} "
+                    f"due to detected user account deletion ({del_count} account(s) deleted). "
+                    f"Proceeding with backup sync without breaking (not a catastrophic data loss)."
+                )
+                print(f"[{now}] {info_msg}")
+                send_ntfy_alert(
+                    info_msg,
+                    title="Account Deletion Backup Notice",
+                    tags="information_source,wastebasket",
+                    priority="default"
+                )
+            else:
+                alert_msg = (
+                    f"[CIRCUIT BREAKER] BACKUP ABORTED! Circuit Breaker Triggered.\n"
+                    f"Local DB document count ({total_local_docs}) is less than 50% of Atlas DB count ({total_atlas_docs}) "
+                    f"with NO corresponding account deletion detected.\n"
+                    f"Atlas backup is locked to prevent data destruction. Inspect local MongoDB immediately!"
+                )
+                print(f"[{now}] {alert_msg}")
+                send_ntfy_alert(alert_msg)
+                if not allow_override:
+                    return False
+                print(f"[{now}] [OVERRIDE ACTIVE] OVERRIDE_BACKUP_CIRCUIT_BREAKER / --force enabled. Proceeding with backup.")
 
         for coll_name in collections:
             if coll_name.startswith('system.') or coll_name.startswith('_backup') or coll_name == 'deleted_items' or coll_name.startswith('whisper_'):

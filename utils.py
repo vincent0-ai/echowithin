@@ -1251,6 +1251,18 @@ def cascade_delete_user_data(user_id):
     if user_email:
         m.newsletter_conf.delete_many({'email': user_email})
 
+    # Record account deletion event (for backup circuit breaker & audit trail)
+    try:
+        m.account_deletions_conf.insert_one({
+            'user_id': uid,
+            'email': user_email,
+            'username': user_doc.get('username'),
+            'deleted_at': now_utc,
+            'reason': 'user_requested'
+        })
+    except Exception:
+        pass
+
     # The user document itself (last, so lookups above still work)
     m.users_conf.delete_one({'_id': uid})
 

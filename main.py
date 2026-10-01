@@ -872,6 +872,9 @@ activity_read_conf = db['activity_read']
 activity_read_conf.create_index([('user_id', 1), ('comment_id', 1)], unique=True, sparse=True)
 activity_read_conf.create_index([('user_id', 1), ('read_at', 1)])
 
+account_deletions_conf = db['account_deletions']
+account_deletions_conf.create_index([('deleted_at', -1)])
+
 # --- Whisper Mode Collections ---
 whisper_sessions_conf = db['whisper_sessions']
 whisper_sessions_conf.create_index([('initiator_id', 1), ('status', 1)])
@@ -1132,6 +1135,7 @@ database.note_attachments_conf = note_attachments_conf
 database.comment_votes_conf = comment_votes_conf
 database.activities_conf = activities_conf
 database.activity_read_conf = activity_read_conf
+database.account_deletions_conf = account_deletions_conf
 database.whisper_sessions_conf = whisper_sessions_conf
 database.whisper_messages_conf = whisper_messages_conf
 database.bonds_conf = bonds_conf

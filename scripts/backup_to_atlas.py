@@ -24,15 +24,16 @@ except ImportError:
 load_dotenv()
 
 
-def send_ntfy_alert(message, title="🚨 CRITICAL: Database Backup Circuit Breaker", tags="rotating_light,sos,warning", priority="max"):
+def send_ntfy_alert(message, title="CRITICAL: Database Backup Circuit Breaker", tags="rotating_light,sos,warning", priority="max"):
     """Sends a high-priority alert to the configured ntfy topic."""
     ntfy_topic = os.environ.get('NTFY_TOPIC')
     if not ntfy_topic:
         print("NTFY_TOPIC not configured; skipping ntfy alert.")
         return
     try:
+        clean_title = title.encode('ascii', 'ignore').decode('ascii').strip() or "Database Backup Circuit Breaker"
         headers = {
-            'Title': title,
+            'Title': clean_title,
             'Tags': tags,
             'Priority': priority
         }
@@ -190,6 +191,11 @@ def _run_backup_internal():
         atlas_colls = atlas_db.list_collection_names()
         total_atlas_docs = sum(atlas_db[c].count_documents({'_deleted_at': {'$exists': False}}) for c in collections if c in atlas_colls and not c.startswith('system.') and not c.startswith('_backup') and c != 'deleted_items' and not c.startswith('whisper_'))
 
+        allow_override = (
+            os.environ.get('OVERRIDE_BACKUP_CIRCUIT_BREAKER', '').lower() in ('true', '1') or
+            '--force' in sys.argv
+        )
+
         if total_atlas_docs >= 20 and total_local_docs < (total_atlas_docs * 0.5):
             alert_msg = (
                 f"🚨 BACKUP ABORTED! Circuit Breaker Triggered.\n"
@@ -198,7 +204,9 @@ def _run_backup_internal():
             )
             print(f"[{now}] {alert_msg}")
             send_ntfy_alert(alert_msg)
-            return False
+            if not allow_override:
+                return False
+            print(f"[{now}] [OVERRIDE ACTIVE] OVERRIDE_BACKUP_CIRCUIT_BREAKER / --force enabled. Proceeding with backup.")
 
         for coll_name in collections:
             if coll_name.startswith('system.') or coll_name.startswith('_backup') or coll_name == 'deleted_items' or coll_name.startswith('whisper_'):

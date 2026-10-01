@@ -977,18 +977,128 @@ def _has_active_auto_approve(share_id, editor_id):
         return str(editor_id) in [str(uid) for uid in auto_approved]
 
 
+def purge_bond_data(bond_id):
+    """Permanently delete a bond and all associated sub-collections and media.
+    Called when NO ONE is holding the bond (both partners dismissed or deleted accounts).
+    """
+    import main as m
+    b_oid = ObjectId(bond_id) if not isinstance(bond_id, ObjectId) else bond_id
+    try:
+        for photo in m.bond_album_photos_conf.find({'bond_id': b_oid}):
+            pid = photo.get('image_public_id') or photo.get('public_id')
+            if pid:
+                destroy_cloudinary_media(pid, resource_type='raw', delivery_type='authenticated')
+        for rec in m.bond_recommendations_conf.find({'bond_id': b_oid}):
+            pid = rec.get('image_public_id') or rec.get('public_id')
+            if pid:
+                destroy_cloudinary_media(pid, resource_type='raw', delivery_type='authenticated')
+
+        m.bond_goals_conf.delete_many({'bond_id': b_oid})
+        m.bond_journal_conf.delete_many({'bond_id': b_oid})
+        m.bond_moods_conf.delete_many({'bond_id': b_oid})
+        m.bond_qotd_conf.delete_many({'bond_id': b_oid})
+        m.bond_habits_conf.delete_many({'bond_id': b_oid})
+        m.bond_countdowns_conf.delete_many({'bond_id': b_oid})
+        m.bond_album_photos_conf.delete_many({'bond_id': b_oid})
+        m.bond_bucketlist_conf.delete_many({'bond_id': b_oid})
+        m.bond_recommendations_conf.delete_many({'bond_id': b_oid})
+        m.bond_pulses_conf.delete_many({'bond_id': b_oid})
+        m.bonds_conf.delete_one({'_id': b_oid})
+    except Exception as e:
+        import logging
+        logging.getLogger('utils').error(f"Error purging bond data {b_oid}: {e}")
+
+
+def purge_direct_messages_between(user_a_id, user_b_id):
+    """Permanently delete all direct messages, scheduled messages, and media between two users.
+    Called when NO ONE is holding the conversation (both users deleted the chat or their accounts).
+    """
+    import main as m
+    u_a = ObjectId(user_a_id) if not isinstance(user_a_id, ObjectId) else user_a_id
+    u_b = ObjectId(user_b_id) if not isinstance(user_b_id, ObjectId) else user_b_id
+    try:
+        messages = list(m.direct_messages_conf.find({
+            '$or': [
+                {'sender_id': u_a, 'recipient_id': u_b},
+                {'sender_id': u_b, 'recipient_id': u_a}
+            ]
+        }))
+        for dm in messages:
+            try:
+                s_id, r_id = str(dm.get('sender_id')), str(dm.get('recipient_id'))
+                raw_pub = dm.get('image_public_id')
+                plain_pub = None
+                if raw_pub:
+                    if raw_pub.startswith('gAAAAA'):
+                        try:
+                            plain_pub = decrypt_dm(raw_pub, s_id, r_id)
+                        except Exception:
+                            plain_pub = None
+                    else:
+                        plain_pub = raw_pub
+                if not plain_pub and dm.get('image_url'):
+                    raw_url = dm['image_url']
+                    plain_url = raw_url
+                    if raw_url.startswith('gAAAAA'):
+                        try:
+                            plain_url = decrypt_dm(raw_url, s_id, r_id)
+                        except Exception:
+                            plain_url = None
+                    if plain_url:
+                        plain_pub = extract_cloudinary_public_id(plain_url)
+                if plain_pub and not str(plain_pub).startswith('[Content unavailable'):
+                    res_type = 'raw' if dm.get('media_encrypted') else ('video' if dm.get('message_type') == 'audio' or str(plain_pub).startswith('dm_voice') else 'image')
+                    del_type = 'authenticated' if dm.get('media_encrypted') else 'upload'
+                    destroy_cloudinary_media(plain_pub, resource_type=res_type, delivery_type=del_type)
+            except Exception:
+                pass
+
+        m.direct_messages_conf.delete_many({
+            '$or': [
+                {'sender_id': u_a, 'recipient_id': u_b},
+                {'sender_id': u_b, 'recipient_id': u_a}
+            ]
+        })
+        m.scheduled_messages_conf.delete_many({
+            '$or': [
+                {'sender_id': u_a, 'recipient_id': u_b},
+                {'sender_id': u_b, 'recipient_id': u_a}
+            ]
+        })
+        m.hidden_chats_conf.delete_many({
+            '$or': [
+                {'user_id': u_a, 'partner_id': u_b},
+                {'user_id': u_b, 'partner_id': u_a}
+            ]
+        })
+        m.dm_permissions_conf.delete_many({
+            '$or': [
+                {'requester_id': u_a, 'target_id': u_b},
+                {'requester_id': u_b, 'target_id': u_a}
+            ]
+        })
+    except Exception as e:
+        import logging
+        logging.getLogger('utils').error(f"Error purging messages between {u_a} and {u_b}: {e}")
+
+
 def cascade_delete_user_data(user_id):
     """Permanently delete every data record owned by a user (GDPR-complete).
 
     Covers blog posts/comments/votes/views, community content, whisper data,
-    bonds + all bond sub-collections, DMs, notes, shares, sessions, and logs.
-    Messages received from other users are redacted in place rather than deleted
-    so the other party's conversation history is not destroyed.
+    personal notes, shares, sessions, and logs.
+    For shared spaces (DMs and Bonds):
+      - If the partner is still active and holding the data, messages and shared
+        memories remain in read-only/archive mode for the partner (anonymized to
+        'Deleted User' / 'Former Partner') so evidence and memories are preserved.
+      - When NEITHER party is holding the space (both deleted accounts or deleted the chat/bond),
+        the data and media are permanently purged immediately with zero hanging data.
     """
     import main as m
     uid = ObjectId(user_id)
     user_doc = m.users_conf.find_one({'_id': uid}) or {}
     user_email = user_doc.get('email')
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     # Auth / sessions / tokens
     m.auth_conf.delete_many({'$or': [{'user_id': uid}, {'email': user_email}]} if user_email else {'user_id': uid})
@@ -1041,82 +1151,32 @@ def cascade_delete_user_data(user_id):
     m.note_versions_conf.delete_many({'author_id': uid})
     m.note_discussions_conf.delete_many({'author_id': uid})
 
-    # Messaging: delete what the user sent; redact messages others sent to them.
-    sent_dms = list(m.direct_messages_conf.find({
-        'sender_id': uid,
-        '$or': [{'image_public_id': {'$exists': True, '$ne': ''}}, {'image_url': {'$exists': True, '$ne': ''}}]
-    }))
-    for dm in sent_dms:
-        try:
-            s_id, r_id = str(dm.get('sender_id')), str(dm.get('recipient_id'))
-            raw_pub = dm.get('image_public_id')
-            plain_pub = None
-            if raw_pub:
-                if raw_pub.startswith('gAAAAA'):
-                    try:
-                        plain_pub = decrypt_dm(raw_pub, s_id, r_id)
-                    except Exception:
-                        plain_pub = None
-                else:
-                    plain_pub = raw_pub
-            if not plain_pub and dm.get('image_url'):
-                raw_url = dm['image_url']
-                plain_url = raw_url
-                if raw_url.startswith('gAAAAA'):
-                    try:
-                        plain_url = decrypt_dm(raw_url, s_id, r_id)
-                    except Exception:
-                        plain_url = None
-                if plain_url:
-                    plain_pub = extract_cloudinary_public_id(plain_url)
-            if plain_pub and not str(plain_pub).startswith('[Content unavailable'):
-                res_type = 'raw' if dm.get('media_encrypted') else ('video' if dm.get('message_type') == 'audio' or str(plain_pub).startswith('dm_voice') else 'image')
-                del_type = 'authenticated' if dm.get('media_encrypted') else 'upload'
-                destroy_cloudinary_media(plain_pub, resource_type=res_type, delivery_type=del_type)
-        except Exception:
-            pass
-    m.direct_messages_conf.delete_many({'sender_id': uid})
-    m.direct_messages_conf.update_many(
-        {'recipient_id': uid},
-        {'$set': {'sender_id': None, 'content': '', 'image_url': '', 'image_public_id': '', 'link_preview': {}, 'deleted_for_recipient': True}}
-    )
-    m.dm_permissions_conf.delete_many({'$or': [{'requester_id': uid}, {'target_id': uid}]})
+    # Messaging (DMs):
+    # Find all users with whom this account exchanged messages
+    dm_partners = set()
+    for dm in m.direct_messages_conf.find({'sender_id': uid}, {'recipient_id': 1}):
+        if dm.get('recipient_id'):
+            dm_partners.add(dm['recipient_id'])
+    for dm in m.direct_messages_conf.find({'recipient_id': uid}, {'sender_id': 1}):
+        if dm.get('sender_id'):
+            dm_partners.add(dm['sender_id'])
 
-    sched_msgs = list(m.scheduled_messages_conf.find({
-        'sender_id': uid,
-        '$or': [{'image_public_id': {'$exists': True, '$ne': ''}}, {'image_url': {'$exists': True, '$ne': ''}}]
-    }))
-    for sm in sched_msgs:
-        try:
-            s_id, r_id = str(sm.get('sender_id')), str(sm.get('recipient_id'))
-            raw_pub = sm.get('image_public_id')
-            plain_pub = None
-            if raw_pub:
-                if raw_pub.startswith('gAAAAA'):
-                    try:
-                        plain_pub = decrypt_dm(raw_pub, s_id, r_id)
-                    except Exception:
-                        plain_pub = None
-                else:
-                    plain_pub = raw_pub
-            if not plain_pub and sm.get('image_url'):
-                raw_url = sm['image_url']
-                plain_url = raw_url
-                if raw_url.startswith('gAAAAA'):
-                    try:
-                        plain_url = decrypt_dm(raw_url, s_id, r_id)
-                    except Exception:
-                        plain_url = None
-                if plain_url:
-                    plain_pub = extract_cloudinary_public_id(plain_url)
-            if plain_pub and not str(plain_pub).startswith('[Content unavailable'):
-                res_type = 'raw' if sm.get('media_encrypted') else ('video' if sm.get('message_type') == 'audio' or str(plain_pub).startswith('dm_voice') else 'image')
-                del_type = 'authenticated' if sm.get('media_encrypted') else 'upload'
-                destroy_cloudinary_media(plain_pub, resource_type=res_type, delivery_type=del_type)
-        except Exception:
-            pass
-    m.scheduled_messages_conf.delete_many({'sender_id': uid})
-    m.hidden_chats_conf.delete_many({'user_id': uid})
+    for p_oid in dm_partners:
+        if p_oid == uid:
+            continue
+        partner_user = m.users_conf.find_one({'_id': p_oid})
+        partner_hidden = m.hidden_chats_conf.find_one({'user_id': p_oid, 'partner_id': uid})
+        # If partner is already deleted OR partner already deleted/hid this chat:
+        # NO ONE is holding the chat -> purge permanently!
+        if not partner_user or partner_hidden:
+            purge_direct_messages_between(uid, p_oid)
+        else:
+            # Partner is still holding the chat: hide from uid's side, retain for partner (evidence/history)
+            m.hidden_chats_conf.update_one(
+                {'user_id': uid, 'partner_id': p_oid},
+                {'$set': {'hidden_at': now_utc}},
+                upsert=True
+            )
 
     # Whisper data
     my_whisper_sessions = list(m.whisper_sessions_conf.find({'$or': [{'initiator_id': uid}, {'partner_id': uid}]}))
@@ -1132,30 +1192,39 @@ def cascade_delete_user_data(user_id):
     else:
         m.whisper_messages_conf.delete_many({'sender_id': uid})
 
-    # Bonds + sub-collections
-    my_bonds = list(m.bonds_conf.find({'$or': [{'user_a_id': uid}, {'user_b_id': uid}]}, {'_id': 1}))
-    m.bonds_conf.delete_many({'$or': [{'user_a_id': uid}, {'user_b_id': uid}]})
-    bond_ids = [b['_id'] for b in my_bonds]
-    if bond_ids:
-        for photo in m.bond_album_photos_conf.find({'bond_id': {'$in': bond_ids}}):
-            pid = photo.get('image_public_id') or photo.get('public_id')
-            if pid:
-                destroy_cloudinary_media(pid, resource_type='raw', delivery_type='authenticated')
-        for rec in m.bond_recommendations_conf.find({'bond_id': {'$in': bond_ids}}):
-            pid = rec.get('image_public_id') or rec.get('public_id')
-            if pid:
-                destroy_cloudinary_media(pid, resource_type='raw', delivery_type='authenticated')
+    # Bonds + sub-collections:
+    my_bonds = list(m.bonds_conf.find({'$or': [{'user_a_id': uid}, {'user_b_id': uid}]}))
+    for bond in my_bonds:
+        b_id = bond['_id']
+        partner_id = bond['user_b_id'] if bond['user_a_id'] == uid else bond['user_a_id']
+        partner_user = m.users_conf.find_one({'_id': partner_id})
+        partner_dismissed = str(partner_id) in [str(x) for x in bond.get('dismissed_by', [])]
 
-        m.bond_goals_conf.delete_many({'bond_id': {'$in': bond_ids}})
-        m.bond_journal_conf.delete_many({'bond_id': {'$in': bond_ids}})
-        m.bond_moods_conf.delete_many({'bond_id': {'$in': bond_ids}})
-        m.bond_qotd_conf.delete_many({'bond_id': {'$in': bond_ids}})
-        m.bond_habits_conf.delete_many({'bond_id': {'$in': bond_ids}})
-        m.bond_countdowns_conf.delete_many({'bond_id': {'$in': bond_ids}})
-        m.bond_album_photos_conf.delete_many({'bond_id': {'$in': bond_ids}})
-        m.bond_bucketlist_conf.delete_many({'bond_id': {'$in': bond_ids}})
-        m.bond_recommendations_conf.delete_many({'bond_id': {'$in': bond_ids}})
-        m.bond_pulses_conf.delete_many({'bond_id': {'$in': bond_ids}})
+        # If partner is already deleted OR partner already dismissed this bond:
+        # NO ONE is holding the bond -> purge permanently!
+        if not partner_user or partner_dismissed:
+            purge_bond_data(b_id)
+        else:
+            # Partner is still active and holding the memories -> archive for partner
+            m.bonds_conf.update_one(
+                {'_id': b_id},
+                {
+                    '$set': {
+                        'status': 'broken',
+                        'broken_at': now_utc,
+                        'broken_by': uid,
+                        'partner_account_deleted': True
+                    },
+                    '$addToSet': {'dismissed_by': uid}
+                }
+            )
+            # Mark sub-collections as archived
+            m.bond_goals_conf.update_many({'bond_id': b_id}, {'$set': {'archived_by_bond_break': True}})
+            m.bond_journal_conf.update_many({'bond_id': b_id}, {'$set': {'archived_by_bond_break': True}})
+            m.bond_moods_conf.update_many({'bond_id': b_id}, {'$set': {'archived_by_bond_break': True}})
+            m.bond_qotd_conf.update_many({'bond_id': b_id}, {'$set': {'archived_by_bond_break': True}})
+            m.bond_habits_conf.update_many({'bond_id': b_id}, {'$set': {'archived_by_bond_break': True}})
+            m.bond_countdowns_conf.update_many({'bond_id': b_id}, {'$set': {'archived_by_bond_break': True}})
 
     # Communities
     m.communities_conf.update_many({'admin_id': uid}, {'$set': {'admin_id': None}})

@@ -1364,8 +1364,12 @@ def bonds_page():
             {'_id': ObjectId(partner_id)},
             {'username': 1, 'profile_image_url': 1}
         )
-        if not partner:
-            continue
+        if partner:
+            partner_name = _clean_username(partner['username'])
+            partner_avatar = partner.get('profile_image_url')
+        else:
+            partner_name = 'Former Partner (Account Deleted)'
+            partner_avatar = None
 
         bond_type = bond.get('bond_type', 'custom')
         type_info = BOND_TYPES.get(bond_type, BOND_TYPES['custom'])
@@ -1374,8 +1378,8 @@ def bonds_page():
         past_bonds_data.append({
             'id': str(bond['_id']),
             'partner_id': partner_id,
-            'partner_username': _clean_username(partner['username']),
-            'partner_avatar': partner.get('profile_image_url'),
+            'partner_username': partner_name,
+            'partner_avatar': partner_avatar,
             'label': bond.get('label', ''),
             'bond_type': bond_type,
             'bond_type_label': type_info['label'],
@@ -7371,6 +7375,7 @@ def api_bond_pulse_send(bond_id):
 
 
 @bp.route('/api/bonds/<bond_id>/dismiss_archive', methods=['POST'])
+@bp.route('/api/bonds/<bond_id>/dismiss-archive', methods=['POST'])
 @login_required
 def api_bond_dismiss_archive(bond_id):
     """Dismiss/hide an archived past bond from current user's past bonds view."""
@@ -7387,6 +7392,14 @@ def api_bond_dismiss_archive(bond_id):
             {'_id': ObjectId(bond_id)},
             {'$addToSet': {'dismissed_by': ObjectId(user_id_str)}}
         )
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        partner_user = m.users_conf.find_one({'_id': ObjectId(partner_id)})
+        dismissed_by = [str(x) for x in bond_doc.get('dismissed_by', [])]
+        if not partner_user or partner_id in dismissed_by:
+            from utils import purge_bond_data
+            purge_bond_data(bond_doc['_id'])
+
         return jsonify({'success': True})
     except Exception as e:
         current_app.logger.error(f"Dismiss archive error: {e}")

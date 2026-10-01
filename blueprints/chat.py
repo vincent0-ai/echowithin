@@ -54,15 +54,22 @@ def messages_page():
         return {'user_id': str(user_info['_id']), 'username': _clean_chat_username(user_info['username']), 'profile_image': user_info.get('profile_image_url'), 'last_message': last_msg, 'timestamp': timestamp, 'unread_count': unread_count, 'last_active': (user_info.get('last_active').isoformat() + 'Z').replace('+00:00Z', 'Z') if user_info.get('last_active') else None, 'is_online': is_online}
     for c in contacts_raw:
         user_info = _contact_users_map.get(c['_id'])
-        if user_info:
-            last_msg = c.get('last_message', '')
-            if last_msg and last_msg.startswith('gAAAAA'):
-                try:
-                    last_msg = m.decrypt_dm(last_msg, str(current_user.id), str(user_info['_id']))
-                except Exception:
-                    pass
-            contacts.append(build_contact_entry(user_info, last_msg, c['timestamp'], c['unread_count']))
-            contact_user_ids.add(str(user_info['_id']))
+        if not user_info:
+            user_info = {
+                '_id': c['_id'],
+                'username': 'Deleted User',
+                'profile_image_url': None,
+                'last_active': None,
+                'is_deleted': True
+            }
+        last_msg = c.get('last_message', '')
+        if last_msg and last_msg.startswith('gAAAAA'):
+            try:
+                last_msg = m.decrypt_dm(last_msg, str(current_user.id), str(user_info['_id']))
+            except Exception:
+                pass
+        contacts.append(build_contact_entry(user_info, last_msg, c['timestamp'], c['unread_count']))
+        contact_user_ids.add(str(user_info['_id']))
     accepted_permissions = list(m.dm_permissions_conf.find({'status': 'accepted', '$or': [{'requester_id': current_user_oid}, {'target_id': current_user_oid}]}).sort('updated_at', -1))
     # Batch-fetch permission graft users in one query (I1)
     _perm_other_ids = []
@@ -112,6 +119,12 @@ def messages_page():
             # DM relationship, not for arbitrary enumerated user IDs.
             if m.can_dm(current_user.id, target_user_id):
                 active_chat = m.users_conf.find_one({'_id': target_oid}, {'username': 1, 'last_active': 1})
+                if not active_chat:
+                    has_prior = bool(m.direct_messages_conf.find_one({
+                        '$or': [{'sender_id': current_user_oid, 'recipient_id': target_oid}, {'sender_id': target_oid, 'recipient_id': current_user_oid}]
+                    }))
+                    if has_prior:
+                        active_chat = {'_id': target_oid, 'username': 'Deleted User', 'last_active': None, 'is_deleted': True}
     pending_request_count = m.dm_permissions_conf.count_documents({'target_id': ObjectId(current_user.id), 'status': 'pending'})
     return render_template('messages.html', active_page='messages', contacts=contacts, active_chat=active_chat, pending_request_count=pending_request_count)
 
@@ -126,7 +139,13 @@ def api_message_history(other_user_id):
         return jsonify({'error': 'Invalid user ID'}), 400
     other_user = m.users_conf.find_one({'_id': other_id}, {'username': 1, 'last_active': 1})
     if not other_user:
-        return jsonify({'error': 'User not found'}), 404
+        has_history = bool(m.direct_messages_conf.find_one({
+            '$or': [{'sender_id': ObjectId(current_user.id), 'recipient_id': other_id}, {'sender_id': other_id, 'recipient_id': ObjectId(current_user.id)}]
+        }))
+        if has_history:
+            other_user = {'_id': other_id, 'username': 'Deleted User', 'last_active': None, 'is_deleted': True}
+        else:
+            return jsonify({'error': 'User not found'}), 404
     # SECURITY: only reveal activity/presence when an actual DM relationship
     # exists (accepted request, prior history, or demo bot). Prevents arbitrary
     # user-ID enumeration of last_active / online status.
@@ -836,63 +855,13 @@ def api_delete_chat(other_user_id):
             upsert=True
         )
         other_also_hidden = m.hidden_chats_conf.find_one({'user_id': other_id, 'partner_id': my_id})
-        if other_also_hidden:
-            expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3)
-            messages = list(m.direct_messages_conf.find({
-                '$or': [
-                    {'sender_id': my_id, 'recipient_id': other_id},
-                    {'sender_id': other_id, 'recipient_id': my_id}
-                ]
-            }))
-            if messages:
-                for msg in messages:
-                    # Destroy Cloudinary media if attached
-                    raw_pub = msg.get('image_public_id')
-                    s_id, r_id = str(msg.get('sender_id')), str(msg.get('recipient_id'))
-                    plain_pub = None
-                    if raw_pub:
-                        if raw_pub.startswith('gAAAAA'):
-                            try:
-                                plain_pub = m.decrypt_dm(raw_pub, s_id, r_id)
-                            except Exception:
-                                pass
-                        else:
-                            plain_pub = raw_pub
-                    if not plain_pub and msg.get('image_url'):
-                        raw_url = msg['image_url']
-                        plain_url = raw_url
-                        if raw_url.startswith('gAAAAA'):
-                            try:
-                                plain_url = m.decrypt_dm(raw_url, s_id, r_id)
-                            except Exception:
-                                plain_url = None
-                        if plain_url:
-                            plain_pub = m.extract_cloudinary_public_id(plain_url)
-
-                    if plain_pub and not str(plain_pub).startswith('[Content unavailable'):
-                        res_type = 'raw' if msg.get('media_encrypted') else ('video' if msg.get('message_type') == 'audio' or str(plain_pub).startswith('dm_voice') else 'image')
-                        del_type = 'authenticated' if msg.get('media_encrypted') else 'upload'
-                        m.destroy_cloudinary_media(plain_pub, resource_type=res_type, delivery_type=del_type)
-
-                    msg['original_collection'] = 'direct_messages'
-                    msg['_id'] = ObjectId()
-                    msg['expires_at'] = expires_at
-                    msg['deleted_at'] = datetime.datetime.now(datetime.timezone.utc)
-                m.deleted_items_conf.insert_many(messages)
-            m.direct_messages_conf.delete_many({
-                '$or': [
-                    {'sender_id': my_id, 'recipient_id': other_id},
-                    {'sender_id': other_id, 'recipient_id': my_id}
-                ]
-            })
-            m.hidden_chats_conf.delete_many({
-                '$or': [
-                    {'user_id': my_id, 'partner_id': other_id},
-                    {'user_id': other_id, 'partner_id': my_id}
-                ]
-            })
+        other_user_exists = bool(m.users_conf.find_one({'_id': other_id}))
+        if other_also_hidden or not other_user_exists:
+            from utils import purge_direct_messages_between
+            purge_direct_messages_between(my_id, other_id)
             m.socketio.emit('chat_deleted', {'by_id': str(current_user.id), 'target_id': other_user_id}, room=f"user_{current_user.id}")
-            m.socketio.emit('chat_deleted', {'by_id': str(current_user.id)}, room=f"user_{other_user_id}")
+            if other_user_exists:
+                m.socketio.emit('chat_deleted', {'by_id': str(current_user.id)}, room=f"user_{other_user_id}")
         else:
             m.socketio.emit('chat_deleted', {'by_id': str(current_user.id), 'target_id': other_user_id}, room=f"user_{current_user.id}")
         return jsonify({'success': True})

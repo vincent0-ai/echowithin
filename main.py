@@ -86,6 +86,7 @@ from pymongo.errors import DuplicateKeyError
 import bleach
 from slugify import slugify
 from bson.objectid import ObjectId
+from bson.errors import InvalidId
 from ratelimit import RateLimitException
 from security import (safe_object_id,
     encrypt_dm, decrypt_dm, generate_signed_cloudinary_url, re_sign_cloudinary_url,
@@ -1481,7 +1482,7 @@ def update_last_active():
     # /api/sessions covers the active sessions validation check
     if request.path.startswith(('/api/messages/unread_count', '/api/notifications/badge-counts',
                                 '/api/notifications/unread-count', '/api/push/',
-                                '/api/sessions', '/socket.io/', '/static/', '/favicon.ico', '/a1bfa401-22fa-430b-b8d0-570bc961eb8e.txt')):
+                                '/api/sessions', '/socket.io/', '/static/', '/favicon.ico')):
         return
     if current_user.is_authenticated:
         user_id = current_user.id
@@ -1528,7 +1529,7 @@ def update_last_active():
 def enforce_canonical_domain_and_https():
     # Skip for API calls and static assets — they're already on the canonical domain
     # and don't benefit from a redirect (saves CPU on high-frequency polling endpoints)
-    if request.path.startswith(('/api/', '/static/', '/favicon.ico', '/socket.io/', '/a1bfa401-22fa-430b-b8d0-570bc961eb8e.txt')):
+    if request.path.startswith(('/api/', '/static/', '/favicon.ico', '/socket.io/')):
         return
 
     host = request.headers.get('X-Forwarded-Host', request.host)
@@ -1600,6 +1601,7 @@ def add_security_headers(response):
         "default-src 'self'; "
         f"script-src {script_src}; "
         "worker-src 'self'; "
+        "object-src 'none'; "
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com https://maxcdn.bootstrapcdn.com; "
         "img-src 'self' https: data: blob:; "
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://maxcdn.bootstrapcdn.com; "
@@ -1607,7 +1609,8 @@ def add_security_headers(response):
         "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com wss://echowithin.xyz https://cdn.socket.io https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
         "frame-ancestors 'self'; "
         "base-uri 'self'; "
-        "form-action 'self' https://accounts.google.com;"
+        "form-action 'self' https://accounts.google.com; "
+        "upgrade-insecure-requests;"
     )
 
     # Prevent indexing of private/auth/interactive routes without triggering GSC blocked warnings
@@ -4998,6 +5001,26 @@ def handle_whisper_edit(data=None, *args, **kwargs):
 
 
 # Handles any possible errors
+
+@app.errorhandler(InvalidId)
+def handle_invalid_objectid(e):
+    """Gracefully handle malformed or non-hex MongoDB ObjectIds in requests."""
+    is_api = (request.is_json
+              or request.headers.get('X-App-Token')
+              or request.path.startswith('/api/'))
+    if is_api:
+        return jsonify({'error': 'Invalid resource identifier format'}), 400
+    return render_template("404.html"), 404
+
+@app.errorhandler(OverflowError)
+def handle_overflow_error(e):
+    """Gracefully handle integer overflow in pagination or query arguments."""
+    is_api = (request.is_json
+              or request.headers.get('X-App-Token')
+              or request.path.startswith('/api/'))
+    if is_api:
+        return jsonify({'error': 'Parameter out of acceptable range'}), 400
+    return render_template("404.html"), 404
 
 @app.errorhandler(404)
 def page_not_found(e):

@@ -45,7 +45,7 @@
 
 {% block head_meta %}
 {% if meta_jsonld %}
-<script type="application/ld+json">{{ meta_jsonld|safe }}</script>
+<script type="application/ld+json" nonce="{{ csp_nonce }}">{{ meta_jsonld|safe }}</script>
 {% endif %}
 {# Add Prism.js for syntax highlighting in code blocks #}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">

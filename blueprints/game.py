@@ -228,7 +228,7 @@ def snake():
 
 @bp.route('/games/word-duet')
 def word_duet():
-    return redirect(url_for('games.emoji_decoder', **request.args))
+    return redirect(url_for('game.emoji_decoder', **request.args))
 
 @bp.route('/games/emoji-decoder')
 def emoji_decoder():

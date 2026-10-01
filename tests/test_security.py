@@ -142,17 +142,20 @@ class TestStaticPages:
         assert 'Disallow: /search' not in text
         assert 'Disallow: /dashboard' not in text
 
-    def test_probely_verification_file(self, https_client):
-        """Probely verification text file must be served at document root."""
-        resp = https_client.get('/a1bfa401-22fa-430b-b8d0-570bc961eb8e.txt')
-        assert resp.status_code == 200
-        assert 'Probely' in resp.get_data(as_text=True)
+    def test_invalid_objectid_returns_404_or_400(self, https_client):
+        """Malformed MongoDB ObjectId should return 404 for pages and 400 for API, not 500."""
+        resp = https_client.get('/edit_post/invalid-oid-123')
+        assert resp.status_code in (404, 302)  # 404 or redirect to login
+        resp_api = https_client.get('/api/bonds/undefined/calendar')
+        assert resp_api.status_code in (400, 401, 404)
+        assert resp_api.status_code != 500
 
-    def test_probely_verification_meta_tag(self, https_client):
-        """Probely verification meta tag must be present in HTML head."""
-        resp = https_client.get('/dashboard')
-        assert resp.status_code == 200
-        assert '<meta name="probely-verification" content="a1bfa401-22fa-430b-b8d0-570bc961eb8e"' in resp.get_data(as_text=True)
+    def test_csp_hardened_directives(self, https_client):
+        """CSP header must include object-src 'none' and upgrade-insecure-requests."""
+        resp = https_client.get('/')
+        csp = resp.headers.get('Content-Security-Policy', '')
+        assert "object-src 'none'" in csp
+        assert "upgrade-insecure-requests" in csp
 
     def test_noindex_headers_on_private_routes(self, https_client):
         """Private, auth, and search routes must carry X-Robots-Tag: noindex, nofollow."""

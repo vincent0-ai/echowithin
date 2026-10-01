@@ -102,7 +102,7 @@ def user_posts_page(username):
         return redirect(url_for('pages.home'))
     user_id = user['_id']
     is_owner_or_admin = current_user.is_authenticated and (str(current_user.id) == str(user_id) or getattr(current_user, 'is_admin', False))
-    page = request.args.get('page', 1, type=int)
+    page = max(1, min(request.args.get('page', 1, type=int) or 1, 10000))
     posts_per_page = 10
     filter_query = {'author_id': user_id} if is_owner_or_admin else m.get_public_posts_filter({'author_id': user_id})
     total_posts = m.posts_conf.count_documents(filter_query)

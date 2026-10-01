@@ -105,12 +105,14 @@ def search():
         try:
             filter_clauses = []
             if tags_filter:
-                tag_terms = [f'tags:={t}' for t in tags_filter if t]
+                safe_tags = [re.sub(r'[^a-zA-Z0-9_\-]', '', t) for t in tags_filter if t]
+                tag_terms = [f'tags:={st}' for st in safe_tags if st]
                 if tag_terms:
                     filter_clauses.append('(' + ' || '.join(tag_terms) + ')')
             if author_filter:
                 _safe_author = re.sub(r'[^a-zA-Z0-9_\-]', '', author_filter)
-                filter_clauses.append(f'author_username:={_safe_author}')
+                if _safe_author:
+                    filter_clauses.append(f'author_username:={_safe_author}')
             if date_from:
                 try:
                     dt_from = datetime.datetime.strptime(date_from, '%Y-%m-%d')
@@ -148,15 +150,23 @@ def search():
                         title_html = hl['snippet']
                     if hl.get('field') == 'content' and hl.get('snippet'):
                         excerpt = hl['snippet']
-                results.append({'id': doc.get('id'), 'title': title_html, 'slug': doc.get('slug'), 'author': doc.get('author_username'), 'created_at': datetime.datetime.fromtimestamp(doc.get('created_at'), tz=datetime.timezone.utc) if doc.get('created_at') else None, 'excerpt': excerpt})
+                safe_title = m.bleach.clean(title_html, tags=['span'], attributes={'span': ['class']}, strip=True)
+                safe_excerpt = m.bleach.clean(excerpt, tags=['span'], attributes={'span': ['class']}, strip=True)
+                results.append({'id': doc.get('id'), 'title': safe_title, 'slug': doc.get('slug'), 'author': doc.get('author_username'), 'created_at': datetime.datetime.fromtimestamp(doc.get('created_at'), tz=datetime.timezone.utc) if doc.get('created_at') else None, 'excerpt': safe_excerpt})
         except Exception as e:
-            current_app.logger.error(f'Typesense search error: {e}')
-    else:
-        if query:
-            cursor = m.posts_conf.find(m.get_public_posts_filter({'$text': {'$search': query}}), {'score': {'$meta': 'textScore'}}).sort([('score', {'$meta': 'textScore'})]).limit(per_page)
+            current_app.logger.warning(f'Typesense search error, falling back to MongoDB: {e}')
+            results = []
+            total = 0
+
+    if not results and query:
+        try:
+            cursor = m.posts_conf.find(m.get_public_posts_filter({'$text': {'$search': query}}), {'score': {'$meta': 'textScore'}}).sort([('score', {'$meta': 'textScore'})]).skip(max(0, (page - 1) * per_page)).limit(per_page)
+            import html
             for p in cursor:
-                results.append({'id': str(p.get('_id')), 'title': p.get('title'), 'slug': p.get('slug'), 'author': p.get('author'), 'created_at': p.get('timestamp'), 'excerpt': p.get('content', '')[:300]})
-            total = len(results)
+                results.append({'id': str(p.get('_id')), 'title': html.escape(p.get('title', '')), 'slug': p.get('slug'), 'author': p.get('author'), 'created_at': p.get('timestamp'), 'excerpt': html.escape((p.get('content') or '')[:300])})
+            total = m.posts_conf.count_documents(m.get_public_posts_filter({'$text': {'$search': query}}))
+        except Exception as fallback_e:
+            current_app.logger.error(f'MongoDB fallback search error: {fallback_e}')
     try:
         available_tags = sorted([t for t in m.posts_conf.distinct('tags') if t])
     except Exception:
@@ -417,16 +427,6 @@ Sitemap: https://echowithin.xyz/sitemap_index.xml
 """
     response = make_response(robots_txt)
     response.headers['Content-Type'] = 'text/plain'
-    return response
-
-
-@bp.route('/a1bfa401-22fa-430b-b8d0-570bc961eb8e.txt')
-def probely_verification_file():
-    txt_path = os.path.join(current_app.root_path, 'static', 'a1bfa401-22fa-430b-b8d0-570bc961eb8e.txt')
-    if os.path.exists(txt_path):
-        return send_from_directory(os.path.join(current_app.root_path, 'static'), 'a1bfa401-22fa-430b-b8d0-570bc961eb8e.txt', mimetype='text/plain')
-    response = make_response('Probely')
-    response.headers['Content-Type'] = 'text/plain; charset=utf-8'
     return response
 
 

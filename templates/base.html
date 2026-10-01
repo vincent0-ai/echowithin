@@ -540,8 +540,6 @@
 
     {% block title %}<title>EchoWithin</title>{% endblock %}
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <!-- Probely Verification -->
-    <meta name="probely-verification" content="a1bfa401-22fa-430b-b8d0-570bc961eb8e" />
 </head>
 
 <body data-user-logged-in="{{ 'true' if current_user.is_authenticated else 'false' }}">

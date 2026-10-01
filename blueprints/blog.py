@@ -1142,7 +1142,7 @@ def post():
             flash("Publishing to the community blog is disabled in Tour Mode. Sign up to publish your posts!", "warning")
             return redirect(url_for('pages.create_post'))
 
-        title = request.form.get("title")
+        title = m.bleach.clean(request.form.get("title") or '', tags=[], strip=True).strip()
         content = request.form.get("content", '') or ''
         content = m.bleach.clean(content, tags=[], strip=True)
         tags = request.form.getlist("tags")
@@ -1553,9 +1553,8 @@ def view_post(slug):
             ]
         }
 
-        # Build combined JSON-LD string
-        jsonld_str = json.dumps(jsonld_article) + '</script>\n<script type="application/ld+json">' + json.dumps(jsonld_breadcrumb)
-
+        # Build combined JSON-LD graph safely escaped for HTML script context
+        jsonld_graph = [jsonld_article, jsonld_breadcrumb]
         if post.get('video_url'):
             video_url = post['video_url']
             jsonld_video = {
@@ -1568,7 +1567,13 @@ def view_post(slug):
                 "thumbnailUrl": meta_image or url_for('static', filename='logo-512.png', _external=True)
             }
             jsonld_article["video"] = jsonld_video
-            jsonld_str = json.dumps(jsonld_article) + '</script>\n<script type="application/ld+json">' + json.dumps(jsonld_breadcrumb) + '</script>\n<script type="application/ld+json">' + json.dumps(jsonld_video)
+            jsonld_graph.append(jsonld_video)
+
+        jsonld_root = {
+            "@context": "https://schema.org",
+            "@graph": jsonld_graph
+        }
+        jsonld_str = json.dumps(jsonld_root).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
     except Exception:
         jsonld_str = ''
 
@@ -1881,7 +1886,11 @@ def api_vote_comment(comment_id):
 @login_required
 def edit_post(post_id):
     import main as m
-    post = m.posts_conf.find_one({'_id': ObjectId(post_id)})
+    try:
+        oid = ObjectId(post_id)
+    except Exception:
+        abort(404)
+    post = m.posts_conf.find_one({'_id': oid})
     if not post:
         abort(404)
     if str(post.get('author_id')) != current_user.id:
@@ -1897,14 +1906,18 @@ def update_post(post_id):
     import main as m
     import secrets
     import redis
-    post = m.posts_conf.find_one({'_id': ObjectId(post_id)})
+    try:
+        oid = ObjectId(post_id)
+    except Exception:
+        abort(404)
+    post = m.posts_conf.find_one({'_id': oid})
     if not post:
         abort(404)
     if str(post.get('author_id')) != current_user.id:
         flash("You can only edit your own posts.", "danger")
         return redirect(url_for('blog.view_post', slug=post.get('slug')))
 
-    title = request.form.get("title")
+    title = m.bleach.clean(request.form.get("title") or '', tags=[], strip=True).strip()
     content = request.form.get("content")
     tags = request.form.getlist("tags")
     images_files = request.files.getlist('images') if request.files else []

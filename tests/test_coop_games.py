@@ -56,20 +56,18 @@ def _as_sid(m, sid, fn, data=None, user=None):
 
 class TestCoopGameRoutes:
     def test_word_duet_guest_access(self, client):
-        """Guest users can access Word Bond: Duet directly."""
-        res = client.get('/games/word-duet')
+        """Guest users are redirected from word-duet to emoji-decoder."""
+        res = client.get('/games/word-duet', follow_redirects=True)
         assert res.status_code == 200
         html = res.get_data(as_text=True)
-        assert 'Word Bond: Duet' in html
-        assert 'word_duet.js' in html
-        assert 'duet-board' in html
+        assert 'Emoji Decoder' in html
 
     def test_word_duet_authenticated_access(self, auth_client):
-        """Authenticated users can access Word Bond: Duet."""
-        res = auth_client.get('/games/word-duet')
+        """Authenticated users are redirected from word-duet to emoji-decoder."""
+        res = auth_client.get('/games/word-duet', follow_redirects=True)
         assert res.status_code == 200
         html = res.get_data(as_text=True)
-        assert 'Word Bond: Duet' in html
+        assert 'Emoji Decoder' in html
 
     def test_team_crossword_guest_access(self, client):
         """Guest users can access Team Crossword directly."""
@@ -329,9 +327,9 @@ class TestGameInvitesAndBondsIntegration:
                 assert saved_doc_xword['game_data']['game_url'] == '/games/team-crossword?room=xword-xyz789'
 
     def test_bonds_blueprint_has_coop_games(self):
-        """BOND_GAME_LABELS includes word_duet and team_crossword."""
+        """BOND_GAME_LABELS includes emoji_decoder and team_crossword."""
         from blueprints.bonds import BOND_GAME_LABELS
-        assert 'word_duet' in BOND_GAME_LABELS
+        assert 'emoji_decoder' in BOND_GAME_LABELS
         assert 'team_crossword' in BOND_GAME_LABELS
-        assert BOND_GAME_LABELS['word_duet'] == 'Word Bond: Duet'
+        assert BOND_GAME_LABELS['emoji_decoder'] == 'Emoji Decoder'
         assert BOND_GAME_LABELS['team_crossword'] == 'Team Crossword'

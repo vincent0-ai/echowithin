@@ -441,6 +441,71 @@ QUESTION_BANK = {
 }
 
 
+# Themed question day mapping — optional per-bond feature
+THEMED_DAYS = {
+    0: {'label': 'Memory Monday', 'keywords': ['memory', 'remember', 'childhood', 'past', 'first', 'favourite', 'favorite', 'photo', 'story', 'tradition']},
+    1: {'label': 'Dream Tuesday', 'keywords': ['dream', 'future', 'goal', 'wish', 'imagine', 'plan', 'aspir', 'hope', 'want', 'could']},
+    2: {'label': 'Fun Wednesday', 'keywords': ['fun', 'funny', 'laugh', 'silly', 'hypothetical', 'superpower', 'lottery', 'random', 'weirdest', 'wildest']},
+    3: {'label': 'Gratitude Thursday', 'keywords': ['grateful', 'thankful', 'appreciate', 'kind', 'admire', 'proud', 'compliment', 'love', 'support', 'comfort']},
+    4: {'label': 'Free Friday', 'keywords': []},  # any question
+    5: {'label': 'Weekend Vibes', 'keywords': []},  # any question
+    6: {'label': 'Weekend Vibes', 'keywords': []},  # any question
+}
+
+# Progressive depth tiers: controls question weighting based on bond maturity
+# (total questions both partners have answered together)
+DEPTH_TIERS = [
+    # (min_answered, universal_weight, type_weight, label)
+    (0,  3, 1, 'Icebreaker'),    # New bonds: mostly universal, light questions
+    (10, 2, 2, 'Building'),       # Growing bonds: balanced mix
+    (25, 1, 2, 'Deepening'),      # Maturing bonds: more type-specific
+    (50, 1, 3, 'Deep Bond'),      # Deep bonds: mostly type-specific personal questions
+]
+
+
+def _get_depth_tier(answered_together_count):
+    """Return the depth tier config for the given number of mutually-answered questions."""
+    tier = DEPTH_TIERS[0]
+    for min_ans, u_w, t_w, label in DEPTH_TIERS:
+        if answered_together_count >= min_ans:
+            tier = (min_ans, u_w, t_w, label)
+    return tier
+
+
+def _filter_by_theme(questions, day_of_week):
+    """Filter questions by themed day keywords. Returns filtered list, or original if no theme or no matches."""
+    theme = THEMED_DAYS.get(day_of_week)
+    if not theme or not theme.get('keywords'):
+        return questions  # No filtering for free/weekend days
+    keywords = theme['keywords']
+    themed = [q for q in questions if any(kw in q.lower() for kw in keywords)]
+    # If themed filter is too restrictive (< 5 options), return full pool
+    return themed if len(themed) >= 5 else questions
+
+
+def _get_qotd_answered_together_count(bond_id):
+    """Count total QOTD entries where both partners answered for this bond."""
+    import main as m
+    try:
+        bond_oid = ObjectId(bond_id) if not isinstance(bond_id, ObjectId) else bond_id
+        bond_doc = m.bonds_conf.find_one({'_id': bond_oid})
+        if not bond_doc or not isinstance(bond_doc, dict):
+            return 0
+        user_a = str(bond_doc.get('user_a_id', ''))
+        user_b = str(bond_doc.get('user_b_id', ''))
+        if not user_a or not user_b:
+            return 0
+        # Count docs where both user keys exist in answers
+        count = m.bond_qotd_conf.count_documents({
+            'bond_id': bond_oid,
+            f'answers.{user_a}': {'$exists': True},
+            f'answers.{user_b}': {'$exists': True}
+        })
+        return int(count) if isinstance(count, (int, float)) else 0
+    except Exception:
+        return 0
+
+
 # Bond anniversary milestones (days -> label)
 _ANNIVERSARY_MILESTONES = [
     (7,    '1 week'),
@@ -546,13 +611,20 @@ def _get_daily_question(bond_doc):
     today_str = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     bond_id_str = str(bond_doc['_id'])
 
-    # Combine type-specific + universal questions
+    # Combine type-specific + universal questions with progressive depth weighting
     type_questions = QUESTION_BANK.get(bond_type, [])
     universal = QUESTION_BANK.get('universal', [])
-    # Weight type-specific 2:1 over universal
-    pool = type_questions + type_questions + universal
+    # Progressive depth: weight pools based on bond maturity
+    answered_together = _get_qotd_answered_together_count(bond_doc['_id'])
+    _, u_weight, t_weight, depth_label = _get_depth_tier(answered_together)
+    pool = (type_questions * t_weight) + (universal * u_weight)
     if not pool:
         pool = universal or ["What's on your mind today?"]
+    # Themed day filtering (optional, soft filter)
+    day_of_week = datetime.datetime.now(datetime.timezone.utc).weekday()
+    themed_enabled = bond_doc.get('themed_days_enabled', False)
+    if themed_enabled:
+        pool = _filter_by_theme(pool, day_of_week)
 
     # --- Skip-feedback weighting ---
     # Gather skip reasons from the last 30 days to learn user preferences
@@ -579,11 +651,14 @@ def _get_daily_question(bond_doc):
         boring_skips = reason_counts.get('boring', 0) + reason_counts.get('not_relevant', 0)
 
         if personal_skips >= 3 and boring_skips < 3:
-            # Reduce type-specific weight: use 1:2 ratio instead of 2:1
-            pool = type_questions + universal + universal
+            # Reduce type-specific weight when too personal
+            pool = type_questions + (universal * max(u_weight + 1, 3))
         elif boring_skips >= 3 and personal_skips < 3:
-            # Boost type-specific weight: use 3:1 ratio
-            pool = type_questions + type_questions + type_questions + universal
+            # Boost type-specific weight when too boring
+            pool = (type_questions * max(t_weight + 1, 3)) + universal
+        # Re-apply themed day filter after skip adjustment
+        if themed_enabled:
+            pool = _filter_by_theme(pool, day_of_week)
     except Exception:
         pass
 
@@ -2991,6 +3066,22 @@ def api_bond_qotd_get(bond_id):
         result['skip_count'] = qotd_doc.get('skip_count', 0)
         result['skips_remaining'] = max(0, 3 - qotd_doc.get('skip_count', 0))
 
+        # Monthly QOTD stats
+        try:
+            result['monthly_stats'] = _get_qotd_monthly_stats(
+                bond_id, user_id_str, partner_id
+            )
+        except Exception:
+            result['monthly_stats'] = None
+
+        # Themed days info
+        themed_enabled = bond_doc.get('themed_days_enabled', False)
+        result['themed_days_enabled'] = themed_enabled
+        if themed_enabled:
+            day_of_week = datetime.datetime.now(datetime.timezone.utc).weekday()
+            theme_info = THEMED_DAYS.get(day_of_week, {})
+            result['today_theme'] = theme_info.get('label', '')
+
         return jsonify(result)
 
     except Exception as e:
@@ -3797,48 +3888,289 @@ def api_bond_qotd_history(bond_id):
         history = []
         for doc in history_docs:
             answers = doc.get('answers', {})
-            if user_id_str in answers and partner_id_str in answers:
-                decrypted_q = m.decrypt_bond_data(doc.get('question_text', ''), bond_id) if doc.get('encrypted', True) else doc.get('question_text', '')
+            has_my_answer = user_id_str in answers
+            has_partner_answer = partner_id_str in answers
 
-                def _parse_ans(a_val):
-                    if isinstance(a_val, dict):
-                        raw_a = a_val.get('answer', '')
-                        if a_val.get('encrypted', True):
-                            return m.decrypt_bond_data(raw_a, bond_id)
-                        return raw_a or ''
-                    elif isinstance(a_val, str):
-                        return m.decrypt_bond_data(a_val, bond_id)
-                    return ''
+            # Include entries where at least one person answered (not just both)
+            if not has_my_answer and not has_partner_answer:
+                continue
 
-                my_ans = _parse_ans(answers.get(user_id_str))
-                partner_ans = _parse_ans(answers.get(partner_id_str))
+            # Determine answer status
+            if has_my_answer and has_partner_answer:
+                status = 'both_answered'
+            elif has_my_answer:
+                status = 'only_me'
+            else:
+                status = 'only_partner'
 
-                history.append({
-                    'date': doc.get('date'),
-                    'question': decrypted_q,
-                    'category': doc.get('question_category', ''),
-                    'source': doc.get('source', 'app'),
-                    'my_username': current_user.username,
-                    'my_answer': my_ans,
-                    'partner_username': partner_username,
-                    'partner_answer': partner_ans,
-                    'answers': {
-                        user_id_str: {
-                            'username': current_user.username,
-                            'text': my_ans
-                        },
-                        partner_id_str: {
-                            'username': partner_username,
-                            'text': partner_ans
-                        }
-                    }
-                })
+            decrypted_q = m.decrypt_bond_data(doc.get('question_text', ''), bond_id) if doc.get('encrypted', True) else doc.get('question_text', '')
+
+            def _parse_ans(a_val):
+                if isinstance(a_val, dict):
+                    raw_a = a_val.get('answer', '')
+                    if a_val.get('encrypted', True):
+                        return m.decrypt_bond_data(raw_a, bond_id)
+                    return raw_a or ''
+                elif isinstance(a_val, str):
+                    return m.decrypt_bond_data(a_val, bond_id)
+                return ''
+
+            my_ans = _parse_ans(answers.get(user_id_str)) if has_my_answer else None
+            partner_ans = _parse_ans(answers.get(partner_id_str)) if has_partner_answer else None
+
+            entry = {
+                'date': doc.get('date'),
+                'question': decrypted_q,
+                'category': doc.get('question_category', ''),
+                'source': doc.get('source', 'app'),
+                'status': status,
+                'my_username': current_user.username,
+                'my_answer': my_ans,
+                'partner_username': partner_username,
+                'partner_answer': partner_ans,
+                'answers': {}
+            }
+            if has_my_answer:
+                entry['answers'][user_id_str] = {
+                    'username': current_user.username,
+                    'text': my_ans
+                }
+            if has_partner_answer:
+                entry['answers'][partner_id_str] = {
+                    'username': partner_username,
+                    'text': partner_ans
+                }
+
+            history.append(entry)
 
         return jsonify({'history': history})
 
     except Exception as e:
         current_app.logger.error(f"Bond QotD history error: {e}")
         return jsonify({'error': 'Failed to fetch QotD history'}), 500
+
+
+def _get_qotd_monthly_stats(bond_id, user_id_str, partner_id_str):
+    """Return QOTD stats for the current calendar month."""
+    import main as m
+    now = datetime.datetime.now(datetime.timezone.utc)
+    month_start = now.replace(day=1).date().isoformat()
+    month_end = now.date().isoformat()
+    docs = list(m.bond_qotd_conf.find({
+        'bond_id': ObjectId(bond_id),
+        'date': {'$gte': month_start, '$lte': month_end}
+    }))
+    total_days = now.day
+    both_answered = 0
+    my_answered = 0
+    partner_answered_count = 0
+    for doc in docs:
+        answers = doc.get('answers', {})
+        if user_id_str in answers:
+            my_answered += 1
+        if partner_id_str in answers:
+            partner_answered_count += 1
+        if user_id_str in answers and partner_id_str in answers:
+            both_answered += 1
+    # Lifetime total for depth tier display
+    lifetime_both = _get_qotd_answered_together_count(bond_id)
+    _, _, _, depth_label = _get_depth_tier(lifetime_both)
+    return {
+        'month_name': now.strftime('%B %Y'),
+        'total_days': total_days,
+        'both_answered': both_answered,
+        'my_answered': my_answered,
+        'partner_answered': partner_answered_count,
+        'lifetime_together': lifetime_both,
+        'depth_tier': depth_label,
+    }
+
+
+@bp.route('/api/bonds/<bond_id>/qotd/missed', methods=['GET'])
+@login_required
+@limits(calls=15, period=60)
+def api_bond_qotd_missed(bond_id):
+    """Check if the user missed yesterday's question and if catch-up is available."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'has_missed': False})
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'has_missed': False})
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        yesterday_str = (now.date() - datetime.timedelta(days=1)).isoformat()
+
+        yesterday_doc = m.bond_qotd_conf.find_one({
+            'bond_id': ObjectId(bond_id),
+            'date': yesterday_str
+        })
+
+        if not yesterday_doc:
+            return jsonify({'has_missed': False})
+
+        answers = yesterday_doc.get('answers', {})
+        my_answered = user_id_str in answers
+        partner_answered = partner_id in answers
+
+        if my_answered:
+            # User already answered yesterday — no catch-up needed
+            return jsonify({'has_missed': False})
+
+        # User missed yesterday's question
+        decrypted_q = m.decrypt_bond_data(
+            yesterday_doc.get('question_text', ''), bond_id
+        ) if yesterday_doc.get('encrypted', True) else yesterday_doc.get('question_text', '')
+
+        return jsonify({
+            'has_missed': True,
+            'date': yesterday_str,
+            'question': decrypted_q,
+            'category': yesterday_doc.get('question_category', ''),
+            'partner_answered': partner_answered,
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Bond QotD missed check error: {e}")
+        return jsonify({'has_missed': False})
+
+
+@bp.route('/api/bonds/<bond_id>/qotd/catchup', methods=['POST'])
+@login_required
+@limits(calls=5, period=60)
+def api_bond_qotd_catchup(bond_id):
+    """Submit a late answer to yesterday's missed question."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json() or {}
+        answer = data.get('answer', '').strip()
+        if not answer or len(answer) > 1000:
+            return jsonify({'error': 'Answer required (max 1000 chars)'}), 400
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        yesterday_str = (now.date() - datetime.timedelta(days=1)).isoformat()
+
+        # Only allow catch-up for yesterday
+        qotd_doc = m.bond_qotd_conf.find_one({
+            'bond_id': ObjectId(bond_id),
+            'date': yesterday_str
+        })
+        if not qotd_doc:
+            return jsonify({'error': 'No question found for yesterday.'}), 404
+
+        answers = qotd_doc.get('answers', {})
+        if user_id_str in answers:
+            return jsonify({'error': 'You already answered yesterday\'s question.'}), 400
+
+        # Save the catch-up answer
+        encrypted_ans = m.encrypt_bond_data(answer, bond_id)
+        answer_key = f'answers.{user_id_str}'
+        m.bond_qotd_conf.update_one(
+            {'_id': qotd_doc['_id']},
+            {'$set': {
+                answer_key: {
+                    'answer': encrypted_ans,
+                    'encrypted': True,
+                    'answered_at': now,
+                    'is_catchup': True,
+                },
+            }}
+        )
+
+        # Track question hash
+        try:
+            raw_q = qotd_doc.get('question_text', '')
+            if raw_q and qotd_doc.get('encrypted'):
+                raw_q = m.decrypt_bond_data(raw_q, bond_id)
+            q_hash = _normalize_question_hash(raw_q)
+            if q_hash:
+                m.bonds_conf.update_one(
+                    {'_id': ObjectId(bond_id)},
+                    {'$addToSet': {'answered_qotd_hashes': q_hash}}
+                )
+        except Exception as ex:
+            current_app.logger.warning(f"Failed to record catchup QotD hash for bond {bond_id}: {ex}")
+
+        # Notify partner if both now answered
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        partner_answered = partner_id in answers
+
+        _on_bond_action(bond_doc, 'qotd', current_user.id)
+
+        result = {
+            'success': True,
+            'revealed': partner_answered,
+        }
+
+        if partner_answered:
+            partner_user = m.users_conf.find_one(
+                {'_id': ObjectId(partner_id)}, {'username': 1}
+            )
+            partner_answer = answers.get(partner_id, {})
+            partner_ans_text = m.decrypt_bond_data(
+                partner_answer.get('answer', ''), bond_id
+            ) if partner_answer else ''
+            result['partner_answer'] = partner_ans_text
+            result['partner_username'] = partner_user['username'] if partner_user else 'Partner'
+            result['my_answer'] = answer
+
+            # Notify partner
+            m.socketio.emit('bond_qotd_revealed', {
+                'bond_id': bond_id,
+                'partner_username': current_user.username,
+                'is_catchup': True
+            }, room=f"user_{partner_id}")
+
+        return jsonify(result)
+
+    except Exception as e:
+        current_app.logger.error(f"Bond QotD catchup error: {e}")
+        return jsonify({'error': 'Failed to submit catch-up answer'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/qotd/themed_days', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_bond_qotd_themed_days(bond_id):
+    """Toggle themed question days on/off for a bond."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json() or {}
+        enabled = bool(data.get('enabled', False))
+
+        m.bonds_conf.update_one(
+            {'_id': ObjectId(bond_id)},
+            {'$set': {'themed_days_enabled': enabled}}
+        )
+
+        return jsonify({
+            'success': True,
+            'themed_days_enabled': enabled
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Bond themed days toggle error: {e}")
+        return jsonify({'error': 'Failed to update setting'}), 500
 
 
 # --- Streak Shield ---

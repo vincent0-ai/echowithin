@@ -1,7 +1,7 @@
 {
-  "versionCode": 46,
-  "versionName": "1.13.1",
+  "versionCode": 47,
+  "versionName": "1.13.2",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.13.1 Fix Web Arcade URLs:\n• Fixed game URLs in mobile app to accurately match website routes (/games/floppy-bird, /games/ping-pong, /games/slime-volleyball, /games/dots-and-boxes, /games/team-crossword)\n• Games now launch smoothly in full-screen without 404 errors",
-  "sha256": "9916596C266E76ED79FF40113CA162FE8ABF764BDEAD8D55D444A3450819B024"
+  "changelog": "v1.13.2 Note Details Modal & Enlarge Snake Game:\n• Moved creation/updated time info to a dedicated Note Info modal in the three-dots options menu\n• Greatly enlarged Retro Snake game window by removing D-pad buttons and adding responsive swipe steering",
+  "sha256": "BB39130EA334ADCCCCCB97371C527CD4AA5FC2D49D07C28BB7C30E9E90A511B3"
 }

@@ -830,8 +830,35 @@ def _get_media_fernet():
         return _MEDIA_FERNET_CACHE['instance']
     app = _get_app()
     secret = app.config["SECRET_KEY"].encode() if isinstance(app.config["SECRET_KEY"], str) else app.config["SECRET_KEY"]
-    key = _derive_fernet_key(secret, b'echowithin_media_at_rest_v1', _NOTES_KDF_ITERATIONS)
-    f = Fernet(key)
+    derived_key = _derive_fernet_key(secret, b'echowithin_media_at_rest_v1', _NOTES_KDF_ITERATIONS)
+    try:
+        if database.auth_conf is not None:
+            doc = database.auth_conf.find_one(
+                {'type': 'media_encryption_key'},
+                {'encryption_key_enc': 1, 'encryption_key_enc_prev': 1}
+            )
+            if doc:
+                kek = _get_kek()
+                unwrapped_key = None
+                for field in ('encryption_key_enc', 'encryption_key_enc_prev'):
+                    enc_val = doc.get(field)
+                    if enc_val:
+                        try:
+                            unwrapped_key = kek.decrypt(enc_val.encode('utf-8'))
+                            break
+                        except Exception:
+                            continue
+                if unwrapped_key:
+                    from cryptography.fernet import MultiFernet
+                    fernets = [Fernet(unwrapped_key)]
+                    if unwrapped_key != derived_key:
+                        fernets.append(Fernet(derived_key))
+                    f = MultiFernet(fernets) if len(fernets) > 1 else fernets[0]
+                    _MEDIA_FERNET_CACHE['instance'] = f
+                    return f
+    except Exception as e:
+        app.logger.warning(f"Failed to unwrap envelope media key, falling back to derived key: {e}")
+    f = Fernet(derived_key)
     _MEDIA_FERNET_CACHE['instance'] = f
     return f
 

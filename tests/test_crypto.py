@@ -406,3 +406,101 @@ class TestFormDefinitionEncryption:
             plain = _decrypt_form_definition({'_id': form_oid, 'title': '', 'description': '', 'questions': []})
             assert plain['title'] == '' and plain['questions'] == []
 
+
+class TestSecretKeyRotation:
+    """Tests for _RotationKeyRing and media envelope key rotation."""
+
+    def test_keyring_rotates_all_domains_without_data_loss(self, app):
+        import base64
+        import secrets
+        from scripts.rotate_secret_key import _RotationKeyRing
+
+        old_sec = 'unit_test_old_secret_' + secrets.token_hex(8)
+        new_sec = 'unit_test_new_secret_' + secrets.token_hex(8)
+
+        with app.app_context():
+            kr = _RotationKeyRing(old_sec, new_sec)
+
+            # 1. User v2 -> v3 rotation
+            uid = '507f1f77bcf86cd799439011'
+            dek_raw = secrets.token_bytes(32)
+            salt_b64 = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8')
+            kr.register_user_v3_dek(uid, dek_raw, salt_b64)
+
+            old_v2_cipher = kr.get_old_user_v2(uid).encrypt(b'My secret note').decode('utf-8')
+            rotated_cipher, st = kr.rotate_user_field(old_v2_cipher, [uid], primary_uid=uid)
+            assert st == 'rotated'
+            assert kr.get_user_v3(uid).decrypt(rotated_cipher.encode('utf-8')).decode('utf-8') == 'My secret note'
+
+            # Idempotency check
+            _, st2 = kr.rotate_user_field(rotated_cipher, [uid], primary_uid=uid)
+            assert st2 == 'skipped'
+
+            # 2. DM v2 -> v3 rotation
+            u1, u2 = '507f1f77bcf86cd799439001', '507f1f77bcf86cd799439002'
+            dm_dek = secrets.token_bytes(32)
+            kr.register_dm_v3_dek(u1, u2, dm_dek)
+
+            old_dm_cipher = kr.get_old_dm_v2(u1, u2).encrypt(b'Private DM image url').decode('utf-8')
+            rot_dm, st_dm = kr.rotate_dm_field(old_dm_cipher, u1, u2)
+            assert st_dm == 'rotated'
+            assert kr.get_dm_v3(u1, u2).decrypt(rot_dm.encode('utf-8')).decode('utf-8') == 'Private DM image url'
+            assert kr.rotate_dm_field(rot_dm, u1, u2)[1] == 'skipped'
+
+            # 3. Bond, Community, Form, Game, Vault simple field rotation
+            bid = '507f1f77bcf86cd799439077'
+            bond_c = kr.get_old_bond(bid).encrypt(b'Bond journal').decode('utf-8')
+            rot_bond, st_bond = kr.rotate_simple_field(bond_c, kr.get_old_bond(bid), kr.get_new_bond(bid))
+            assert st_bond == 'rotated'
+            assert kr.get_new_bond(bid).decrypt(rot_bond.encode('utf-8')).decode('utf-8') == 'Bond journal'
+            assert kr.rotate_simple_field(rot_bond, kr.get_old_bond(bid), kr.get_new_bond(bid))[1] == 'skipped'
+
+    def test_media_envelope_key_preserves_media_across_secret_rotation(self, app):
+        import secrets
+        from unittest.mock import MagicMock
+        import database
+        import security
+
+        old_sec = 'media_old_secret_' + secrets.token_hex(8)
+        new_sec = 'media_new_secret_' + secrets.token_hex(8)
+        orig_secret = app.config['SECRET_KEY']
+        orig_auth = database.auth_conf
+
+        try:
+            with app.app_context():
+                # Step 1: Encrypt media bytes under old_sec (before rotation)
+                app.config['SECRET_KEY'] = old_sec
+                security._KEK_CACHE.clear()
+                security._MEDIA_FERNET_CACHE.clear()
+                database.auth_conf = None
+
+                raw_media = b'\x89PNG\r\n\x1a\nsecret_image_bytes'
+                cipher_bytes = security.encrypt_media_bytes(raw_media)
+                assert security.decrypt_media_bytes(cipher_bytes) == raw_media
+
+                # Step 2: Simulate Phase 3 rotation wrapping old media key with new KEK
+                old_media_key = security._derive_fernet_key(
+                    old_sec.encode('utf-8'), b'echowithin_media_at_rest_v1', security._NOTES_KDF_ITERATIONS
+                )
+                app.config['SECRET_KEY'] = new_sec
+                security._KEK_CACHE.clear()
+                security._MEDIA_FERNET_CACHE.clear()
+
+                wrapped_media_key = security._get_kek().encrypt(old_media_key).decode('utf-8')
+                mock_auth = MagicMock()
+                mock_auth.find_one.return_value = {
+                    'type': 'media_encryption_key',
+                    'encryption_key_enc': wrapped_media_key,
+                }
+                database.auth_conf = mock_auth
+
+                # Step 3: Decrypt pre-rotation media bytes under new_sec!
+                decrypted = security.decrypt_media_bytes(cipher_bytes)
+                assert decrypted == raw_media
+        finally:
+            app.config['SECRET_KEY'] = orig_secret
+            database.auth_conf = orig_auth
+            security._KEK_CACHE.clear()
+            security._MEDIA_FERNET_CACHE.clear()
+
+

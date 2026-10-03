@@ -290,18 +290,18 @@ class _RotationKeyRing:
         # 1. Check if already decryptable with any candidate's v3 key
         for uid in clean_uids:
             f_v3 = self.get_user_v3(uid)
-            if f_v3 and _try_decrypt(f_v3, ciphertext) is not None:
+            if f_v3 is not None and _try_decrypt(f_v3, ciphertext) is not None:
                 return ciphertext, 'skipped'
 
         # 2. If no candidate has a v3 key, check if already decryptable with new v2 or new v1
         for uid in clean_uids:
-            if not self.get_user_v3(uid):
+            if self.get_user_v3(uid) is None:
                 if _try_decrypt(self.get_new_user_v2(uid), ciphertext) is not None:
                     return ciphertext, 'skipped'
         if not owner_uid and _try_decrypt(self.new_v1_notes, ciphertext) is not None:
             return ciphertext, 'skipped'
 
-        # 3. Decrypt using old v2 keys, new v2 keys (if upgrading to v3), old v1, or new v1
+        # 3. Decrypt using candidate old v2 keys, new v2 keys (if upgrading to v3), old v1, or new v1
         plaintext = None
         matched_uid = None
         for uid in clean_uids:
@@ -319,11 +319,36 @@ class _RotationKeyRing:
         if plaintext is None:
             plaintext = _try_decrypt(self.new_v1_notes, ciphertext)
 
+        # 4. Fallback: check all known users' v3 keys (in case note/version was encrypted by another user)
+        if plaintext is None:
+            for uid, f_v3 in self._user_v3.items():
+                if uid in clean_uids:
+                    continue
+                plain_v3 = _try_decrypt(f_v3, ciphertext)
+                if plain_v3 is not None:
+                    # If we have a known owner_uid with v3 key, re-encrypt under owner_uid so normal runtime can decrypt it
+                    if owner_uid and self.get_user_v3(owner_uid) is not None:
+                        plaintext = plain_v3
+                        matched_uid = owner_uid
+                        break
+                    return ciphertext, 'skipped'
+
+        # 5. Fallback: check all known users' old v2 keys
+        if plaintext is None:
+            for uid in list(self._user_v3.keys()):
+                if uid in clean_uids:
+                    continue
+                plain_v2 = _try_decrypt(self.get_old_user_v2(uid), ciphertext)
+                if plain_v2 is not None:
+                    plaintext = plain_v2
+                    matched_uid = owner_uid or uid
+                    break
+
         if plaintext is None:
             return ciphertext, 'failed'
 
-        # 4. Re-encrypt with target key (prefer v3 DEK of owner/matched user, else new v2, else new v1)
-        target_uid = matched_uid or owner_uid
+        # 6. Re-encrypt with target key (prefer v3 DEK of owner/matched user, else new v2, else new v1)
+        target_uid = owner_uid or matched_uid
         target_fernet = None
         if target_uid:
             target_fernet = self.get_user_v3(target_uid) or self.get_new_user_v2(target_uid)
@@ -666,7 +691,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
         #  note_discussions, note_shares)
         # ==================================================================
         print("\n--- Phase 5: User-Keyed Records (bio, notes, versions, attachments, shares, discussions) ---")
-        p5_rotated, p5_skipped, p5_failed = 0, 0, 0
+        p5_rotated, p5_skipped, p5_orphaned = 0, 0, 0
 
         # 5a. users.bio
         for udoc in database.users_conf.find({'bio': {'$exists': True, '$ne': ''}}, {'_id': 1, 'bio': 1}):
@@ -679,7 +704,8 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                         database.users_conf.update_one({'_id': udoc['_id']}, {'$set': {'bio': new_bio}})
                     p5_rotated += 1
                 elif st == 'failed':
-                    p5_failed += 1
+                    print(f"  [WARN] Pre-existing undecryptable users.bio on user {uid} (skipped)")
+                    p5_orphaned += 1
                 else:
                     p5_skipped += 1
 
@@ -693,7 +719,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                 note_owner_map[nid] = primary
 
             updates = {}
-            failed_flag = False
+            failed_fields = []
 
             for field in ('content', 'reference'):
                 val = ndoc.get(field)
@@ -702,7 +728,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                     if st == 'rotated':
                         updates[field] = new_val
                     elif st == 'failed':
-                        failed_flag = True
+                        failed_fields.append(field)
 
             tags = ndoc.get('tags')
             if isinstance(tags, list) and any(_is_fernet_token(t) for t in tags):
@@ -716,7 +742,8 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                             tags_changed = True
                         elif st == 'failed':
                             new_tags.append(t)
-                            failed_flag = True
+                            if 'tags' not in failed_fields:
+                                failed_fields.append('tags')
                         else:
                             new_tags.append(t)
                     else:
@@ -724,22 +751,24 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                 if tags_changed:
                     updates['tags'] = new_tags
 
-            if failed_flag:
-                p5_failed += 1
-            elif updates:
+            if updates:
                 if confirm:
                     database.personal_posts_conf.update_one({'_id': ndoc['_id']}, {'$set': updates})
                 p5_rotated += 1
+            elif failed_fields:
+                print(f"  [WARN] Pre-existing undecryptable personal_posts {nid} fields={failed_fields} owner={primary} (skipped)")
+                p5_orphaned += 1
             else:
                 p5_skipped += 1
 
         # 5c. note_versions (content, base_content, proposed_content)
         for vdoc in database.note_versions_conf.find({}):
+            vid = str(vdoc['_id'])
             nid = str(vdoc.get('note_id', ''))
             cands = [vdoc.get('content_owner_id'), vdoc.get('editor_id'), vdoc.get('user_id'), note_owner_map.get(nid)]
             primary = str(vdoc.get('content_owner_id') or note_owner_map.get(nid) or vdoc.get('editor_id') or '')
             updates = {}
-            failed_flag = False
+            failed_fields = []
             for field in ('content', 'base_content', 'proposed_content'):
                 val = vdoc.get(field)
                 if _is_fernet_token(val):
@@ -747,23 +776,25 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                     if st == 'rotated':
                         updates[field] = new_val
                     elif st == 'failed':
-                        failed_flag = True
-            if failed_flag:
-                p5_failed += 1
-            elif updates:
+                        failed_fields.append(field)
+            if updates:
                 if confirm:
                     database.note_versions_conf.update_one({'_id': vdoc['_id']}, {'$set': updates})
                 p5_rotated += 1
+            elif failed_fields:
+                print(f"  [WARN] Pre-existing undecryptable note_versions {vid} fields={failed_fields} note={nid} (skipped)")
+                p5_orphaned += 1
             else:
                 p5_skipped += 1
 
         # 5d. note_attachments (url, filename)
         for adoc in database.note_attachments_conf.find({}):
+            aid = str(adoc['_id'])
             nid = str(adoc.get('note_id', ''))
             cands = [adoc.get('user_id'), note_owner_map.get(nid)]
             primary = str(adoc.get('user_id') or note_owner_map.get(nid) or '')
             updates = {}
-            failed_flag = False
+            failed_fields = []
             for field in ('url', 'filename'):
                 val = adoc.get(field)
                 if _is_fernet_token(val):
@@ -771,18 +802,20 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                     if st == 'rotated':
                         updates[field] = new_val
                     elif st == 'failed':
-                        failed_flag = True
-            if failed_flag:
-                p5_failed += 1
-            elif updates:
+                        failed_fields.append(field)
+            if updates:
                 if confirm:
                     database.note_attachments_conf.update_one({'_id': adoc['_id']}, {'$set': updates})
                 p5_rotated += 1
+            elif failed_fields:
+                print(f"  [WARN] Pre-existing undecryptable note_attachments {aid} fields={failed_fields} (skipped)")
+                p5_orphaned += 1
             else:
                 p5_skipped += 1
 
         # 5e. note_discussions (content)
         for ddoc in database.note_discussions_conf.find({}):
+            did = str(ddoc['_id'])
             uid = str(ddoc.get('author_id', ''))
             val = ddoc.get('content')
             if _is_fernet_token(val):
@@ -792,16 +825,18 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                         database.note_discussions_conf.update_one({'_id': ddoc['_id']}, {'$set': {'content': new_val}})
                     p5_rotated += 1
                 elif st == 'failed':
-                    p5_failed += 1
+                    print(f"  [WARN] Pre-existing undecryptable note_discussions {did} author={uid} (skipped)")
+                    p5_orphaned += 1
                 else:
                     p5_skipped += 1
 
         # 5f. note_shares (valentine_photo, valentine_audio, valentine_document)
         for sdoc in database.note_shares_conf.find({}):
+            sid = str(sdoc['_id'])
             cands = [sdoc.get('owner_id'), sdoc.get('source_owner_id')]
             primary = str(sdoc.get('owner_id') or sdoc.get('source_owner_id') or '')
             updates = {}
-            failed_flag = False
+            failed_fields = []
             for field in ('valentine_photo', 'valentine_audio', 'valentine_document'):
                 val = sdoc.get(field)
                 if _is_fernet_token(val):
@@ -809,17 +844,18 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                     if st == 'rotated':
                         updates[field] = new_val
                     elif st == 'failed':
-                        failed_flag = True
-            if failed_flag:
-                p5_failed += 1
-            elif updates:
+                        failed_fields.append(field)
+            if updates:
                 if confirm:
                     database.note_shares_conf.update_one({'_id': sdoc['_id']}, {'$set': updates})
                 p5_rotated += 1
+            elif failed_fields:
+                print(f"  [WARN] Pre-existing undecryptable note_shares {sid} fields={failed_fields} (skipped)")
+                p5_orphaned += 1
             else:
                 p5_skipped += 1
 
-        summary['Phase 5 (User-Keyed Docs)'] = f"{p5_rotated} rotated, {p5_skipped} skipped, {p5_failed} failed"
+        summary['Phase 5 (User-Keyed Docs)'] = f"{p5_rotated} rotated, {p5_skipped} skipped, {p5_orphaned} orphaned/pre-existing"
         print(f"  Phase 5 complete: {summary['Phase 5 (User-Keyed Docs)']}")
 
         # ==================================================================
@@ -1326,7 +1362,9 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
             else:
                 p10_skipped += 1
 
-        game_subs_conf = getattr(m, 'game_submissions_conf', None) or database.db['game_submissions']
+        game_subs_conf = getattr(m, 'game_submissions_conf', None)
+        if game_subs_conf is None:
+            game_subs_conf = database.db['game_submissions']
         for sub in game_subs_conf.find({}):
             lid = str(sub.get('lobby_id', ''))
             content = sub.get('content')

@@ -169,3 +169,60 @@ class TestQotdDepthAndThemedDays:
         # Friday is 4 (Free Friday - no filtering)
         free = _filter_by_theme(questions, 4)
         assert free == questions
+
+
+class TestQotdHistoryPagination:
+    """Test pagination and mutual reveal behavior in api_bond_qotd_history."""
+
+    def test_history_pagination_response_format(self, auth_client, mock_user):
+        bond_id = ObjectId()
+        partner_id = ObjectId()
+        bond_doc = {
+            '_id': bond_id,
+            'user_a_id': mock_user['_id'],
+            'user_b_id': partner_id,
+            'status': 'active'
+        }
+
+        with patch('main.bonds_conf') as mock_bonds, \
+             patch('main.bond_qotd_conf') as mock_qotd, \
+             patch('main.users_conf') as mock_users, \
+             patch('main.decrypt_bond_data', side_effect=lambda val, bid: f"decrypted_{val}"):
+
+            mock_bonds.find_one.return_value = bond_doc
+            mock_users.find_one.return_value = {'_id': partner_id, 'username': 'partneruser'}
+            mock_qotd.count_documents.return_value = 25
+
+            # Mock cursor chaining: find().sort().skip().limit()
+            mock_cursor = MagicMock()
+            mock_cursor.sort.return_value = mock_cursor
+            mock_cursor.skip.return_value = mock_cursor
+            mock_cursor.limit.return_value = [
+                {
+                    'date': '2026-10-01',
+                    'question_text': 'test_q',
+                    'encrypted': True,
+                    'answers': {
+                        str(partner_id): {'answer': 'enc_ans_partner', 'encrypted': True}
+                    }
+                }
+            ]
+            mock_qotd.find.return_value = mock_cursor
+
+            res = auth_client.get(f'/api/bonds/{bond_id}/qotd/history?page=2&per_page=10')
+            assert res.status_code == 200
+            data = res.get_json()
+
+            assert data['page'] == 2
+            assert data['per_page'] == 10
+            assert data['total'] == 25
+            assert data['total_pages'] == 3
+            assert data['has_more'] is True
+            assert len(data['history']) == 1
+
+            entry = data['history'][0]
+            assert entry['status'] == 'only_partner'
+            assert entry['is_revealed'] is False
+            assert entry['partner_answer'] is None  # Masked until user answers
+            assert entry['can_answer'] is True
+

@@ -3909,12 +3909,29 @@ def api_bond_qotd_history(bond_id):
         now = datetime.datetime.now(datetime.timezone.utc)
         today_str = now.date().isoformat()
 
-        history_docs = list(m.bond_qotd_conf.find(
-            {
-                'bond_id': ObjectId(bond_id),
-                'date': {'$ne': today_str}
-            }
-        ).sort('date', -1).limit(30))
+        try:
+            page = max(1, int(request.args.get('page', 1)))
+        except (ValueError, TypeError):
+            page = 1
+        try:
+            per_page = min(50, max(5, int(request.args.get('per_page', 20))))
+        except (ValueError, TypeError):
+            per_page = 20
+
+        # Query all historical records for this bond where at least one person answered
+        history_query = {
+            'bond_id': ObjectId(bond_id),
+            'date': {'$ne': today_str},
+            'answers': {'$exists': True, '$ne': {}}
+        }
+
+        total_count = m.bond_qotd_conf.count_documents(history_query)
+        total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
+
+        history_docs = list(m.bond_qotd_conf.find(history_query)
+                            .sort('date', -1)
+                            .skip((page - 1) * per_page)
+                            .limit(per_page))
 
         history = []
         for doc in history_docs:
@@ -3922,7 +3939,7 @@ def api_bond_qotd_history(bond_id):
             has_my_answer = user_id_str in answers
             has_partner_answer = partner_id_str in answers
 
-            # Include entries where at least one person answered (not just both)
+            # Include entries where at least one person answered
             if not has_my_answer and not has_partner_answer:
                 continue
 
@@ -3980,7 +3997,14 @@ def api_bond_qotd_history(bond_id):
 
             history.append(entry)
 
-        return jsonify({'history': history})
+        return jsonify({
+            'history': history,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': total_pages,
+            'total': total_count,
+            'has_more': page < total_pages
+        })
 
     except Exception as e:
         current_app.logger.error(f"Bond QotD history error: {e}")

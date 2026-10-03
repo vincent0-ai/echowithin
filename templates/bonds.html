@@ -833,26 +833,48 @@
         border-top: 1px solid var(--card-border);
     }
 
-    .qotd-theme-badge {
-        display: inline-block;
-        font-size: 0.7rem;
-        color: var(--primary-color);
+    .qotd-settings-panel {
         background: var(--surface-bg);
         border: 1px solid var(--border-color);
-        border-radius: 10px;
-        padding: 0.1rem 0.5rem;
-        margin-bottom: 0.3rem;
+        border-radius: 8px;
+        padding: 0.7rem 0.9rem;
+        margin-top: 0.8rem;
     }
 
-    .qotd-history-missed {
-        opacity: 0.7;
+    .qotd-settings-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.55rem 0;
+        border-bottom: 1px solid var(--card-border);
+    }
+
+    .qotd-settings-row:last-child {
+        border-bottom: none;
+    }
+
+    .qotd-settings-info {
+        flex: 1;
+        padding-right: 0.8rem;
+    }
+
+    .qotd-settings-title {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--text-dark-color);
+    }
+
+    .qotd-settings-desc {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        line-height: 1.35;
+        margin-top: 0.15rem;
     }
 
     .qotd-history-missed .qotd-reveal-card.missed-placeholder {
         border-style: dashed;
         text-align: center;
         color: var(--text-muted);
-        font-style: italic;
         font-size: 0.8rem;
     }
 
@@ -4733,42 +4755,18 @@
             html += '</div></div></div>';
         }
 
-        // Themed day badge
+        var catText = escHtml(data.category || '');
         if (data.today_theme) {
-            html += '<div style="text-align:center;"><span class="qotd-theme-badge">' + escHtml(data.today_theme) + '</span></div>';
+            catText += (catText ? ' · ' : '') + escHtml(data.today_theme);
+        }
+        if (catText) {
+            html += '<div class="qotd-category">' + catText + '</div>';
         }
 
-        html += '<div class="qotd-category">' + escHtml(data.category) + '</div>';
         html += '<div class="qotd-question">"' + escHtml(data.question) + '"</div>';
 
         if (data.source === 'custom' && data.set_by_username && (!data.category || !data.category.includes('Asked by'))) {
             html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-bottom:0.8rem;">Asked by ' + escHtml(data.set_by_username) + '</div>';
-        }
-
-        // Action controls for AI & Custom question (only available online and before answers are submitted AND for active bonds)
-        if (!isOffline() && !data.is_archived_bond && !data.my_answered && !data.partner_answered) {
-            html += '<div style="display:flex; gap:0.5rem; justify-content:center; margin-bottom:0.8rem; flex-wrap:wrap;">';
-            html += '<button class="btn btn-bond-primary" style="font-size:0.78rem; padding:0.25rem 0.6rem;" onclick="generateAiQotd(\'' + bondId + '\')">Generate AI Question</button>';
-            html += '<button class="btn btn-bond-secondary" style="font-size:0.78rem; padding:0.25rem 0.6rem;" onclick="showCustomQotdInput(\'' + bondId + '\')">Write Custom Question</button>';
-            html += '</div>';
-            if (data.ai_consent) {
-                if (data.ai_consent.i_consented) {
-                    if (!data.ai_consent.all_consented) {
-                        html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-bottom:0.8rem;">AI questions enabled for you \u2014 waiting for your partner to enable them too.</div>';
-                    }
-                } else {
-                    html += '<div style="text-align:center; margin-bottom:0.8rem; padding:0.5rem 0.6rem; background:var(--surface-bg); border-radius:6px; border:1px solid var(--border-color);">';
-                    html += '<div style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:0.4rem;">AI questions send your bond type and recent questions to an external AI provider. Both partners must enable them.</div>';
-                    html += '<button class="btn btn-bond-secondary" style="font-size:0.75rem; padding:0.2rem 0.6rem;" onclick="toggleAiConsent(\'' + bondId + '\', true)">Enable AI Questions</button>';
-                    html += '</div>';
-                }
-            }
-            html += '<div id="qotd-custom-form-' + bondId + '" style="display:none; margin-bottom:0.8rem; padding:0.6rem; background:var(--surface-bg); border-radius:6px; border:1px solid var(--border-color);">';
-            html += '<textarea id="qotd-custom-input-' + bondId + '" placeholder="Type a custom question for your partner..." maxlength="300" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; min-height:50px; background:var(--card-bg); color:var(--text-dark-color);"></textarea>';
-            html += '<div style="display:flex; gap:0.4rem; justify-content:flex-end; margin-top:0.4rem;">';
-            html += '<button class="btn btn-bond-secondary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="hideCustomQotdInput(\'' + bondId + '\')">Cancel</button>';
-            html += '<button class="btn btn-bond-primary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="submitCustomQotd(\'' + bondId + '\')">Set Question</button>';
-            html += '</div></div>';
         }
 
         if (data.offline_saved) {
@@ -4811,49 +4809,128 @@
             if (data.partner_answered) {
                 html += '<div class="qotd-waiting">Your partner has already answered. Submit yours to reveal both!</div>';
             }
-            // Skip button (only if neither answered and skips remaining and online)
-            if (!isOffline() && !data.partner_answered && data.skips_remaining > 0) {
-                html += '<div style="margin-top:1rem; padding-top:0.8rem; border-top:1px solid var(--border-color);">';
-                html += '<div style="text-align:center; margin-bottom:0.4rem;">';
-                html += '<div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.3rem;">Not feeling this question?</div>';
-                html += '<button class="btn btn-bond-secondary" style="font-size:0.78rem; padding:0.3rem 0.8rem;" onclick="showSkipOptions(\'' + bondId + '\')">Skip and get a new one (' + data.skips_remaining + ' left today)</button>';
+
+            // Compact secondary actions row (Custom, AI, Skip)
+            if (!isOffline()) {
+                var hasAi = data.ai_consent && data.ai_consent.all_consented;
+                var canSkip = data.skips_remaining > 0 && !data.partner_answered;
+                html += '<div style="display:flex;gap:0.4rem;justify-content:center;margin-top:0.6rem;flex-wrap:wrap;">';
+                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.18rem 0.5rem;" onclick="showCustomQotdInput(\'' + bondId + '\')">Custom Question</button>';
+                if (hasAi) {
+                    html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.18rem 0.5rem;" onclick="generateAiQotd(\'' + bondId + '\')">AI Question</button>';
+                }
+                if (canSkip) {
+                    html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.18rem 0.5rem;" onclick="showSkipOptions(\'' + bondId + '\')">Skip (' + data.skips_remaining + ' left)</button>';
+                }
                 html += '</div>';
-                html += '<div id="skip-options-' + bondId + '" style="display:none;margin-top:0.5rem;padding:0.5rem;background:var(--surface-bg);border:1px solid var(--border-color);border-radius:6px;">';
-                html += '<div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.4rem;">Tell us why so we won\'t show this question to your bond again:</div>';
-                html += '<div style="display:flex;flex-wrap:wrap;gap:0.3rem;justify-content:center;">';
-                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'already_answered\')">Already Answered</button>';
-                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'boring\')">Boring</button>';
-                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'too_personal\')">Too Personal</button>';
-                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'not_relevant\')">Not Relevant</button>';
-                html += '</div></div></div>';
+
+                // Expandable custom question form
+                html += '<div id="qotd-custom-form-' + bondId + '" style="display:none; margin-top:0.6rem; padding:0.6rem; background:var(--surface-bg); border-radius:6px; border:1px solid var(--border-color);">';
+                html += '<textarea id="qotd-custom-input-' + bondId + '" placeholder="Type a custom question for your partner..." maxlength="300" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; min-height:50px; background:var(--card-bg); color:var(--text-dark-color);"></textarea>';
+                html += '<div style="display:flex; gap:0.4rem; justify-content:flex-end; margin-top:0.4rem;">';
+                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem; padding:0.18rem 0.5rem;" onclick="hideCustomQotdInput(\'' + bondId + '\')">Cancel</button>';
+                html += '<button class="btn btn-bond-primary" style="font-size:0.72rem; padding:0.18rem 0.5rem;" onclick="submitCustomQotd(\'' + bondId + '\')">Set Question</button>';
+                html += '</div></div>';
+
+                // Expandable skip options
+                if (canSkip) {
+                    html += '<div id="skip-options-' + bondId + '" style="display:none;margin-top:0.5rem;padding:0.5rem;background:var(--surface-bg);border:1px solid var(--border-color);border-radius:6px;">';
+                    html += '<div style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.3rem;">Tell us why so we won\'t show this question to your bond again:</div>';
+                    html += '<div style="display:flex;flex-wrap:wrap;gap:0.3rem;justify-content:center;">';
+                    html += '<button class="btn btn-bond-secondary" style="font-size:0.7rem;padding:0.15rem 0.45rem;" onclick="skipQotd(\'' + bondId + '\', \'already_answered\')">Already Answered</button>';
+                    html += '<button class="btn btn-bond-secondary" style="font-size:0.7rem;padding:0.15rem 0.45rem;" onclick="skipQotd(\'' + bondId + '\', \'boring\')">Boring</button>';
+                    html += '<button class="btn btn-bond-secondary" style="font-size:0.7rem;padding:0.15rem 0.45rem;" onclick="skipQotd(\'' + bondId + '\', \'too_personal\')">Too Personal</button>';
+                    html += '<button class="btn btn-bond-secondary" style="font-size:0.7rem;padding:0.15rem 0.45rem;" onclick="skipQotd(\'' + bondId + '\', \'not_relevant\')">Not Relevant</button>';
+                    html += '</div></div>';
+                }
             }
         }
 
-        // Monthly stats bar
-        if (data.monthly_stats && !data.is_archived_bond) {
-            var ms = data.monthly_stats;
-            html += '<div class="qotd-stats-bar">';
-            html += '<span>' + ms.both_answered + '/' + ms.total_days + ' answered together in ' + escHtml(ms.month_name) + '</span>';
-            html += '<span>' + escHtml(ms.depth_tier) + ' · ' + ms.lifetime_together + ' total</span>';
+        var settingsWasOpen = false;
+        var existingSettings = document.getElementById('qotd-settings-' + bondId);
+        if (existingSettings && existingSettings.style.display !== 'none') {
+            settingsWasOpen = true;
+        }
+
+        var historyWasOpen = false;
+        var existingHistory = document.getElementById('qotd-history-' + bondId);
+        if (existingHistory && existingHistory.style.display !== 'none') {
+            historyWasOpen = true;
+        }
+
+        // Bottom row: Past Questions & Settings buttons
+        html += '<div style="margin-top:0.9rem;display:flex;justify-content:center;gap:0.5rem;flex-wrap:wrap;">';
+        html += '<button class="btn btn-bond-secondary" style="font-size:0.75rem;padding:0.22rem 0.65rem;" onclick="toggleQotdHistory(\'' + bondId + '\')"><i class="fas fa-history" style="margin-right:0.25rem;"></i>Past Questions</button>';
+        if (!data.is_archived_bond) {
+            html += '<button class="btn btn-bond-secondary" style="font-size:0.75rem;padding:0.22rem 0.65rem;" onclick="toggleQotdSettings(\'' + bondId + '\')"><i class="fas fa-sliders-h" style="margin-right:0.25rem;"></i>Settings</button>';
+        }
+        html += '</div>';
+
+        // History container (collapsible)
+        html += '<div id="qotd-history-' + bondId + '" style="display:' + (historyWasOpen ? 'block' : 'none') + '; margin-top:0.8rem;"></div>';
+
+        // Settings panel (collapsible)
+        if (!data.is_archived_bond) {
+            html += '<div id="qotd-settings-' + bondId + '" class="qotd-settings-panel" style="display:' + (settingsWasOpen ? 'block' : 'none') + ';">';
+            html += '<div style="font-size:0.85rem;font-weight:600;color:var(--primary-dark-color);margin-bottom:0.6rem;display:flex;justify-content:space-between;align-items:center;">';
+            html += '<span>Question Settings & Preferences</span>';
+            html += '<button style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.9rem;" onclick="toggleQotdSettings(\'' + bondId + '\')">&times;</button>';
+            html += '</div>';
+
+            // Row 1: Themed Question Days
+            var themedOn = !!data.themed_days_enabled;
+            html += '<div class="qotd-settings-row">';
+            html += '<div class="qotd-settings-info">';
+            html += '<div class="qotd-settings-title">Themed Question Days</div>';
+            html += '<div class="qotd-settings-desc">Questions matched to daily themes (Memory Monday, Dream Tuesday, Fun Wednesday, Gratitude Thursday, Free Weekend).</div>';
+            html += '</div>';
+            html += '<label style="position:relative;display:inline-block;width:34px;height:18px;cursor:pointer;flex-shrink:0;">';
+            html += '<input type="checkbox" ' + (themedOn ? 'checked' : '') + ' onchange="toggleThemedDays(\'' + bondId + '\', this.checked)" style="opacity:0;width:0;height:0;">';
+            html += '<span style="position:absolute;top:0;left:0;right:0;bottom:0;background:' + (themedOn ? 'var(--primary-color)' : 'var(--border-color)') + ';border-radius:9px;transition:0.2s;"></span>';
+            html += '<span style="position:absolute;top:2px;left:' + (themedOn ? '18px' : '2px') + ';width:14px;height:14px;background:#fff;border-radius:50%;transition:0.2s;"></span>';
+            html += '</label></div>';
+
+            // Row 2: Progressive Depth
+            var ms = data.monthly_stats || {};
+            var depthTier = ms.depth_tier || 'Icebreaker';
+            var lifetimeTogether = ms.lifetime_together || 0;
+            html += '<div class="qotd-settings-row">';
+            html += '<div class="qotd-settings-info">';
+            html += '<div class="qotd-settings-title">Question Depth: <span style="color:var(--primary-color);">' + escHtml(depthTier) + '</span></div>';
+            html += '<div class="qotd-settings-desc">Questions adapt from light icebreakers into deeper topics as your bond matures (' + lifetimeTogether + ' questions answered together).</div>';
+            html += '</div></div>';
+
+            // Row 3: AI Generation Consent
+            var aiConsented = data.ai_consent && data.ai_consent.i_consented;
+            var aiAllConsented = data.ai_consent && data.ai_consent.all_consented;
+            var aiStatusText = aiAllConsented ? 'Active (both opted in)' : (aiConsented ? 'Opted in · Waiting for partner' : 'Disabled');
+            html += '<div class="qotd-settings-row">';
+            html += '<div class="qotd-settings-info">';
+            html += '<div class="qotd-settings-title">AI Question Generation</div>';
+            html += '<div class="qotd-settings-desc">Allows generating tailored questions using AI. Requires both partners to opt in.<br><span style="color:' + (aiAllConsented ? 'var(--primary-color)' : 'var(--text-muted)') + ';font-weight:500;">Status: ' + aiStatusText + '</span></div>';
+            html += '</div>';
+            html += '<label style="position:relative;display:inline-block;width:34px;height:18px;cursor:pointer;flex-shrink:0;">';
+            html += '<input type="checkbox" ' + (aiConsented ? 'checked' : '') + ' onchange="toggleAiConsent(\'' + bondId + '\', this.checked)" style="opacity:0;width:0;height:0;">';
+            html += '<span style="position:absolute;top:0;left:0;right:0;bottom:0;background:' + (aiConsented ? 'var(--primary-color)' : 'var(--border-color)') + ';border-radius:9px;transition:0.2s;"></span>';
+            html += '<span style="position:absolute;top:2px;left:' + (aiConsented ? '18px' : '2px') + ';width:14px;height:14px;background:#fff;border-radius:50%;transition:0.2s;"></span>';
+            html += '</label></div>';
+
+            // Row 4: Monthly activity
+            if (ms.month_name) {
+                html += '<div class="qotd-settings-row">';
+                html += '<div class="qotd-settings-info">';
+                html += '<div class="qotd-settings-title">Monthly Activity</div>';
+                html += '<div class="qotd-settings-desc">' + ms.both_answered + ' of ' + ms.total_days + ' answered together in ' + escHtml(ms.month_name) + ' (' + (ms.my_answered || 0) + ' by you, ' + (ms.partner_answered || 0) + ' by partner).</div>';
+                html += '</div></div>';
+            }
+
             html += '</div>';
         }
 
-        // Themed days toggle
-        if (!data.is_archived_bond) {
-            var themedOn = !!data.themed_days_enabled;
-            html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.72rem;color:var(--text-muted);padding:0.3rem 0;">';
-            html += '<span>Themed question days</span>';
-            html += '<label style="position:relative;display:inline-block;width:32px;height:18px;cursor:pointer;">';
-            html += '<input type="checkbox" ' + (themedOn ? 'checked' : '') + ' onchange="toggleThemedDays(\'' + bondId + '\', this.checked)" style="opacity:0;width:0;height:0;">';
-            html += '<span style="position:absolute;top:0;left:0;right:0;bottom:0;background:' + (themedOn ? 'var(--primary-color)' : 'var(--border-color)') + ';border-radius:9px;transition:0.2s;"></span>';
-            html += '<span style="position:absolute;top:2px;left:' + (themedOn ? '16px' : '2px') + ';width:14px;height:14px;background:#fff;border-radius:50%;transition:0.2s;"></span>';
-            html += '</label></div>';
-        }
-
-        html += '<div style="margin-top:0.8rem;text-align:center;"><button class="btn btn-bond-secondary" style="font-size:0.75rem;padding:0.2rem 0.6rem;" onclick="toggleQotdHistory(\'' + bondId + '\')">Past Questions</button></div>';
-        html += '<div id="qotd-history-' + bondId + '" style="display:none; margin-top:0.8rem;"></div>';
-
         container.innerHTML = html;
+        if (historyWasOpen) {
+            loadQotdHistory(bondId, 1);
+        }
     }
 
     function showSkipOptions(bondId) {
@@ -5096,12 +5173,28 @@
         });
     }
 
+    window._qotdHistoryPages = window._qotdHistoryPages || {};
+
+    function toggleQotdSettings(bondId) {
+        const el = document.getElementById('qotd-settings-' + bondId);
+        if (!el) return;
+        if (el.style.display === 'none' || !el.style.display) {
+            el.style.display = 'block';
+            const hist = document.getElementById('qotd-history-' + bondId);
+            if (hist) hist.style.display = 'none';
+        } else {
+            el.style.display = 'none';
+        }
+    }
+
     function toggleQotdHistory(bondId) {
         const historyContainer = document.getElementById('qotd-history-' + bondId);
         if (!historyContainer) return;
         if (historyContainer.style.display === 'none' || !historyContainer.style.display) {
             historyContainer.style.display = 'block';
-            loadQotdHistory(bondId);
+            loadQotdHistory(bondId, 1);
+            const settings = document.getElementById('qotd-settings-' + bondId);
+            if (settings) settings.style.display = 'none';
         } else {
             historyContainer.style.display = 'none';
         }
@@ -5109,7 +5202,7 @@
 
     function renderQotdHistoryItems(history, bondId) {
         if (!history || history.length === 0) {
-            return '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;">No past questions found in history.</div>';
+            return '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;">No past answered questions found in history.</div>';
         }
         let html = '';
         history.forEach(item => {
@@ -5181,33 +5274,63 @@
         return html;
     }
 
-    function loadQotdHistory(bondId) {
+    function renderAllQotdHistory(bondId) {
+        const el = document.getElementById('qotd-history-' + bondId);
+        if (!el) return;
+        const state = _qotdHistoryPages[bondId] || { items: [] };
+        let html = renderQotdHistoryItems(state.items, bondId);
+        if (state.hasMore) {
+            html += '<div style="text-align:center; margin-top:0.7rem;">';
+            html += '<button class="btn btn-bond-secondary" style="font-size:0.75rem; padding:0.25rem 0.75rem;" onclick="loadMoreQotdHistory(\'' + bondId + '\')"><i class="fas fa-chevron-down" style="margin-right:0.25rem;"></i>Load More Past Questions (' + state.items.length + ' of ' + state.total + ')</button>';
+            html += '</div>';
+        }
+        el.innerHTML = html;
+    }
+
+    function loadQotdHistory(bondId, page, isAppend) {
+        page = page || 1;
         const historyContainer = document.getElementById('qotd-history-' + bondId);
         if (!historyContainer) return;
-        historyContainer.style.display = 'block';
-        historyContainer.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Loading history...</div>';
-        echoFetch('/api/bonds/' + bondId + '/qotd/history')
+        if (!isAppend) {
+            historyContainer.style.display = 'block';
+            historyContainer.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.6rem;">Loading past questions...</div>';
+        }
+        echoFetch('/api/bonds/' + bondId + '/qotd/history?page=' + page + '&per_page=20')
             .then(r => r.json())
             .then(d => {
-                if (d && d.history) {
+                const list = d.history || [];
+                _qotdHistoryPages[bondId] = _qotdHistoryPages[bondId] || { items: [] };
+                if (page === 1) {
+                    _qotdHistoryPages[bondId].items = list;
                     setBondCache(bondId + ':qotd_history', d);
+                } else {
+                    _qotdHistoryPages[bondId].items = _qotdHistoryPages[bondId].items.concat(list);
                 }
-                const el = document.getElementById('qotd-history-' + bondId);
-                if (!el) return;
-                el.innerHTML = renderQotdHistoryItems(d.history, bondId);
+                _qotdHistoryPages[bondId].page = page;
+                _qotdHistoryPages[bondId].hasMore = !!d.has_more;
+                _qotdHistoryPages[bondId].total = d.total || _qotdHistoryPages[bondId].items.length;
+
+                renderAllQotdHistory(bondId);
             }).catch(function () {
-                const el = document.getElementById('qotd-history-' + bondId);
-                if (!el) return;
-                getBondCache(bondId + ':qotd_history').then(cached => {
-                    if (cached && cached.history && cached.history.length > 0) {
-                        el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached history</div>' + renderQotdHistoryItems(cached.history, bondId);
-                    } else {
-                        el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;">Past Q&A memory lane will load when back online.</div>';
-                    }
-                }).catch(() => {
-                    el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;">Past Q&A memory lane will load when back online.</div>';
-                });
+                if (page === 1) {
+                    getBondCache(bondId + ':qotd_history').then(cached => {
+                        if (cached && cached.history && cached.history.length > 0) {
+                            historyContainer.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached history</div>' + renderQotdHistoryItems(cached.history, bondId);
+                        } else {
+                            historyContainer.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;">Past Q&A memory lane will load when back online.</div>';
+                        }
+                    }).catch(() => {
+                        historyContainer.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;">Past Q&A memory lane will load when back online.</div>';
+                    });
+                }
             });
+    }
+
+    function loadMoreQotdHistory(bondId) {
+        const state = _qotdHistoryPages[bondId];
+        if (!state || !state.hasMore) return;
+        const nextPage = (state.page || 1) + 1;
+        loadQotdHistory(bondId, nextPage, true);
     }
 
     // ===================================================================

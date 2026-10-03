@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, make_response, session, current_app
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
-import datetime, secrets, hashlib
+import datetime, secrets, hashlib, re
 from security import limits, encrypt_form_response, decrypt_form_response
 
 bp = Blueprint('forms', __name__)
@@ -623,6 +623,100 @@ def submit_form(share_id):
     return redirect(url_for('forms.view_form', share_id=share_id, submitted='1'))
 
 
+# --- Question Alignment & Response Matching ---
+
+STOPWORDS = {'what', 'is', 'are', 'your', 'you', 'the', 'a', 'an', 'in', 'of', 'for', 'to', 'do', 'how', 'please', 'enter', 'rate'}
+
+def _clean_text(s):
+    if not s:
+        return ''
+    s = s.lower().strip()
+    s = re.sub(r'[^a-z0-9\s]', '', s)
+    return ' '.join(s.split())
+
+def _substantive_words(s):
+    cleaned = _clean_text(s)
+    return set(w for w in cleaned.split() if w not in STOPWORDS and len(w) > 1)
+
+def _labels_are_compatible(lbl1, lbl2):
+    t1 = _clean_text(lbl1)
+    t2 = _clean_text(lbl2)
+    if not t1 or not t2:
+        return True
+    if t1 == t2:
+        return True
+    if t1 in t2 or t2 in t1:
+        return True
+    w1 = _substantive_words(lbl1)
+    w2 = _substantive_words(lbl2)
+    if not w1 or not w2:
+        return t1 == t2
+    overlap = len(w1 & w2)
+    min_len = min(len(w1), len(w2))
+    return (overlap / min_len) >= 0.5
+
+
+def _align_response_answers(form_questions, answers):
+    """Align answers from a submission against current form questions.
+
+    Returns:
+      (aligned_dict, retired_list)
+      - aligned_dict: {q_id: answer_dict or None}
+      - retired_list: list of answer_dict for questions that were replaced or removed
+    """
+    claimed_answers = set()
+    aligned = {}
+
+    # Pass 1: Exact ID + Compatible Label
+    for q in form_questions:
+        q_id = q['id']
+        q_lbl = q.get('label', '')
+        for idx, a in enumerate(answers):
+            if idx in claimed_answers:
+                continue
+            if a.get('question_id') == q_id and _labels_are_compatible(q_lbl, a.get('label', '')):
+                aligned[q_id] = a
+                claimed_answers.add(idx)
+                break
+
+    # Pass 2: Exact Normalized Label Match (handles retained questions whose ID changed during edit)
+    for q in form_questions:
+        q_id = q['id']
+        if q_id in aligned:
+            continue
+        q_clean = _clean_text(q.get('label', ''))
+        for idx, a in enumerate(answers):
+            if idx in claimed_answers:
+                continue
+            if q_clean and q_clean == _clean_text(a.get('label', '')):
+                aligned[q_id] = a
+                claimed_answers.add(idx)
+                break
+
+    # Pass 3: Substantive Word Overlap Match (minor phrasing edits to retained questions)
+    for q in form_questions:
+        q_id = q['id']
+        if q_id in aligned:
+            continue
+        q_lbl = q.get('label', '')
+        for idx, a in enumerate(answers):
+            if idx in claimed_answers:
+                continue
+            if _labels_are_compatible(q_lbl, a.get('label', '')):
+                aligned[q_id] = a
+                claimed_answers.add(idx)
+                break
+
+    # Pass 4: Unanswered current questions (e.g. newly added questions)
+    for q in form_questions:
+        q_id = q['id']
+        if q_id not in aligned:
+            aligned[q_id] = None
+
+    retired = [answers[idx] for idx in range(len(answers)) if idx not in claimed_answers]
+    return aligned, retired
+
+
 # --- Owner views ---
 
 @bp.route('/forms/<share_id>/responses')
@@ -640,13 +734,30 @@ def form_responses_view(share_id):
     per_page = 20
     total = m.form_responses_conf.count_documents({'form_id': form['_id']})
     responses = list(m.form_responses_conf.find({'form_id': form['_id']}).sort('submitted_at', -1).skip((page-1)*per_page).limit(per_page))
-    # decrypt for display
+
+    # Decrypt and align answers for display
+    retired_questions_map = {}
     for r in responses:
         for a in r.get('answers', []):
             try:
                 a['value_plain'] = decrypt_form_response(a.get('value',''), str(form['_id']))
             except Exception:
                 a['value_plain'] = a.get('value','')
+
+        aligned, retired = _align_response_answers(form.get('questions', []), r.get('answers', []))
+        r['aligned_answers'] = aligned
+        r['retired_answers'] = retired
+
+        for ra in retired:
+            lbl = (ra.get('label') or '').strip()
+            if lbl:
+                clean_lbl = _clean_text(lbl)
+                if clean_lbl not in retired_questions_map:
+                    retired_questions_map[clean_lbl] = {
+                        'id': ra.get('question_id') or clean_lbl,
+                        'label': lbl
+                    }
+
         if r.get('submitted_at'):
             ts = r['submitted_at']
             if ts.tzinfo is None: ts = ts.replace(tzinfo=datetime.timezone.utc)
@@ -654,7 +765,10 @@ def form_responses_view(share_id):
             r['submitted_at_formatted'] = ts.strftime('%b %d, %Y, %I:%M %p')
         else:
             r['submitted_at_formatted'] = '—'
-    # stats for charts: per single_choice counts and rating avg
+
+    retired_questions = list(retired_questions_map.values())
+
+    # Stats for charts: use aligned answers to prevent data pollution from replaced questions
     stats = {}
     if responses:
         for q in form.get('questions', []):
@@ -662,25 +776,37 @@ def form_responses_view(share_id):
                 counts = {o:0 for o in q['options']}
                 total_q = 0
                 for r in m.form_responses_conf.find({'form_id': form['_id']}, {'answers':1}):
-                    for a in r.get('answers', []):
-                        if a['question_id']==q['id']:
-                            v = decrypt_form_response(a.get('value',''), str(form['_id']))
-                            if v in counts:
-                                counts[v]+=1
-                                total_q+=1
+                    aligned, _ = _align_response_answers(form.get('questions', []), r.get('answers', []))
+                    matched_a = aligned.get(q['id'])
+                    if matched_a:
+                        v = decrypt_form_response(matched_a.get('value',''), str(form['_id']))
+                        if v in counts:
+                            counts[v]+=1
+                            total_q+=1
                 stats[q['id']] = {'type':'single_choice','label':q['label'],'counts':counts,'total':total_q}
             elif q['type'] == 'rating':
                 vals=[]
                 for r in m.form_responses_conf.find({'form_id': form['_id']}, {'answers':1}):
-                    for a in r.get('answers', []):
-                        if a['question_id']==q['id']:
-                            v=decrypt_form_response(a.get('value',''), str(form['_id']))
-                            try: vals.append(int(v))
-                            except: pass
+                    aligned, _ = _align_response_answers(form.get('questions', []), r.get('answers', []))
+                    matched_a = aligned.get(q['id'])
+                    if matched_a:
+                        v=decrypt_form_response(matched_a.get('value',''), str(form['_id']))
+                        try: vals.append(int(v))
+                        except: pass
                 avg = round(sum(vals)/len(vals),2) if vals else None
                 stats[q['id']] = {'type':'rating','label':q['label'],'avg':avg,'count':len(vals),'distribution':{str(i):vals.count(i) for i in range(1,6)}}
     total_pages = max(1, (total + per_page -1)//per_page)
-    return render_template('form_responses.html', form=form, responses=responses, total=total, page=page, per_page=per_page, total_pages=total_pages, stats=stats)
+    return render_template(
+        'form_responses.html',
+        form=form,
+        responses=responses,
+        retired_questions=retired_questions,
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+        stats=stats
+    )
 
 
 @bp.route('/forms/<share_id>/responses/export')
@@ -695,8 +821,24 @@ def form_responses_export(share_id):
         return jsonify({'error':'Not authorized'}),403
     fmt = (request.args.get('format') or 'csv').lower()
     responses = list(m.form_responses_conf.find({'form_id': form['_id']}).sort('submitted_at', -1))
+
+    # Pre-scan and align all responses
+    retired_map = {}
+    for r in responses:
+        aligned, retired = _align_response_answers(form.get('questions', []), r.get('answers', []))
+        r['_aligned'] = aligned
+        r['_retired'] = retired
+        for ra in retired:
+            lbl = (ra.get('label') or '').strip()
+            if lbl:
+                clean_lbl = _clean_text(lbl)
+                if clean_lbl not in retired_map:
+                    retired_map[clean_lbl] = lbl
+
+    retired_headers = list(retired_map.values())
+
     if fmt == 'json':
-        out=[]
+        out = []
         for r in responses:
             ts = r.get('submitted_at')
             if ts and ts.tzinfo is None:
@@ -706,28 +848,42 @@ def form_responses_export(share_id):
                 'respondent': r.get('submitter_username') or 'Anonymous',
                 'is_authenticated': bool(r.get('is_authenticated'))
             }
-            for a in r.get('answers', []):
-                row[a.get('label') or a['question_id']] = decrypt_form_response(a.get('value',''), str(form['_id']))
+            # Active current questions
+            for q in form.get('questions', []):
+                ans = r['_aligned'].get(q['id'])
+                val = decrypt_form_response(ans.get('value',''), str(form['_id'])) if ans else None
+                row[q['label']] = val
+            # Historical retired answers
+            if retired_headers:
+                row['historical_answers'] = {}
+                for ra in r['_retired']:
+                    rlbl = ra.get('label') or 'Question'
+                    row['historical_answers'][rlbl] = decrypt_form_response(ra.get('value',''), str(form['_id']))
             out.append(row)
         return jsonify({'form':{'title':form['title'],'share_id':share_id},'count':len(out),'responses':out})
-    # csv
+
+    # CSV export: aligned current questions first, then historical questions
     q_labels = [q['label'] for q in form.get('questions',[])]
-    headers = ['submitted_at', 'respondent'] + q_labels
+    extra_headers = [f"[Historical] {rh}" for rh in retired_headers]
+    headers = ['submitted_at', 'respondent'] + q_labels + extra_headers
     output = io.StringIO()
     w = csv.writer(output)
     w.writerow(headers)
     for r in responses:
-        ans_map={}
-        for a in r.get('answers',[]):
-            ans_map[a['question_id']] = decrypt_form_response(a.get('value',''), str(form['_id']))
         ts = r.get('submitted_at')
         if ts and ts.tzinfo is None:
             ts = ts.replace(tzinfo=datetime.timezone.utc)
         sub_str = ts.strftime('%Y-%m-%d %H:%M:%S UTC') if ts else ''
         resp_str = r.get('submitter_username') or 'Anonymous'
-        row=[sub_str, resp_str]
+        row = [sub_str, resp_str]
+        # Current questions (dash / empty if new question not answered)
         for q in form.get('questions',[]):
-            row.append(ans_map.get(q['id'],''))
+            ans = r['_aligned'].get(q['id'])
+            row.append(decrypt_form_response(ans.get('value',''), str(form['_id'])) if ans else '')
+        # Retired questions
+        for rh in retired_headers:
+            r_match = next((ra for ra in r['_retired'] if _clean_text(ra.get('label','')) == _clean_text(rh)), None)
+            row.append(decrypt_form_response(r_match.get('value',''), str(form['_id'])) if r_match else '')
         w.writerow(row)
     csv_data = output.getvalue()
     resp = make_response(csv_data)

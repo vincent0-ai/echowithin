@@ -285,3 +285,57 @@ class TestFormEditing:
             assert captured_update['allow_anonymous'] is False
             assert captured_update['max_responses'] == 25
             assert captured_update['updated_at'].tzinfo == datetime.timezone.utc
+
+
+class TestFormQuestionAlignment:
+    """Test smart question alignment and retired answer handling when forms are edited."""
+
+    def test_align_response_answers_retained_and_new_questions(self):
+        from blueprints.forms import _align_response_answers
+
+        current_questions = [
+            {'id': 'q_name', 'label': 'Full Name', 'type': 'short_text'},
+            {'id': 'q_phone', 'label': 'Phone Number', 'type': 'short_text'},  # Replaced Q2 (was Email)
+            {'id': 'q_new', 'label': 'Favorite Hobby', 'type': 'short_text'},   # Brand new Q
+        ]
+
+        past_answers = [
+            {'question_id': 'q_name', 'label': 'Full Name', 'value': 'Alice'},
+            {'question_id': 'q_phone', 'label': 'Email Address', 'value': 'alice@example.com'},  # Had same slot ID, but completely different question
+        ]
+
+        aligned, retired = _align_response_answers(current_questions, past_answers)
+
+        # 1. Retained question 'Full Name' correctly maps to Alice
+        assert aligned['q_name'] is not None
+        assert aligned['q_name']['value'] == 'Alice'
+
+        # 2. Replaced question 'Phone Number' is NOT misaligned with the old Email answer
+        assert aligned['q_phone'] is None
+
+        # 3. Brand new question has no answer (will render dash)
+        assert aligned['q_new'] is None
+
+        # 4. Old 'Email Address' answer is safely preserved in retired list
+        assert len(retired) == 1
+        assert retired[0]['label'] == 'Email Address'
+        assert retired[0]['value'] == 'alice@example.com'
+
+    def test_align_response_answers_retained_with_new_id(self):
+        from blueprints.forms import _align_response_answers
+
+        current_questions = [
+            {'id': 'q_new_id', 'label': 'Full Name', 'type': 'short_text'},
+        ]
+
+        # In past submission, question was also 'Full Name', but had an old ID
+        past_answers = [
+            {'question_id': 'q_old_id', 'label': 'Full Name', 'value': 'Bob'},
+        ]
+
+        aligned, retired = _align_response_answers(current_questions, past_answers)
+
+        # Matched by normalized label because question was retained despite ID change
+        assert aligned['q_new_id'] is not None
+        assert aligned['q_new_id']['value'] == 'Bob'
+        assert len(retired) == 0

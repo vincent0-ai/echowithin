@@ -92,6 +92,7 @@ questions.forEach(q => {
   if (!q.id) q.id = Math.random().toString(36).slice(2, 6);
   if (!Array.isArray(q.options)) q.options = [];
   q.required = Boolean(q.required);
+  q._originalLabel = q.label || '';
 });
 
 function addQuestion(type){
@@ -193,11 +194,32 @@ function render(){
   `).join('');
 }
 
+function areLabelsCompatible(lbl1, lbl2) {
+  function clean(s) {
+    return (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/).filter(Boolean);
+  }
+  const w1 = clean(lbl1);
+  const w2 = clean(lbl2);
+  if (w1.length === 0 || w2.length === 0) return true;
+  const s1 = w1.join(' ');
+  const s2 = w2.join(' ');
+  if (s1 === s2 || s1.includes(s2) || s2.includes(s1)) return true;
+  const set2 = new Set(w2);
+  const overlap = w1.filter(x => set2.has(x)).length;
+  const minLen = Math.min(w1.length, w2.length);
+  return (overlap / minLen) >= 0.5;
+}
+
 document.getElementById('form-builder').addEventListener('submit', (e)=>{
   if(questions.length===0){ e.preventDefault(); alert('Add at least one question'); return; }
   for(const q of questions){
     if(!q.label.trim()){ e.preventDefault(); alert('All questions need a label'); return; }
     if(q.type.includes('choice') && (!q.options || q.options.length < 2)){ e.preventDefault(); alert('Choice questions need at least 2 options'); return; }
+    // If an existing question was completely rewritten into an incompatible question, assign a new ID
+    // so past answers for the old question are not misaligned under this new question.
+    if(q._originalLabel && !areLabelsCompatible(q._originalLabel, q.label)){
+      q.id = Math.random().toString(36).slice(2, 6);
+    }
   }
   document.getElementById('questions_json').value = JSON.stringify(questions);
 });

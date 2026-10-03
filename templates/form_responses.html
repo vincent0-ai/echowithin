@@ -106,6 +106,13 @@ if (typeof QRCode === 'undefined') {
   {% endif %}
 
   {% if responses %}
+  {% if retired_questions %}
+  <div style="display: flex; justify-content: flex-end; margin-bottom: 0.6rem;">
+    <button type="button" id="toggle-retired-btn" onclick="toggleRetiredColumns()" class="ew-btn ew-btn--outline ew-btn--sm" style="font-size: 0.78rem;">
+      <i class="fas fa-history" style="margin-right:0.25rem;"></i>Show Historical Questions ({{ retired_questions|length }})
+    </button>
+  </div>
+  {% endif %}
   <div class="ew-table-wrap">
     <table class="ew-table">
       <thead>
@@ -114,6 +121,12 @@ if (typeof QRCode === 'undefined') {
           <th style="min-width: 140px;">Submitted</th>
           <th style="min-width: 130px;">Respondent</th>
           {% for q in form.questions %}<th style="min-width: 140px;">{{ q.label }}</th>{% endfor %}
+          {% for rq in retired_questions %}
+            <th class="retired-col" style="min-width: 140px; display: none; background: var(--surface-bg); color: var(--text-muted);">
+              <span class="ew-badge" style="font-size: 0.68rem; margin-right: 0.25rem;">Historical</span>{{ rq.label }}
+            </th>
+          {% endfor %}
+          <th style="width: 70px; text-align: center;">View</th>
         </tr>
       </thead>
       <tbody>
@@ -129,9 +142,25 @@ if (typeof QRCode === 'undefined') {
             {% endif %}
           </td>
           {% for q in form.questions %}
-            {% set ans = (r.answers|selectattr('question_id','equalto',q.id)|first) %}
+            {% set ans = r.aligned_answers.get(q.id) if r.aligned_answers else (r.answers|selectattr('question_id','equalto',q.id)|first) %}
             <td style="word-break: break-word;">{{ ans.value_plain if ans and ans.value_plain else '—' }}</td>
           {% endfor %}
+          {% for rq in retired_questions %}
+            {% set r_ans = None %}
+            {% if r.retired_answers %}
+              {% for ra in r.retired_answers %}
+                {% if ra.label and ra.label|lower|trim == rq.label|lower|trim %}{% set r_ans = ra %}{% endif %}
+              {% endfor %}
+            {% endif %}
+            <td class="retired-col" style="word-break: break-word; display: none; background: var(--surface-bg); color: var(--text-muted);">
+              {{ r_ans.value_plain if r_ans and r_ans.value_plain else '—' }}
+            </td>
+          {% endfor %}
+          <td style="text-align: center; white-space: nowrap;">
+            <button type="button" class="ew-btn ew-btn--outline ew-btn--sm" style="font-size: 0.72rem; padding: 0.18rem 0.45rem;" onclick="openResponseModal({{ loop.index0 }})">
+              Details
+            </button>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -151,7 +180,83 @@ if (typeof QRCode === 'undefined') {
     </div>
   {% endif %}
 </div>
+
+<!-- Individual Submission Details Modal -->
+<div id="response-modal" style="display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); align-items: center; justify-content: center; padding: 1rem;">
+  <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; width: 100%; max-width: 600px; max-height: 85vh; overflow-y: auto; padding: 1.4rem; box-shadow: 0 10px 30px rgba(0,0,0,0.25);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.6rem;">
+      <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-dark-color);">Submission Details</h3>
+      <button type="button" onclick="closeResponseModal()" style="background: none; border: none; font-size: 1.4rem; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 0.2rem 0.5rem;" title="Close">&times;</button>
+    </div>
+    <div id="response-modal-meta" style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.5;"></div>
+    <div id="response-modal-body"></div>
+    <div style="text-align: right; margin-top: 1.2rem;">
+      <button type="button" class="ew-btn ew-btn--outline ew-btn--sm" onclick="closeResponseModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <script nonce="{{ csp_nonce }}">
+let rawResponses = [];
+try {
+  rawResponses = {{ responses|tojson|safe }};
+} catch(e) {
+  rawResponses = [];
+}
+
+window.openResponseModal = function(idx) {
+  const r = rawResponses[idx];
+  if (!r) return;
+  const modal = document.getElementById('response-modal');
+  const meta = document.getElementById('response-modal-meta');
+  const body = document.getElementById('response-modal-body');
+
+  meta.innerHTML = '<strong>Respondent:</strong> ' + (r.submitter_username ? ('@' + escHtml(r.submitter_username)) : 'Anonymous') +
+                   ' &bull; <strong>Submitted:</strong> ' + escHtml(r.submitted_at_formatted || r.submitted_at_iso || '—');
+
+  let html = '';
+  const ansList = r.answers || [];
+  if (ansList.length === 0) {
+    html = '<div style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:1rem;">No answers recorded for this submission.</div>';
+  } else {
+    ansList.forEach((a, i) => {
+      html += '<div style="margin-bottom:0.75rem; padding:0.65rem 0.85rem; background:var(--surface-bg); border-radius:8px; border:1px solid var(--border-color);">';
+      html += '<div style="font-weight:600; font-size:0.82rem; color:var(--text-dark-color); margin-bottom:0.3rem;">' + (i+1) + '. ' + escHtml(a.label || 'Question') + '</div>';
+      html += '<div style="font-size:0.88rem; color:var(--text-dark-color); word-break:break-word; white-space:pre-wrap;">' + (a.value_plain ? escHtml(a.value_plain) : '<span style="color:var(--text-muted);">—</span>') + '</div>';
+      html += '</div>';
+    });
+  }
+  body.innerHTML = html;
+  modal.style.display = 'flex';
+};
+
+window.closeResponseModal = function() {
+  const modal = document.getElementById('response-modal');
+  if (modal) modal.style.display = 'none';
+};
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeResponseModal();
+  }
+});
+
+let showRetired = false;
+window.toggleRetiredColumns = function() {
+  showRetired = !showRetired;
+  const cols = document.querySelectorAll('.retired-col');
+  cols.forEach(el => el.style.display = showRetired ? '' : 'none');
+  const btn = document.getElementById('toggle-retired-btn');
+  if (btn) {
+    btn.innerHTML = showRetired ? '<i class="fas fa-eye-slash" style="margin-right:0.25rem;"></i>Hide Historical Questions' : '<i class="fas fa-history" style="margin-right:0.25rem;"></i>Show Historical Questions ({{ retired_questions|length }})';
+  }
+};
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
 window.toggleQRCode = function(){
   const box = document.getElementById('qr-box');
   if(!box) return;

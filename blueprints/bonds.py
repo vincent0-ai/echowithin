@@ -4193,13 +4193,31 @@ def api_bond_qotd_catchup(bond_id):
             result['partner_username'] = partner_user['username'] if partner_user else 'Partner'
             result['my_answer'] = answer
 
-            # Notify partner
+            # Notify partner via socket
             m.socketio.emit('bond_qotd_revealed', {
                 'bond_id': bond_id,
                 'partner_username': current_user.username,
                 'date': target_date,
                 'is_catchup': True
             }, room=f"user_{partner_id}")
+
+            # Send push notification to partner
+            m.send_push_notification_to_user(
+                partner_id,
+                "Answers revealed! 💬",
+                f"{current_user.username} answered a past question — see both answers now.",
+                url=url_for('bonds.bonds_page', _external=True),
+                tag=f'bond-qotd-{bond_id}'
+            )
+        else:
+            # Partner hasn't answered this question yet — nudge them
+            m.send_push_notification_to_user(
+                partner_id,
+                f"{current_user.username} answered a past question",
+                "Answer yours to reveal both!",
+                url=url_for('bonds.bonds_page', _external=True),
+                tag=f'bond-qotd-{bond_id}'
+            )
 
         return jsonify(result)
 

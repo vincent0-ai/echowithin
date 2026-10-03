@@ -4722,14 +4722,14 @@
 
         // Missed question catch-up banner (yesterday)
         if (data.missed && data.missed.has_missed && !data.is_archived_bond) {
-            html += '<div class="qotd-catchup-banner" id="qotd-catchup-' + bondId + '">';
+            html += '<div class="qotd-catchup-banner" id="qotd-catchup-' + bondId + '" data-date="' + escHtml(data.missed.date) + '">';
             html += '<div class="catchup-header">You missed yesterday\'s question' + (data.missed.partner_answered ? ' — your partner already answered' : '') + '</div>';
             html += '<div class="catchup-question">"' + escHtml(data.missed.question) + '"</div>';
             html += '<div id="catchup-form-' + bondId + '">';
             html += '<textarea id="catchup-input-' + bondId + '" placeholder="Answer now to reveal both..." maxlength="1000" style="width:100%;font-size:0.85rem;padding:0.4rem;box-sizing:border-box;border:1px solid var(--border-color);border-radius:6px;min-height:45px;background:var(--card-bg);color:var(--text-dark-color);margin-top:0.3rem;"></textarea>';
             html += '<div style="display:flex;gap:0.4rem;justify-content:flex-end;margin-top:0.3rem;">';
             html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="dismissCatchup(\'' + bondId + '\')">Dismiss</button>';
-            html += '<button class="btn btn-bond-primary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="submitCatchupAnswer(\'' + bondId + '\')">Submit Late Answer</button>';
+            html += '<button class="btn btn-bond-primary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="submitCatchupAnswer(\'' + bondId + '\', \'' + escHtml(data.missed.date) + '\')">Submit Late Answer</button>';
             html += '</div></div></div>';
         }
 
@@ -5017,38 +5017,61 @@
         });
     }
 
-    function submitCatchupAnswer(bondId) {
-        var textarea = document.getElementById('catchup-input-' + bondId);
+    function submitCatchupAnswer(bondId, targetDate) {
+        var inputId = targetDate ? ('history-catchup-input-' + bondId + '-' + targetDate) : ('catchup-input-' + bondId);
+        var textarea = document.getElementById(inputId);
         var answer = textarea ? textarea.value.trim() : '';
         if (!answer) {
             if (window.showCustomAlert) showCustomAlert('Please write an answer.', 'danger');
             return;
         }
+        var payload = { answer: answer };
+        if (targetDate) payload.date = targetDate;
+
         echoFetch('/api/bonds/' + bondId + '/qotd/catchup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-            body: JSON.stringify({ answer: answer })
+            body: JSON.stringify(payload)
         }).then(function (r) { return r.json(); }).then(function (d) {
             if (d.success) {
                 if (window.showCustomToast) showCustomToast('Catch-up answer submitted!' + (d.revealed ? ' Answers revealed.' : ''), 'success');
-                // Show the reveal if both answered
+                // Update yesterday's banner if present and relevant
                 var banner = document.getElementById('qotd-catchup-' + bondId);
-                if (banner && d.revealed) {
-                    var revealHtml = '<div class="catchup-header" style="color:var(--primary-dark-color);">Yesterday\'s answers revealed!</div>';
-                    revealHtml += '<div class="qotd-reveal">';
-                    revealHtml += '<div class="qotd-reveal-card"><div class="author">You</div><div class="answer">' + nl2br(d.my_answer) + '</div></div>';
-                    revealHtml += '<div class="qotd-reveal-card"><div class="author">' + escHtml(d.partner_username) + '</div><div class="answer">' + nl2br(d.partner_answer) + '</div></div>';
-                    revealHtml += '</div>';
-                    banner.innerHTML = revealHtml;
-                } else if (banner) {
-                    banner.innerHTML = '<div class="catchup-header" style="color:var(--primary-dark-color);">Answer saved! Waiting for your partner to answer for the reveal.</div>';
+                if (banner && (!targetDate || !d.date || d.date === banner.getAttribute('data-date'))) {
+                    if (d.revealed) {
+                        var revealHtml = '<div class="catchup-header" style="color:var(--primary-dark-color);">Yesterday\'s answers revealed!</div>';
+                        revealHtml += '<div class="qotd-reveal">';
+                        revealHtml += '<div class="qotd-reveal-card"><div class="author">You</div><div class="answer">' + nl2br(d.my_answer) + '</div></div>';
+                        revealHtml += '<div class="qotd-reveal-card"><div class="author">' + escHtml(d.partner_username) + '</div><div class="answer">' + nl2br(d.partner_answer) + '</div></div>';
+                        revealHtml += '</div>';
+                        banner.innerHTML = revealHtml;
+                    } else {
+                        banner.innerHTML = '<div class="catchup-header" style="color:var(--primary-dark-color);">Answer saved! Waiting for your partner to answer for the reveal.</div>';
+                    }
                 }
+                // Refresh history if history container is open
+                var historyContainer = document.getElementById('qotd-history-' + bondId);
+                if (historyContainer && historyContainer.style.display !== 'none') {
+                    loadQotdHistory(bondId);
+                }
+                // Refresh today's QOTD to update monthly stats counter
+                loadQotd(bondId);
             } else {
                 if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to submit.', 'danger');
             }
         }).catch(function () {
             if (window.showCustomAlert) showCustomAlert('Network error.', 'danger');
         });
+    }
+
+    function showHistoryCatchupInput(bondId, date) {
+        var box = document.getElementById('history-catchup-box-' + bondId + '-' + date);
+        if (box) box.style.display = 'block';
+    }
+
+    function hideHistoryCatchupInput(bondId, date) {
+        var box = document.getElementById('history-catchup-box-' + bondId + '-' + date);
+        if (box) box.style.display = 'none';
     }
 
     function dismissCatchup(bondId) {
@@ -5127,7 +5150,19 @@
 
             // My answer card
             if (status === 'only_partner') {
-                html += '<div class="qotd-reveal-card missed-placeholder"><div class="author">' + escHtml(myUser) + '</div><div class="answer">Didn\'t answer</div></div>';
+                html += '<div class="qotd-reveal-card missed-placeholder">';
+                html += '<div class="author">' + escHtml(myUser) + '</div>';
+                html += '<div class="answer"><span style="color:var(--text-muted);">Didn\'t answer yet</span>';
+                if (item.can_answer) {
+                    html += '<div style="margin-top:0.35rem;"><button class="btn btn-bond-primary" style="font-size:0.72rem;padding:0.18rem 0.55rem;" onclick="showHistoryCatchupInput(\'' + bondId + '\', \'' + escHtml(item.date) + '\')">Answer to Reveal</button></div>';
+                    html += '<div id="history-catchup-box-' + bondId + '-' + escHtml(item.date) + '" style="display:none;margin-top:0.4rem;text-align:left;">';
+                    html += '<textarea id="history-catchup-input-' + bondId + '-' + escHtml(item.date) + '" placeholder="Write your answer to reveal both..." maxlength="1000" style="width:100%;font-size:0.85rem;padding:0.4rem;box-sizing:border-box;border:1px solid var(--border-color);border-radius:6px;min-height:50px;background:var(--card-bg);color:var(--text-dark-color);"></textarea>';
+                    html += '<div style="display:flex;gap:0.4rem;justify-content:flex-end;margin-top:0.3rem;">';
+                    html += '<button class="btn btn-bond-secondary" style="font-size:0.7rem;padding:0.15rem 0.45rem;" onclick="hideHistoryCatchupInput(\'' + bondId + '\', \'' + escHtml(item.date) + '\')">Cancel</button>';
+                    html += '<button class="btn btn-bond-primary" style="font-size:0.7rem;padding:0.15rem 0.45rem;" onclick="submitCatchupAnswer(\'' + bondId + '\', \'' + escHtml(item.date) + '\')">Submit</button>';
+                    html += '</div></div>';
+                }
+                html += '</div></div>';
             } else {
                 html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(myUser) + '</div><div class="answer">' + nl2br(myAns) + '</div></div>';
             }
@@ -5135,6 +5170,8 @@
             // Partner answer card
             if (status === 'only_me') {
                 html += '<div class="qotd-reveal-card missed-placeholder"><div class="author">' + escHtml(partnerUser) + '</div><div class="answer">Didn\'t answer</div></div>';
+            } else if (!item.is_revealed && status === 'only_partner') {
+                html += '<div class="qotd-reveal-card missed-placeholder"><div class="author">' + escHtml(partnerUser) + '</div><div class="answer" style="color:var(--text-muted);"><i class="fas fa-lock" style="font-size:0.72rem;margin-right:0.25rem;"></i>Answer hidden until you answer</div></div>';
             } else {
                 html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(partnerUser) + '</div><div class="answer">' + nl2br(partnerAns) + '</div></div>';
             }

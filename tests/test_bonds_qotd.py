@@ -136,3 +136,36 @@ class TestCommunityBankFiltering:
                     if cond.get('votes') == {'$gt': 0}:
                         found_vote_filter = True
             assert found_vote_filter is True
+
+
+class TestQotdDepthAndThemedDays:
+    """Test progressive depth tier resolution and themed days filtering."""
+
+    def test_depth_tiers(self):
+        from blueprints.bonds import _get_depth_tier
+        assert _get_depth_tier(0)[3] == 'Icebreaker'
+        assert _get_depth_tier(5)[3] == 'Icebreaker'
+        assert _get_depth_tier(10)[3] == 'Building'
+        assert _get_depth_tier(24)[3] == 'Building'
+        assert _get_depth_tier(25)[3] == 'Deepening'
+        assert _get_depth_tier(50)[3] == 'Deep Bond'
+        assert _get_depth_tier(100)[3] == 'Deep Bond'
+
+    def test_filter_by_theme(self):
+        from blueprints.bonds import _filter_by_theme
+        questions = [
+            "What is your favorite memory?",
+            "Do you remember your first day?",
+            "What childhood memory stands out?",
+            "What is a story you like to tell?",
+            "What tradition do you keep?",
+            "What is your dream?",
+            "What goal do you have?"
+        ]
+        # Monday is 0 (Memory Monday)
+        themed = _filter_by_theme(questions, 0)
+        assert len(themed) >= 5
+        assert all(any(kw in q.lower() for kw in ['memory', 'remember', 'childhood', 'past', 'first', 'favourite', 'favorite', 'photo', 'story', 'tradition']) for q in themed)
+        # Friday is 4 (Free Friday - no filtering)
+        free = _filter_by_theme(questions, 4)
+        assert free == questions

@@ -620,11 +620,6 @@ def _get_daily_question(bond_doc):
     pool = (type_questions * t_weight) + (universal * u_weight)
     if not pool:
         pool = universal or ["What's on your mind today?"]
-    # Themed day filtering (optional, soft filter)
-    day_of_week = datetime.datetime.now(datetime.timezone.utc).weekday()
-    themed_enabled = bond_doc.get('themed_days_enabled', False)
-    if themed_enabled:
-        pool = _filter_by_theme(pool, day_of_week)
 
     # --- Skip-feedback weighting ---
     # Gather skip reasons from the last 30 days to learn user preferences
@@ -656,15 +651,18 @@ def _get_daily_question(bond_doc):
         elif boring_skips >= 3 and personal_skips < 3:
             # Boost type-specific weight when too boring
             pool = (type_questions * max(t_weight + 1, 3)) + universal
-        # Re-apply themed day filter after skip adjustment
-        if themed_enabled:
-            pool = _filter_by_theme(pool, day_of_week)
     except Exception:
         pass
 
     # --- Lifetime Exclusion of Answered and Skipped Questions ---
     excluded_hashes = _get_bond_excluded_question_hashes(bond_id_str, bond_doc)
     available_pool = [q for q in pool if _normalize_question_hash(q) not in excluded_hashes]
+
+    # Themed day filtering (applied to available unanswered pool with automatic fallback)
+    themed_enabled = bond_doc.get('themed_days_enabled', False)
+    if themed_enabled and available_pool:
+        day_of_week = datetime.datetime.now(datetime.timezone.utc).weekday()
+        available_pool = _filter_by_theme(available_pool, day_of_week)
 
     # If the bond-specific pool is running low or exhausted, fall back to other categories
     if not available_pool:
@@ -1074,7 +1072,7 @@ def _clean_ai_question(text):
     return text if len(text) >= 10 and len(text) <= 250 else None
 
 
-def _build_qotd_ai_prompt(relationship_label, recent_questions, skip_insights=None):
+def _build_qotd_ai_prompt(relationship_label, recent_questions, skip_insights=None, depth_label=None, theme_label=None):
     """Build a prompt for high-quality, natural, human, and grounded QotD generation."""
     rel_lower = relationship_label.lower()
     if 'love' in rel_lower or 'partner' in rel_lower:
@@ -1128,6 +1126,18 @@ def _build_qotd_ai_prompt(relationship_label, recent_questions, skip_insights=No
         "- ACTIONABLE & RELATABLE: Ask something specific that's easy and enjoyable to answer.",
     ]
 
+    # Progressive depth adaptation for AI
+    if depth_label == 'Icebreaker':
+        prompt_lines.append("BOND MATURITY (Icebreaker): This is a fresh bond. Keep the question lighthearted, breezy, and casual. Avoid heavy emotional intimacy or high vulnerability.")
+    elif depth_label == 'Deep Bond':
+        prompt_lines.append("BOND MATURITY (Deep Bond): This is a mature, high-trust bond. Ask something deeply thoughtful, reflective, or emotionally rich.")
+    elif depth_label == 'Deepening':
+        prompt_lines.append("BOND MATURITY (Deepening): This bond is growing closer. Ask something personal, warm, and engaging.")
+
+    # Themed day adaptation for AI
+    if theme_label:
+        prompt_lines.append(f"TODAY'S THEME ({theme_label}): Align the topic of the question with the spirit of '{theme_label}'.")
+
     if skip_instructions:
         prompt_lines.append("ADAPTATION: " + " ".join(skip_instructions))
 
@@ -1141,7 +1151,7 @@ def _build_qotd_ai_prompt(relationship_label, recent_questions, skip_insights=No
     return "\n".join(prompt_lines)
 
 
-def _generate_ai_question_gemini(relationship_label, recent_questions=None, skip_insights=None):
+def _generate_ai_question_gemini(relationship_label, recent_questions=None, skip_insights=None, depth_label=None, theme_label=None):
     """Generate a QotD question using Gemini API (fallback when JigsawStack is unavailable).
 
     Supports multiple comma-separated API keys in GEMINI_API_KEY env var.
@@ -1162,7 +1172,7 @@ def _generate_ai_question_gemini(relationship_label, recent_questions=None, skip
     if not keys:
         return None
 
-    prompt = _build_qotd_ai_prompt(relationship_label, recent_questions or [], skip_insights=skip_insights)
+    prompt = _build_qotd_ai_prompt(relationship_label, recent_questions or [], skip_insights=skip_insights, depth_label=depth_label, theme_label=theme_label)
 
     payload = json.dumps({
         'contents': [{'parts': [{'text': prompt}]}],
@@ -3294,12 +3304,27 @@ def api_bond_qotd_generate_ai(bond_id):
         skip_insights = _get_bond_skip_insights(bond_id)
         excluded_hashes = _get_bond_excluded_question_hashes(bond_id, bond_doc)
 
+        # Depth and themed day context for the AI prompt
+        answered_together = _get_qotd_answered_together_count(bond_doc['_id'])
+        _, _, _, depth_label = _get_depth_tier(answered_together)
+        theme_label = None
+        if bond_doc.get('themed_days_enabled'):
+            day_of_week = datetime.datetime.now(datetime.timezone.utc).weekday()
+            theme_info = THEMED_DAYS.get(day_of_week, {})
+            theme_label = theme_info.get('label')
+
         # --- Step 1: Try JigsawStack for fresh AI generation ---
         try:
             from jigsawstack import JigsawStack
             api_key = get_env_variable('JIGSAW_API_KEY')
 
-            prompt = _build_qotd_ai_prompt(relationship_label, recent_questions, skip_insights=skip_insights)
+            prompt = _build_qotd_ai_prompt(
+                relationship_label,
+                recent_questions,
+                skip_insights=skip_insights,
+                depth_label=depth_label,
+                theme_label=theme_label
+            )
 
             client = JigsawStack(api_key=api_key)
             res_data = client.prompt_engine.run_prompt_direct({
@@ -3320,7 +3345,13 @@ def api_bond_qotd_generate_ai(bond_id):
 
         # --- Step 2: Fall back to Gemini API ---
         if not ai_question:
-            gemini_result = _generate_ai_question_gemini(relationship_label, recent_questions, skip_insights=skip_insights)
+            gemini_result = _generate_ai_question_gemini(
+                relationship_label,
+                recent_questions,
+                skip_insights=skip_insights,
+                depth_label=depth_label,
+                theme_label=theme_label
+            )
             if gemini_result and _normalize_question_hash(gemini_result) not in excluded_hashes:
                 ai_question = gemini_result
                 source = 'ai_gemini'
@@ -3915,8 +3946,12 @@ def api_bond_qotd_history(bond_id):
                     return m.decrypt_bond_data(a_val, bond_id)
                 return ''
 
+            is_revealed = has_my_answer and has_partner_answer
+            is_archived = bond_doc.get('status') == 'broken'
+            can_see_partner = has_partner_answer and (is_revealed or is_archived)
+
             my_ans = _parse_ans(answers.get(user_id_str)) if has_my_answer else None
-            partner_ans = _parse_ans(answers.get(partner_id_str)) if has_partner_answer else None
+            partner_ans = _parse_ans(answers.get(partner_id_str)) if can_see_partner else None
 
             entry = {
                 'date': doc.get('date'),
@@ -3924,6 +3959,8 @@ def api_bond_qotd_history(bond_id):
                 'category': doc.get('question_category', ''),
                 'source': doc.get('source', 'app'),
                 'status': status,
+                'is_revealed': is_revealed,
+                'can_answer': (not has_my_answer and not is_archived),
                 'my_username': current_user.username,
                 'my_answer': my_ans,
                 'partner_username': partner_username,
@@ -3935,7 +3972,7 @@ def api_bond_qotd_history(bond_id):
                     'username': current_user.username,
                     'text': my_ans
                 }
-            if has_partner_answer:
+            if can_see_partner:
                 entry['answers'][partner_id_str] = {
                     'username': partner_username,
                     'text': partner_ans
@@ -4041,9 +4078,9 @@ def api_bond_qotd_missed(bond_id):
 
 @bp.route('/api/bonds/<bond_id>/qotd/catchup', methods=['POST'])
 @login_required
-@limits(calls=5, period=60)
+@limits(calls=10, period=60)
 def api_bond_qotd_catchup(bond_id):
-    """Submit a late answer to yesterday's missed question."""
+    """Submit a late answer to a missed question (yesterday or past date)."""
     import main as m
     try:
         bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
@@ -4061,18 +4098,23 @@ def api_bond_qotd_catchup(bond_id):
 
         now = datetime.datetime.now(datetime.timezone.utc)
         yesterday_str = (now.date() - datetime.timedelta(days=1)).isoformat()
+        target_date = (data.get('date') or '').strip() or yesterday_str
 
-        # Only allow catch-up for yesterday
+        # Ensure catchup target is in the past
+        if target_date >= now.date().isoformat():
+            return jsonify({'error': 'Cannot catch up on today or future dates.'}), 400
+
+        # Find question for target date
         qotd_doc = m.bond_qotd_conf.find_one({
             'bond_id': ObjectId(bond_id),
-            'date': yesterday_str
+            'date': target_date
         })
         if not qotd_doc:
-            return jsonify({'error': 'No question found for yesterday.'}), 404
+            return jsonify({'error': f'No question found for {target_date}.'}), 404
 
         answers = qotd_doc.get('answers', {})
         if user_id_str in answers:
-            return jsonify({'error': 'You already answered yesterday\'s question.'}), 400
+            return jsonify({'error': 'You already answered this question.'}), 400
 
         # Save the catch-up answer
         encrypted_ans = m.encrypt_bond_data(answer, bond_id)
@@ -4112,6 +4154,7 @@ def api_bond_qotd_catchup(bond_id):
         result = {
             'success': True,
             'revealed': partner_answered,
+            'date': target_date
         }
 
         if partner_answered:
@@ -4130,6 +4173,7 @@ def api_bond_qotd_catchup(bond_id):
             m.socketio.emit('bond_qotd_revealed', {
                 'bond_id': bond_id,
                 'partner_username': current_user.username,
+                'date': target_date,
                 'is_catchup': True
             }, room=f"user_{partner_id}")
 
@@ -4162,6 +4206,25 @@ def api_bond_qotd_themed_days(bond_id):
             {'_id': ObjectId(bond_id)},
             {'$set': {'themed_days_enabled': enabled}}
         )
+
+        # If today's question exists and hasn't been answered by anyone yet,
+        # update it to reflect the new theme setting immediately!
+        now = datetime.datetime.now(datetime.timezone.utc)
+        today_str = now.date().isoformat()
+        today_qotd = m.bond_qotd_conf.find_one({'bond_id': ObjectId(bond_id), 'date': today_str})
+        if today_qotd and not today_qotd.get('answers') and today_qotd.get('source', 'preset') == 'preset':
+            updated_bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id)})
+            new_q, new_cat = _get_daily_question(updated_bond_doc)
+            enc_q = m.encrypt_bond_data(new_q, bond_id)
+            m.bond_qotd_conf.update_one(
+                {'_id': today_qotd['_id']},
+                {'$set': {
+                    'question_text': enc_q,
+                    'question_category': new_cat,
+                    'encrypted': True,
+                    'created_at': now
+                }}
+            )
 
         return jsonify({
             'success': True,
@@ -4795,8 +4858,8 @@ def api_bond_timeline(bond_id):
                 'content': content[:200] + ('...' if len(content) > 200 else '')
             })
 
-        # --- QOTD (answered/revealed only) ---
-        for q in m.bond_qotd_conf.find({'bond_id': bond_oid, 'revealed': True}).sort('date', -1).limit(100):
+        # --- QOTD (answered entries) ---
+        for q in m.bond_qotd_conf.find({'bond_id': bond_oid, 'answers': {'$exists': True, '$ne': {}}}).sort('date', -1).limit(100):
             question_text = q.get('question_text', '')
             if q.get('encrypted') and question_text:
                 try:
@@ -8072,7 +8135,7 @@ def api_bond_export(bond_id):
 
         # 2. Q&As
         qotds = []
-        for q in m.bond_qotd_conf.find({'bond_id': bond_oid, 'revealed': True}).sort('date', 1):
+        for q in m.bond_qotd_conf.find({'bond_id': bond_oid, 'answers': {'$exists': True, '$ne': {}}}).sort('date', 1):
             q_text = q.get('question_text', '')
             if q.get('encrypted') and q_text:
                 try:
@@ -8080,16 +8143,23 @@ def api_bond_export(bond_id):
                 except Exception:
                     pass
             answers = q.get('answers', {})
-            my_ans = answers.get(user_id_str, {}).get('text', '')
-            partner_ans = answers.get(partner_id, {}).get('text', '')
-            if q.get('encrypted'):
-                try:
-                    if my_ans:
-                        my_ans = m.decrypt_bond_data(my_ans, bond_id)
-                    if partner_ans:
-                        partner_ans = m.decrypt_bond_data(partner_ans, bond_id)
-                except Exception:
-                    pass
+            def _parse_export_ans(a_val):
+                if isinstance(a_val, dict):
+                    raw = a_val.get('answer', '') or a_val.get('text', '')
+                    if a_val.get('encrypted', True) and raw:
+                        try:
+                            return m.decrypt_bond_data(raw, bond_id)
+                        except Exception:
+                            return raw
+                    return raw or ''
+                elif isinstance(a_val, str):
+                    try:
+                        return m.decrypt_bond_data(a_val, bond_id)
+                    except Exception:
+                        return a_val
+                return ''
+            my_ans = _parse_export_ans(answers.get(user_id_str))
+            partner_ans = _parse_export_ans(answers.get(partner_id))
             qotds.append({
                 'date': q.get('date', ''),
                 'question': q_text,

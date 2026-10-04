@@ -533,13 +533,22 @@ def personal_space():
     for item in activity_raw:
         # Decrypt necessary fields for the preview if it's a proposal
         if item.get('event_type') == 'proposal':
-            # Use multi-candidate decryption for proposals
-            candidates = m._candidate_user_ids(
-                item.get('content_owner_id'), 
-                item.get('editor_id'), 
-                current_user.id
-            )
-            item['proposed_content_plain'] = m._decrypt_with_candidate_ids(item.get('proposed_content', ''), candidates) or '[Content unavailable \u2014 decryption error]'
+            prop_id = str(item.get('_id', ''))
+            prop_plain = None
+            import database
+            if getattr(database, '_proposal_preview_cache', None) is not None and prop_id:
+                prop_plain = database._proposal_preview_cache.get(prop_id)
+            if prop_plain is None:
+                # Use multi-candidate decryption for proposals
+                candidates = m._candidate_user_ids(
+                    item.get('content_owner_id'), 
+                    item.get('editor_id'), 
+                    current_user.id
+                )
+                prop_plain = m._decrypt_with_candidate_ids(item.get('proposed_content', ''), candidates) or '[Content unavailable \u2014 decryption error]'
+                if getattr(database, '_proposal_preview_cache', None) is not None and prop_id:
+                    database._proposal_preview_cache[prop_id] = prop_plain
+            item['proposed_content_plain'] = prop_plain
         
         # Fetch original note basic info
         note_info_date = activity_note_dates.get(item.get('note_id'))
@@ -556,11 +565,11 @@ def personal_space():
                 pending_proposals_map[nid] = []
             pending_proposals_map[nid].append(p)
 
-    # Forms for personal_space tab
+    # Forms for personal_space tab (skip decrypting heavy historical versions)
     try:
         from blueprints.forms import _decrypt_form_definition
         raw_forms = list(m.forms_conf.find({'owner_id': ObjectId(current_user.id)}).sort('created_at', -1).limit(50))
-        user_forms = [_decrypt_form_definition(f) for f in raw_forms]
+        user_forms = [_decrypt_form_definition(f, decrypt_versions=False) for f in raw_forms]
     except Exception:
         user_forms = []
     # Games for personal_space tab (2+ players, anytime)

@@ -655,12 +655,20 @@ def decrypt_form_response(ciphertext: str, form_id: str) -> str:
     """Decrypt a form answer value. Falls back to plaintext if not Fernet."""
     if not ciphertext:
         return ciphertext
+    if not isinstance(ciphertext, str) or not ciphertext.startswith('gAAAAA'):
+        return ciphertext
+    cache_key = f"{form_id}:{ciphertext}"
+    if getattr(database, '_decrypted_forms_cache', None) is not None:
+        cached = database._decrypted_forms_cache.get(cache_key)
+        if cached is not None:
+            return cached
     try:
         f = _get_form_fernet(str(form_id))
-        return f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+        dec = f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+        if getattr(database, '_decrypted_forms_cache', None) is not None:
+            database._decrypted_forms_cache[cache_key] = dec
+        return dec
     except Exception:
-        if not ciphertext.startswith('gAAAAA'):
-            return ciphertext
         _get_app().logger.warning(f"Form response decryption failed for form {form_id}")
         return '[Unavailable]'
 
@@ -694,12 +702,20 @@ def decrypt_game_data(ciphertext: str, lobby_id: str) -> str:
     """Decrypt a game field. Falls back to plaintext if not Fernet (legacy rows)."""
     if not ciphertext:
         return ciphertext
+    if not isinstance(ciphertext, str) or not ciphertext.startswith('gAAAAA'):
+        return ciphertext
+    cache_key = f"{lobby_id}:{ciphertext}"
+    if getattr(database, '_decrypted_lobbies_cache', None) is not None:
+        cached = database._decrypted_lobbies_cache.get(cache_key)
+        if cached is not None:
+            return cached
     try:
         f = _get_game_fernet(str(lobby_id))
-        return f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+        dec = f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+        if getattr(database, '_decrypted_lobbies_cache', None) is not None:
+            database._decrypted_lobbies_cache[cache_key] = dec
+        return dec
     except Exception:
-        if not ciphertext.startswith('gAAAAA'):
-            return ciphertext
         _get_app().logger.warning(f"Game data decryption failed for lobby {lobby_id}")
         return '[Unavailable]'
 

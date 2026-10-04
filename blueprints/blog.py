@@ -3,6 +3,10 @@ from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, math, json, random, os, re, hashlib
 from security import limits
+from cachetools import TTLCache
+
+_user_interests_memory_cache = TTLCache(maxsize=256, ttl=300)
+
 bp = Blueprint('blog', __name__, template_folder='templates')
 
 
@@ -130,14 +134,15 @@ def all_posts():
         user_id = ObjectId(current_user.id)
         user_id_str = str(current_user.id)
 
-        # Try to get cached interest profile from Redis (cache for 5 minutes)
+        # Try to get cached interest profile from memory or Redis (cache for 5 minutes)
         cache_key = f"user_interests:{user_id_str}"
-        cached_interests = None
-        if m.redis_cache:
+        cached_interests = _user_interests_memory_cache.get(cache_key)
+        if not cached_interests and m.redis_cache:
             try:
                 cached_data = m.redis_cache.get(cache_key)
                 if cached_data:
                     cached_interests = json.loads(cached_data)
+                    _user_interests_memory_cache[cache_key] = cached_interests
             except Exception:
                 pass
 
@@ -186,11 +191,14 @@ def all_posts():
                     author_scores[str(a)] = author_scores.get(str(a), 0) + weight
 
             # Cache the interest profile
-            if m.redis_cache and (tag_scores or author_scores):
-                try:
-                    m.redis_cache.setex(cache_key, 300, json.dumps({'tags': tag_scores, 'authors': author_scores}))
-                except Exception:
-                    pass
+            if tag_scores or author_scores:
+                profile_payload = {'tags': tag_scores, 'authors': author_scores}
+                _user_interests_memory_cache[cache_key] = profile_payload
+                if m.redis_cache:
+                    try:
+                        m.redis_cache.setex(cache_key, 300, json.dumps(profile_payload))
+                    except Exception:
+                        pass
 
         if not tag_scores and not author_scores:
             # Cold-start: authenticated user with no interaction history

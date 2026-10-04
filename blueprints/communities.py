@@ -42,14 +42,28 @@ def _apply_voucher_premium(m, user_id_obj, voucher):
 def communities_page():
     import main as m
     user_communities = list(m.communities_conf.find({'members': ObjectId(current_user.id)}).sort('updated_at', -1))
+    discover_communities = list(m.communities_conf.find({'visibility': 'public', 'members': {'$ne': ObjectId(current_user.id)}}).sort('updated_at', -1).limit(20))
+    
+    # PERF: Batch-fetch note counts in a single aggregation instead of N+1 count_documents loops
+    all_comm_ids = [c['_id'] for c in user_communities] + [c['_id'] for c in discover_communities]
+    note_counts = {}
+    if all_comm_ids:
+        try:
+            for doc in m.community_notes_conf.aggregate([
+                {'$match': {'community_id': {'$in': all_comm_ids}}},
+                {'$group': {'_id': '$community_id', 'count': {'$sum': 1}}}
+            ]):
+                note_counts[doc['_id']] = doc.get('count', 0)
+        except Exception:
+            pass
+
     for comm in user_communities:
         comm['member_count'] = len(comm.get('members', []))
-        comm['note_count'] = m.community_notes_conf.count_documents({'community_id': comm['_id']})
+        comm['note_count'] = note_counts.get(comm['_id'], 0)
         comm['is_admin'] = str(comm.get('admin_id')) == current_user.id
-    discover_communities = list(m.communities_conf.find({'visibility': 'public', 'members': {'$ne': ObjectId(current_user.id)}}).sort('updated_at', -1).limit(20))
     for comm in discover_communities:
         comm['member_count'] = len(comm.get('members', []))
-        comm['note_count'] = m.community_notes_conf.count_documents({'community_id': comm['_id']})
+        comm['note_count'] = note_counts.get(comm['_id'], 0)
     return render_template('communities.html', communities=user_communities, discover_communities=discover_communities)
 
 
@@ -83,12 +97,24 @@ def view_community(community_id):
     skip = (page - 1) * per_page
     total_notes = m.community_notes_conf.count_documents({'community_id': comm_obj_id})
     raw_notes = list(m.community_notes_conf.find({'community_id': comm_obj_id}).sort([('score', -1), ('created_at', -1)]).skip(skip).limit(per_page))
+    
+    # PERF: Batch-fetch user reactions in one indexed query instead of N+1 find_one per note
+    reactions_map = {}
+    if current_user.is_authenticated and raw_notes:
+        try:
+            note_ids = [n['_id'] for n in raw_notes]
+            for r in m.community_reactions_conf.find(
+                {'note_id': {'$in': note_ids}, 'user_id': user_id_obj},
+                {'note_id': 1, 'reaction_type': 1}
+            ):
+                reactions_map[r['note_id']] = r.get('reaction_type')
+        except Exception:
+            pass
+
     for note in raw_notes:
         note['content'] = m.decrypt_community_note(note.get('content', ''), comm_obj_id)
-        if current_user.is_authenticated:
-            user_reaction = m.community_reactions_conf.find_one({'note_id': note['_id'], 'user_id': user_id_obj})
-            if user_reaction:
-                note['user_reaction_type'] = user_reaction.get('reaction_type')
+        if note['_id'] in reactions_map:
+            note['user_reaction_type'] = reactions_map[note['_id']]
     members = []
     if is_admin:
         member_ids = community.get('members', [])

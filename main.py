@@ -851,6 +851,7 @@ community_memberships_conf = db['community_memberships']
 direct_messages_conf.create_index([('sender_id', 1), ('recipient_id', 1), ('timestamp', -1)])
 direct_messages_conf.create_index([('recipient_id', 1), ('is_read', 1)])
 direct_messages_conf.create_index([('recipient_id', 1), ('timestamp', -1)])
+direct_messages_conf.create_index([('sender_id', 1), ('timestamp', -1)])
 
 # --- DM Permissions (Message Request System) ---
 dm_permissions_conf = db['dm_permissions']
@@ -1648,6 +1649,38 @@ def add_security_headers(response):
             # CSS/JS — cache for 1 hour, revalidate after
             response.headers['Cache-Control'] = 'public, max-age=3600, must-revalidate'
 
+    return response
+
+
+@app.after_request
+def compress_response(response):
+    """Compress HTML, CSS, JS, and JSON responses with gzip when supported by the client."""
+    import gzip
+    if (
+        response.status_code < 200
+        or response.status_code >= 300
+        or response.direct_passthrough
+        or 'Content-Encoding' in response.headers
+    ):
+        return response
+
+    if app.testing:
+        return response
+
+    accept_encoding = request.headers.get('Accept-Encoding', '').lower()
+    if 'gzip' not in accept_encoding:
+        return response
+
+    content_type = response.headers.get('Content-Type', '')
+    if any(ct in content_type for ct in ('text/html', 'text/css', 'text/plain', 'text/xml', 'application/json', 'application/javascript', 'application/xml', 'image/svg+xml')):
+        data = response.get_data()
+        if len(data) >= 500:
+            compressed = gzip.compress(data, compresslevel=6)
+            if len(compressed) < len(data):
+                response.set_data(compressed)
+                response.headers['Content-Encoding'] = 'gzip'
+                response.headers['Content-Length'] = len(compressed)
+                response.headers['Vary'] = 'Accept-Encoding'
     return response
 
 

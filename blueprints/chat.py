@@ -64,10 +64,20 @@ def messages_page():
             }
         last_msg = c.get('last_message', '')
         if last_msg and last_msg.startswith('gAAAAA'):
-            try:
-                last_msg = m.decrypt_dm(last_msg, str(current_user.id), str(user_info['_id']))
-            except Exception:
-                pass
+            dm_cache_key = f"{current_user.id}:{user_info['_id']}:{hash(last_msg)}"
+            cached_dec = None
+            import database
+            if getattr(database, '_dm_preview_cache', None) is not None:
+                cached_dec = database._dm_preview_cache.get(dm_cache_key)
+            if cached_dec is not None:
+                last_msg = cached_dec
+            else:
+                try:
+                    last_msg = m.decrypt_dm(last_msg, str(current_user.id), str(user_info['_id']))
+                    if getattr(database, '_dm_preview_cache', None) is not None:
+                        database._dm_preview_cache[dm_cache_key] = last_msg
+                except Exception:
+                    pass
         contacts.append(build_contact_entry(user_info, last_msg, c['timestamp'], c['unread_count']))
         contact_user_ids.add(str(user_info['_id']))
     accepted_permissions = list(m.dm_permissions_conf.find({'status': 'accepted', '$or': [{'requester_id': current_user_oid}, {'target_id': current_user_oid}]}).sort('updated_at', -1))

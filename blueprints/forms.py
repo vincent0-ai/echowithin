@@ -82,7 +82,7 @@ def _encrypt_form_definition(form_id_str, title, description, questions):
     )
 
 
-def _decrypt_form_definition(form):
+def _decrypt_form_definition(form, decrypt_versions=True):
     """Return a copy of a form doc with definition text decrypted for render/validate.
 
     Legacy plaintext rows pass through (decrypt falls back when not a Fernet
@@ -105,23 +105,24 @@ def _decrypt_form_definition(form):
         dec_q.append(q)
     form['questions'] = dec_q
 
-    dec_versions = []
-    for v in (form.get('versions') or []):
-        v = dict(v)
-        if v.get('title'):
-            v['title'] = decrypt_form_response(v['title'], fid)
-        if v.get('description'):
-            v['description'] = decrypt_form_response(v['description'], fid)
-        v_qs = []
-        for vq in (v.get('questions') or []):
-            vq = dict(vq)
-            if vq.get('label'):
-                vq['label'] = decrypt_form_response(vq['label'], fid)
-            vq['options'] = [decrypt_form_response(o, fid) for o in (vq.get('options') or [])]
-            v_qs.append(vq)
-        v['questions'] = v_qs
-        dec_versions.append(v)
-    form['versions'] = dec_versions
+    if decrypt_versions:
+        dec_versions = []
+        for v in (form.get('versions') or []):
+            v = dict(v)
+            if v.get('title'):
+                v['title'] = decrypt_form_response(v['title'], fid)
+            if v.get('description'):
+                v['description'] = decrypt_form_response(v['description'], fid)
+            v_qs = []
+            for vq in (v.get('questions') or []):
+                vq = dict(vq)
+                if vq.get('label'):
+                    vq['label'] = decrypt_form_response(vq['label'], fid)
+                vq['options'] = [decrypt_form_response(o, fid) for o in (vq.get('options') or [])]
+                v_qs.append(vq)
+            v['questions'] = v_qs
+            dec_versions.append(v)
+        form['versions'] = dec_versions
 
     return form
 

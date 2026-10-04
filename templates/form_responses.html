@@ -105,22 +105,28 @@ if (typeof QRCode === 'undefined') {
   </div>
   {% endif %}
 
-  {% if versions_list and versions_list|length > 1 %}
-  <div class="ew-version-selector-wrap" style="margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.6rem;">
-    <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
-      <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin-right: 0.3rem;">Questionnaire Version:</span>
-      {% for v in versions_list %}
-        <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id, version=v.version) }}"
-           class="ew-btn ew-btn--sm {% if selected_version == v.version %}ew-btn--primary{% else %}ew-btn--outline{% endif %}"
-           style="text-decoration: none; font-size: 0.8rem; padding: 0.25rem 0.65rem;">
-          {{ v.label }} <span class="ew-badge" style="margin-left: 0.35rem; font-size: 0.72rem;">{{ v.response_count }}</span>
-        </a>
-      {% endfor %}
-      <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id, version='all') }}"
-         class="ew-btn ew-btn--sm {% if selected_version == 'all' %}ew-btn--primary{% else %}ew-btn--outline{% endif %}"
-         style="text-decoration: none; font-size: 0.8rem; padding: 0.25rem 0.65rem;">
-        All Versions <span class="ew-badge" style="margin-left: 0.35rem; font-size: 0.72rem;">{{ total_all_versions }}</span>
-      </a>
+  {% if versions_list %}
+  <div style="margin-bottom: 1.2rem; padding: 0.65rem 0.9rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+    <div style="display: flex; align-items: center; gap: 0.6rem;">
+      <label for="version-select" style="font-size: 0.84rem; font-weight: 600; color: var(--text-dark-color); margin: 0; white-space: nowrap;">
+        Questionnaire Version:
+      </label>
+      <select id="version-select"
+              class="form-input"
+              style="padding: 0.35rem 1.8rem 0.35rem 0.75rem; font-size: 0.84rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; min-width: 220px;"
+              onchange="if(this.value) window.location.href=this.value;">
+        {% for v in versions_list %}
+          <option value="{{ url_for('forms.form_responses_view', share_id=form.share_id, version=v.version) }}" {% if selected_version == v.version %}selected{% endif %}>
+            {{ v.label }} ({{ v.response_count }} {{ 'response' if v.response_count == 1 else 'responses' }})
+          </option>
+        {% endfor %}
+        <option value="{{ url_for('forms.form_responses_view', share_id=form.share_id, version='all') }}" {% if selected_version == 'all' %}selected{% endif %}>
+          All Versions ({{ total_all_versions }} total)
+        </option>
+      </select>
+    </div>
+    <div style="font-size: 0.82rem; color: var(--text-secondary);">
+      Showing <strong>{{ total }}</strong> {{ 'submission' if total == 1 else 'submissions' }}
     </div>
   </div>
   {% endif %}
@@ -130,14 +136,12 @@ if (typeof QRCode === 'undefined') {
     <table class="ew-table">
       <thead>
         <tr>
-          <th style="width: 40px; text-align: center;">#</th>
-          <th style="min-width: 140px;">Submitted</th>
-          <th style="min-width: 130px;">Respondent</th>
-          {% if selected_version == 'all' %}
-            <th style="min-width: 90px; text-align: center;">Version</th>
-          {% endif %}
-          {% for q in display_questions %}<th style="min-width: 140px;">{{ q.label }}</th>{% endfor %}
-          <th style="width: 70px; text-align: center;">View</th>
+          <th style="width: 45px; text-align: center;">#</th>
+          <th style="min-width: 150px;">Submitted</th>
+          <th style="min-width: 160px;">Respondent</th>
+          <th style="min-width: 140px; text-align: center;">Version</th>
+          <th style="min-width: 100px; text-align: center;">Answers</th>
+          <th style="width: 110px; text-align: center;">Action</th>
         </tr>
       </thead>
       <tbody>
@@ -147,26 +151,23 @@ if (typeof QRCode === 'undefined') {
           <td class="secondary" style="white-space: nowrap;">{{ r.submitted_at_formatted or r.submitted_at_iso }}</td>
           <td style="white-space: nowrap;">
             {% if r.submitter_username %}
-              <span style="font-weight: 600; font-size: 0.82rem; color: var(--primary-color);">@{{ r.submitter_username }}</span>
+              <span style="font-weight: 600; font-size: 0.85rem; color: var(--primary-color);">@{{ r.submitter_username }}</span>
             {% else %}
-              <span class="ew-badge" style="font-size: 0.72rem;">Anonymous</span>
+              <span class="ew-badge" style="font-size: 0.74rem;">Anonymous</span>
             {% endif %}
             {% if r.has_multiple_submissions %}
-              <span class="ew-badge" style="font-size: 0.68rem; margin-left: 0.25rem; background: var(--surface-bg); color: var(--primary-color);" title="Has answered multiple versions">Multi-version</span>
+              <span class="ew-badge" style="font-size: 0.68rem; margin-left: 0.3rem; background: var(--surface-bg); color: var(--primary-color);" title="Has answered multiple versions">Multi-version</span>
             {% endif %}
           </td>
-          {% if selected_version == 'all' %}
-            <td style="text-align: center; white-space: nowrap;">
-              <span class="ew-badge" style="font-size: 0.72rem;">{{ r.version_label or ('v' ~ (r.form_version or 1)) }}</span>
-            </td>
-          {% endif %}
-          {% for q in display_questions %}
-            {% set ans = r.aligned_answers.get(q.id) if r.aligned_answers else None %}
-            <td style="word-break: break-word;">{{ ans.value_plain if ans and ans.value_plain else '—' }}</td>
-          {% endfor %}
           <td style="text-align: center; white-space: nowrap;">
-            <button type="button" class="ew-btn ew-btn--outline ew-btn--sm" style="font-size: 0.72rem; padding: 0.18rem 0.45rem;" onclick="openResponseModal({{ loop.index0 }})">
-              Details
+            <span class="ew-badge" style="font-size: 0.74rem;">{{ r.version_label or ('v' ~ (r.form_version or 1)) }}</span>
+          </td>
+          <td style="text-align: center; white-space: nowrap;">
+            <span style="font-size: 0.82rem; color: var(--text-secondary);">{{ r.answers|length }} answered</span>
+          </td>
+          <td style="text-align: center; white-space: nowrap;">
+            <button type="button" class="ew-btn ew-btn--outline ew-btn--sm" style="font-size: 0.76rem; padding: 0.22rem 0.55rem;" onclick="openResponseModal({{ loop.index0 }})">
+              View Answers
             </button>
           </td>
         </tr>
@@ -269,16 +270,6 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
-let showRetired = false;
-window.toggleRetiredColumns = function() {
-  showRetired = !showRetired;
-  const cols = document.querySelectorAll('.retired-col');
-  cols.forEach(el => el.style.display = showRetired ? '' : 'none');
-  const btn = document.getElementById('toggle-retired-btn');
-  if (btn) {
-    btn.innerHTML = showRetired ? '<i class="fas fa-eye-slash" style="margin-right:0.25rem;"></i>Hide Historical Questions' : '<i class="fas fa-history" style="margin-right:0.25rem;"></i>Show Historical Questions ({{ retired_questions|length }})';
-  }
-};
 
 function escHtml(str) {
   if (!str) return '';

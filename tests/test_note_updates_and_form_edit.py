@@ -475,6 +475,60 @@ class TestFormVersionHistory:
         assert len(r2['other_submissions']) == 1
         assert r2['other_submissions'][0]['version'] == 1
 
+    def test_form_responses_view_renders_sleek_dropdown_and_table(self, auth_client, mock_user):
+        import main as m
+        from unittest.mock import patch, MagicMock
+
+        form_oid = ObjectId()
+        share_id = "test_sleek_form"
+        form_doc = {
+            '_id': form_oid,
+            'share_id': share_id,
+            'owner_id': mock_user['_id'],
+            'title': 'Sleek Feedback Form',
+            'version': 2,
+            'questions': [{'id': 'q2', 'label': 'Current Question', 'type': 'short_text'}],
+            'versions': [{'version': 1, 'title': 'Sleek Feedback Form', 'questions': [{'id': 'q1', 'label': 'Old Question'}]}],
+            'deactivated': False
+        }
+
+        resp1 = {
+            '_id': ObjectId(),
+            'form_id': form_oid,
+            'form_version': 1,
+            'submitter_username': 'maryel',
+            'submitted_at': datetime.datetime.now(datetime.timezone.utc),
+            'answers': [{'question_id': 'q1', 'label': 'Old Question', 'value': 'Old Ans'}]
+        }
+        resp2 = {
+            '_id': ObjectId(),
+            'form_id': form_oid,
+            'form_version': 2,
+            'submitter_username': 'bob',
+            'submitted_at': datetime.datetime.now(datetime.timezone.utc),
+            'answers': [{'question_id': 'q2', 'label': 'Current Question', 'value': 'Current Ans'}]
+        }
+
+        mock_cursor = MagicMock()
+        mock_cursor.sort.return_value = [resp1, resp2]
+        mock_cursor.__iter__.return_value = iter([resp1, resp2])
+
+        with patch.object(m.forms_conf, 'find_one', return_value=form_doc), \
+             patch.object(m.form_responses_conf, 'find', return_value=mock_cursor):
+            res = auth_client.get(f'/forms/{share_id}/responses?version=1')
+            assert res.status_code == 200
+            html = res.get_data(as_text=True)
+            # Verify sleek dropdown exists
+            assert 'id="version-select"' in html
+            assert 'Questionnaire Version:' in html
+            # Verify clean table headers
+            assert 'Respondent' in html
+            assert 'Version' in html
+            assert 'View Answers' in html
+            # Under version=1, maryel is listed
+            assert '@maryel' in html
+
+
 
 class TestVisitorTrackingAndAuth:
     """Test bot user-agent filtering and token auth in requests."""

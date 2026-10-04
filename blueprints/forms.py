@@ -1030,7 +1030,8 @@ def form_responses_view(share_id):
     stats = {}
     if target_responses:
         for q in display_questions:
-            if q['type'] == 'single_choice':
+            qtype = q.get('type')
+            if qtype == 'single_choice':
                 counts = {o: 0 for o in q.get('options', [])}
                 total_q = 0
                 for r in target_responses:
@@ -1041,8 +1042,8 @@ def form_responses_view(share_id):
                         if v in counts:
                             counts[v] += 1
                             total_q += 1
-                stats[q['id']] = {'type': 'single_choice', 'label': q['label'], 'counts': counts, 'total': total_q}
-            elif q['type'] == 'rating':
+                stats[q['id']] = {'type': 'single_choice', 'label': q.get('label', ''), 'counts': counts, 'total': total_q}
+            elif qtype == 'rating':
                 vals = []
                 for r in target_responses:
                     ans_map = {a.get('question_id'): a for a in r.get('answers', [])}

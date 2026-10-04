@@ -97,7 +97,7 @@ from utils import (linkify_filter, markdown_filter,
     optimize_cloudinary_url, extract_cloudinary_public_id,
     index_post_to_typesense, reindex_all_posts_to_typesense,
     _invalidate_badge_cache, can_dm, fetch_link_preview,
-    cascade_delete_user_data)
+    cascade_delete_user_data, purge_community_data, prune_orphaned_communities)
 from models import load_user, load_user_from_request
 # Import and register blueprints
 from blueprints.pages import bp as pages_bp
@@ -216,7 +216,7 @@ __all__ = [
     'VAULT_MAX_FILE_SIZE', 'VAULT_KDF_ITERATIONS', 'PREDEFINED_TAGS', '_TAG_KEYWORDS',
     'generate_password_hash', 'check_password_hash',
     'OAuth2Session', 'bleach', 'slugify', 'Message', 'DuplicateKeyError',
-    'cascade_delete_user_data'
+    'cascade_delete_user_data', 'purge_community_data', 'prune_orphaned_communities'
 ]
 
 

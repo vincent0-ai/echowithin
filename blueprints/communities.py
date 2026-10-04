@@ -42,7 +42,11 @@ def _apply_voucher_premium(m, user_id_obj, voucher):
 def communities_page():
     import main as m
     user_communities = list(m.communities_conf.find({'members': ObjectId(current_user.id)}).sort('updated_at', -1))
-    discover_communities = list(m.communities_conf.find({'visibility': 'public', 'members': {'$ne': ObjectId(current_user.id)}}).sort('updated_at', -1).limit(20))
+    discover_communities = list(m.communities_conf.find({
+        'visibility': 'public',
+        'members': {'$ne': ObjectId(current_user.id)},
+        'members.0': {'$exists': True}
+    }).sort('updated_at', -1).limit(20))
     
     # PERF: Batch-fetch note counts in a single aggregation instead of N+1 count_documents loops
     all_comm_ids = [c['_id'] for c in user_communities] + [c['_id'] for c in discover_communities]
@@ -64,6 +68,9 @@ def communities_page():
     for comm in discover_communities:
         comm['member_count'] = len(comm.get('members', []))
         comm['note_count'] = note_counts.get(comm['_id'], 0)
+
+    # Never display empty communities with 0 members in Discover
+    discover_communities = [c for c in discover_communities if c.get('member_count', 0) > 0]
     return render_template('communities.html', communities=user_communities, discover_communities=discover_communities)
 
 

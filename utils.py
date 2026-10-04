@@ -1082,6 +1082,138 @@ def purge_direct_messages_between(user_a_id, user_b_id):
         logging.getLogger('utils').error(f"Error purging messages between {u_a} and {u_b}: {e}")
 
 
+def purge_community_data(community_id):
+    """Permanently delete a community and all its associated data, files, and sub-collections."""
+    import main as m
+    try:
+        comm_obj_id = ObjectId(community_id) if not isinstance(community_id, ObjectId) else community_id
+    except Exception:
+        return False
+
+    community = m.communities_conf.find_one({'_id': comm_obj_id})
+    if not community:
+        return False
+
+    # 1. Community resources & Cloudinary files
+    try:
+        resources = list(m.community_resources_conf.find({'community_id': comm_obj_id}))
+        for res in resources:
+            pid = res.get('public_id') or res.get('file_public_id')
+            if pid:
+                destroy_cloudinary_media(pid, resource_type=res.get('resource_type', 'raw'), delivery_type='authenticated')
+        m.community_resources_conf.delete_many({'community_id': comm_obj_id})
+    except Exception:
+        pass
+
+    # 2. Community notes & media
+    try:
+        notes = list(m.community_notes_conf.find({'community_id': comm_obj_id}, {'_id': 1, 'valentine_photo_public_id': 1, 'valentine_audio_public_id': 1}))
+        for cnote in notes:
+            if cnote.get('valentine_photo_public_id'):
+                destroy_cloudinary_media(cnote['valentine_photo_public_id'], resource_type='raw', delivery_type='authenticated')
+            if cnote.get('valentine_audio_public_id'):
+                destroy_cloudinary_media(cnote['valentine_audio_public_id'], resource_type='raw', delivery_type='authenticated')
+
+        note_ids = [n['_id'] for n in notes]
+        if note_ids:
+            m.community_reactions_conf.delete_many({'note_id': {'$in': note_ids}})
+        m.community_notes_conf.delete_many({'community_id': comm_obj_id})
+    except Exception:
+        pass
+
+    # 3. Challenges, Polls, Checkins, Reports, Tournaments, Vouchers, Memberships
+    try:
+        m.community_challenges_conf.delete_many({'community_id': comm_obj_id})
+    except Exception:
+        pass
+
+    try:
+        polls = list(m.community_polls_conf.find({'community_id': comm_obj_id}, {'_id': 1}))
+        poll_ids = [p['_id'] for p in polls]
+        if poll_ids:
+            m.community_poll_votes_conf.delete_many({'poll_id': {'$in': poll_ids}})
+        m.community_polls_conf.delete_many({'community_id': comm_obj_id})
+    except Exception:
+        pass
+
+    try:
+        m.community_checkins_conf.delete_many({'community_id': comm_obj_id})
+    except Exception:
+        pass
+
+    try:
+        m.community_reports_conf.delete_many({'community_id': comm_obj_id})
+    except Exception:
+        pass
+
+    try:
+        m.community_tournaments_conf.delete_many({'community_id': comm_obj_id})
+    except Exception:
+        pass
+
+    try:
+        m.community_premium_vouchers_conf.delete_many({'community_id': comm_obj_id})
+    except Exception:
+        pass
+
+    try:
+        m.community_memberships_conf.delete_many({'community_id': comm_obj_id})
+    except Exception:
+        pass
+
+    # 4. Community record
+    m.communities_conf.delete_one({'_id': comm_obj_id})
+    return True
+
+
+def prune_orphaned_communities():
+    """Find and purge communities that have 0 members or whose creator/admin was deleted with no remaining members.
+
+    If an admin was deleted but active members remain, reassigns admin_id to the first active moderator/member.
+    """
+    import main as m
+    pruned_count = 0
+    try:
+        # Find all communities
+        all_comms = list(m.communities_conf.find({}))
+        for comm in all_comms:
+            comm_id = comm['_id']
+            raw_members = comm.get('members') or []
+            # Verify which members actually still exist in users_conf
+            valid_members = [
+                mid for mid in raw_members
+                if m.users_conf.find_one({'_id': mid}, {'_id': 1})
+            ] if raw_members else []
+
+            if not valid_members:
+                # 0 valid members remaining -> purge completely!
+                purge_community_data(comm_id)
+                pruned_count += 1
+                continue
+
+            # If members array had deleted users, sync it with valid_members
+            updates = {}
+            if len(valid_members) != len(raw_members):
+                updates['members'] = valid_members
+
+            admin_id = comm.get('admin_id')
+            admin_valid = admin_id and m.users_conf.find_one({'_id': admin_id}, {'_id': 1})
+            if not admin_valid:
+                # Admin account was deleted: promote first moderator or first active member
+                raw_mods = comm.get('moderators') or []
+                valid_mods = [mod for mod in raw_mods if mod in valid_members]
+                new_admin = valid_mods[0] if valid_mods else valid_members[0]
+                updates['admin_id'] = new_admin
+                updates['moderators'] = valid_mods
+
+            if updates:
+                m.communities_conf.update_one({'_id': comm_id}, {'$set': updates})
+    except Exception as e:
+        import logging
+        logging.getLogger('utils').error(f"Error pruning orphaned communities: {e}")
+    return pruned_count
+
+
 def cascade_delete_user_data(user_id):
     """Permanently delete every data record owned by a user (GDPR-complete).
 
@@ -1227,8 +1359,31 @@ def cascade_delete_user_data(user_id):
             m.bond_countdowns_conf.update_many({'bond_id': b_id}, {'$set': {'archived_by_bond_break': True}})
 
     # Communities
-    m.communities_conf.update_many({'admin_id': uid}, {'$set': {'admin_id': None}})
+    # 1. Handle communities where this user was the admin:
+    for comm in list(m.communities_conf.find({'admin_id': uid})):
+        comm_id = comm['_id']
+        remaining_members = [m_id for m_id in comm.get('members', []) if m_id != uid]
+        remaining_moderators = [m_id for m_id in comm.get('moderators', []) if m_id != uid]
+        if not remaining_members:
+            # Creator/admin was the only member -> permanently purge the community
+            purge_community_data(comm_id)
+        else:
+            # Promote first moderator or oldest member to new admin
+            new_admin = remaining_moderators[0] if remaining_moderators else remaining_members[0]
+            m.communities_conf.update_one(
+                {'_id': comm_id},
+                {'$set': {'admin_id': new_admin, 'members': remaining_members, 'moderators': remaining_moderators}}
+            )
+
+    # 2. Remove user from all remaining communities
     m.communities_conf.update_many({}, {'$pull': {'members': uid, 'moderators': uid}})
+
+    # 3. Purge any communities that were left with 0 members
+    for empty_comm in list(m.communities_conf.find({
+        '$or': [{'members': {'$size': 0}}, {'members': []}, {'members': {'$exists': False}}, {'members': None}]
+    })):
+        purge_community_data(empty_comm['_id'])
+
     m.community_memberships_conf.delete_many({'user_id': uid})
     for cnote in m.community_notes_conf.find({'author_id': uid}):
         if cnote.get('valentine_photo_public_id'):

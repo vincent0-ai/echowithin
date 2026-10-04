@@ -984,32 +984,7 @@ def api_admin_delete_community(community_id):
         return jsonify({'error': 'Community not found'}), 404
     
     comm_name = community.get('name', 'Unknown')
-    
-    # Delete community resources and their Cloudinary files
-    resources = list(m.community_resources_conf.find({'community_id': comm_obj_id}))
-    for res in resources:
-        pid = res.get('public_id') or res.get('file_public_id')
-        if pid:
-            m.destroy_cloudinary_media(pid, resource_type=res.get('resource_type', 'raw'), delivery_type='authenticated')
-    m.community_resources_conf.delete_many({'community_id': comm_obj_id})
-    
-    # Delete all community notes and their Cloudinary files
-    for cnote in m.community_notes_conf.find({'community_id': comm_obj_id}):
-        if cnote.get('valentine_photo_public_id'):
-            m.destroy_cloudinary_media(cnote['valentine_photo_public_id'], resource_type='raw', delivery_type='authenticated')
-        if cnote.get('valentine_audio_public_id'):
-            m.destroy_cloudinary_media(cnote['valentine_audio_public_id'], resource_type='raw', delivery_type='authenticated')
-
-    note_ids = [n['_id'] for n in m.community_notes_conf.find({'community_id': comm_obj_id}, {'_id': 1})]
-    if note_ids:
-        m.community_reactions_conf.delete_many({'note_id': {'$in': note_ids}})
-    m.community_notes_conf.delete_many({'community_id': comm_obj_id})
-    
-    # Delete all reports
-    m.community_reports_conf.delete_many({'community_id': comm_obj_id})
-    
-    # Delete the community
-    m.communities_conf.delete_one({'_id': comm_obj_id})
+    m.purge_community_data(comm_obj_id)
     
     flash(f'Community "{comm_name}" and all its data has been permanently deleted.', 'success')
     return redirect(url_for('admin.admin_communities'))

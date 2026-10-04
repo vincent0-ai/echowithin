@@ -1,0 +1,154 @@
+        <div class="activity-header">
+            <div>
+                <h3 class="activity-header-title">
+                    <i class="fas fa-bell"></i> Collaboration Activity
+                </h3>
+                <p class="activity-header-subtitle">Review changes proposed or applied by collaborators.</p>
+            </div>
+            {% if activity_notifications|length > 0 %}
+            <button onclick="if (window.markAllActivityRead) window.markAllActivityRead(true);"
+                class="activity-clear-btn">
+                Clear notifications
+            </button>
+            {% endif %}
+        </div>
+
+        {% if pending_proposals or reviewed_proposals or auto_approved_activity %}
+
+        {% if pending_proposals %}
+        <div class="activity-section">
+            <h4 class="activity-section-heading">Pending Decisions</h4>
+            <div class="activity-list">
+                {% for proposal in pending_proposals %}
+                <div class="activity-card">
+                    <div class="activity-card-header">
+                        <div>
+                            <div class="activity-card-name">
+                                {{ proposal.editor_name }} proposed changes
+                            </div>
+                            <div class="activity-card-meta">
+                                <span><i class="fas fa-clock"></i> {{ proposal.created_at|localtime }}</span>
+                                <span><i class="fas fa-sticky-note"></i> Note ID: {{
+                                    proposal.note_id|string|truncate(12) }}</span>
+                            </div>
+                        </div>
+                        <span class="activity-status-tag pending">Awaiting Review</span>
+                    </div>
+
+                    <div class="activity-content-preview">
+                        <div class="activity-content-label">New proposed content:</div>
+                        <div class="activity-content-body">{{ proposal.proposed_content_plain }}</div>
+                    </div>
+
+                    <div class="activity-auto-approve">
+                        <input type="checkbox" id="auto-allow-{{ proposal._id }}" name="auto_allow_subsequent">
+                        <label for="auto-allow-{{ proposal._id }}">Automatically allow subsequent
+                            proposals for this user</label>
+                    </div>
+
+                    <div class="activity-card-actions">
+                        <button class="activity-btn accept"
+                            onclick="reviewActivityProposal('{{ proposal._id }}', 'accept', '{{ proposal.note_id }}')">
+                            <i class="fas fa-check"></i> Accept Changes
+                        </button>
+                        <button class="activity-btn reject"
+                            onclick="reviewActivityProposal('{{ proposal._id }}', 'reject', '{{ proposal.note_id }}')">
+                            <i class="fas fa-times"></i> Reject
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if reviewed_proposals %}
+        <div class="activity-section">
+            <h4 class="activity-section-heading">Reviewed Proposals</h4>
+            <div class="activity-list">
+                {% for proposal in reviewed_proposals %}
+                <div class="activity-card" style="opacity: 0.88;">
+                    <div class="activity-card-header">
+                        <div>
+                            <div class="activity-card-name"
+                                style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                                <i class="fas fa-check-circle" style="color: #2e7d32;"></i>
+                                {{ proposal.editor_name }}'s proposal is done
+                            </div>
+                            <div class="activity-card-meta">
+                                <span><i class="fas fa-clock"></i> {{ proposal.created_at|localtime }}</span>
+                                <span><i class="fas fa-sticky-note"></i> Note ID: {{
+                                    proposal.note_id|string|truncate(12) }}</span>
+                            </div>
+                        </div>
+                        <span
+                            class="activity-status-tag {{ 'accepted' if proposal.status == 'accepted' else 'done' }}">Done</span>
+                    </div>
+
+                    <div class="activity-review-result {{ proposal.status }}">
+                        <div class="activity-content-label">Review result:</div>
+                        <div style="font-size: 0.85rem; color: #666;">
+                            {% if proposal.status == 'accepted' %}
+                            Accepted and applied to the note.
+                            {% else %}
+                            Rejected and marked complete.
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="activity-content-preview">
+                        <div class="activity-content-label">Proposed content:</div>
+                        <div class="activity-content-body" style="max-height: 150px;">{{ proposal.proposed_content_plain
+                            }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if auto_approved_activity %}
+        <div class="activity-section">
+            <h4 class="activity-section-heading">Recent Auto-Approved Edits</h4>
+            <div class="activity-list">
+                {% for activity in auto_approved_activity %}
+                <div class="activity-card">
+                    <div class="activity-auto-row">
+                        <div class="activity-auto-info">
+                            <div class="activity-auto-icon">
+                                <i class="fas fa-check-double"></i>
+                            </div>
+                            <div>
+                                <div class="activity-auto-name">{{ activity.editor_name }} updated your note</div>
+                                <div class="activity-auto-summary">{{ activity.edit_summary or 'Collaborator
+                                    contribution' }} · {{ activity.created_at|localtime }}</div>
+                            </div>
+                        </div>
+                        <button onclick="window.openVersionModal('{{ activity.note_id }}')"
+                            class="activity-btn neutral">
+                            View Versions
+                        </button>
+                    </div>
+                    {% if activity.share_id %}
+                    <div class="activity-auto-approve-revert"
+                        style="margin-top: 10px; border-top: 1px dashed #f2e7e3; padding-top: 8px; display: flex; align-items: center; gap: 6px; font-size: 0.8rem;">
+                        <input type="checkbox" class="toggle-auto-approve-checkbox"
+                            data-share-id="{{ activity.share_id }}" data-editor-id="{{ activity.editor_id }}" {% if
+                            activity.has_active_auto_approve %}checked{% endif %}>
+                        <label style="cursor: pointer; color: #5a3328; font-weight: 500;">Automatically approve future
+                            changes from this collaborator</label>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-check-circle" style="color: #5a3328;"></i>
+            <h3>All caught up!</h3>
+            <p>You have no new collaboration activity to review.</p>
+        </div>
+        {% endif %}

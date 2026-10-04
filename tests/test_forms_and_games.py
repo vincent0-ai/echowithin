@@ -291,7 +291,7 @@ class TestPersonalSpaceFormAndGameDecryption:
         with patch.object(m.forms_conf, 'find') as mock_forms_find:
             mock_forms_find.return_value.sort.return_value.limit.return_value = [form_doc]
 
-            res = auth_client.get('/personal_space')
+            res = auth_client.get('/personal_space?tab=forms')
             assert res.status_code == 200
             html = res.get_data(as_text=True)
 

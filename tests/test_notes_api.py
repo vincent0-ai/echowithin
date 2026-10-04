@@ -125,4 +125,36 @@ class TestAppLockVerify:
         assert 'PIN is required' in data.get('error', '')
 
 
+class TestPersonalSpaceTabs:
+    """Tests for on-demand personal space tab endpoints."""
+
+    def test_personal_space_tabs_require_auth(self, client):
+        for tab in ['saved', 'activity', 'locked', 'forms', 'games']:
+            res = client.get(f'/personal_space/tab/{tab}')
+            assert res.status_code in [302, 401]
+
+    def test_personal_space_tab_saved(self, auth_client):
+        res = auth_client.get('/personal_space/tab/saved')
+        assert res.status_code == 200
+
+    def test_personal_space_tab_activity(self, auth_client):
+        res = auth_client.get('/personal_space/tab/activity')
+        assert res.status_code == 200
+
+    def test_personal_space_tab_locked(self, auth_client):
+        res = auth_client.get('/personal_space/tab/locked')
+        assert res.status_code == 200
+
+    def test_personal_space_tab_forms(self, auth_client):
+        res = auth_client.get('/personal_space/tab/forms')
+        assert res.status_code == 200
+
+    def test_personal_space_tab_games(self, auth_client):
+        res = auth_client.get('/personal_space/tab/games')
+        assert res.status_code == 200
+
+    def test_personal_space_tab_invalid(self, auth_client):
+        res = auth_client.get('/personal_space/tab/unknown')
+        assert res.status_code == 404
+
 

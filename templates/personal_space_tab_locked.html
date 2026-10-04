@@ -1,0 +1,307 @@
+        {% if not has_app_lock %}
+        <!-- No PIN set up yet -->
+        <div class="locked-gate">
+            <i class="fas fa-shield-alt gate-icon"></i>
+            <h3>Set Up App Lock</h3>
+            <p>Create a 4-digit PIN to lock sensitive notes away from prying eyes.</p>
+            <button type="button" class="unlock-btn" onclick="openPinSetupFromGate()">Set Up PIN</button>
+            <div class="setup-hint">
+                You can also set this up in <a
+                    href="{{ url_for('profile.profile_settings', username=current_user.username) }}">Account
+                    Settings</a>
+            </div>
+        </div>
+        {% elif has_app_lock %}
+        <!-- PIN is set but tab is locked — show gate, hide notes -->
+        <div id="pin-gate-container" class="locked-gate" style="{{ 'display:none;' if is_unlocked else '' }}">
+            <i class="fas fa-lock gate-icon"></i>
+            <h3>Locked Notes</h3>
+            <p>Enter your PIN to view {{ locked_notes_count }} locked note{{ 's' if locked_notes_count != 1 else '' }}.
+            </p>
+            <button type="button" class="unlock-btn" onclick="openPinModal('verify')"><i class="fas fa-key"></i> Enter
+                PIN</button>
+            <div style="margin-top: 0.75rem;">
+                <a href="#" onclick="event.preventDefault(); startPinReset()"
+                    style="font-size: 0.85rem; color: #888; text-decoration: underline;">Forgot PIN?</a>
+            </div>
+        </div>
+        <!-- Locked notes content — always rendered, hidden until unlocked -->
+        <div id="locked-notes-content" style="{{ '' if is_unlocked else 'display:none;' }}">
+        {% if locked_notes %}
+        <!-- Unlocked: show locked notes with auto-relock timer -->
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; background: #fdfaf9; padding: 0.75rem 1rem; border-radius: 10px; border: 1px solid #f5ebe7;">
+            <div style="font-size: 0.9rem; color: #5a3328; font-weight: 600;">
+                <i class="fas fa-lock-open" style="margin-right: 4px;"></i> Unlocked
+                <span id="relock-timer"
+                    style="font-weight: 400; font-size: 0.8rem; color: #999; margin-left: 6px;"></span>
+            </div>
+            <button type="button" class="btn"
+                style="background: #3e2217; color: white; border: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; border-radius: 6px; cursor: pointer;"
+                onclick="relockSession()">
+                <i class="fas fa-lock"></i> Lock Now
+            </button>
+        </div>
+        <script nonce="{{ csp_nonce }}">
+            (function () {
+                const UNLOCK_DURATION = 300; // 5 minutes in seconds
+                const timerEl = document.getElementById('relock-timer');
+                let remaining = UNLOCK_DURATION;
+
+                function formatTime(secs) {
+                    const m = Math.floor(secs / 60);
+                    const s = secs % 60;
+                    return m + ':' + (s < 10 ? '0' : '') + s;
+                }
+
+                const interval = setInterval(() => {
+                    remaining--;
+                    if (timerEl) timerEl.textContent = '(' + formatTime(Math.max(0, remaining)) + ')';
+                    if (remaining <= 0) {
+                        clearInterval(interval);
+                        // Auto-relock
+                        if (typeof relockSession === 'function') relockSession(false);
+                    }
+                }, 1000);
+                if (timerEl) timerEl.textContent = '(' + formatTime(remaining) + ')';
+
+                // Also relock when page comes back from being hidden (app switch, screen lock)
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'visible') {
+                        // Re-check with server whether session is still valid
+                        echoFetch('/api/app_lock/check_status').then(r => r.json()).then(d => {
+                            if (!d.unlocked) {
+                                clearInterval(interval);
+                                window.location.hash = 'locked';
+                                window.location.reload();
+                            }
+                        }).catch(() => { });
+                    }
+                });
+            })();
+        </script>
+        <div class="personal-notes-list" id="locked-notes-container">
+            {% for note in locked_notes %}
+            <div class="locked-note-card note-card {% if note.update_available %}update-available{% endif %}{% if pending_proposals_map.get(note._id|string) %} has-proposal{% endif %}"
+                data-note-id="{{ note._id }}">
+                <div class="note-content rendered-note" data-raw="{{ note.content | e }}">
+                    {{ note.content | markdown | safe }}
+                </div>
+                {% if note.reference or note.tags %}
+                <div class="note-metadata-display"
+                    style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem;">
+                    {% if note.reference %}
+                    <div class="note-ref-display" style="font-size: 0.75rem; color: #555; font-weight: 600;">{{
+                        note.reference }}</div>
+                    {% endif %}
+                    {% if note.tags %}
+                    <div class="note-tags-display" style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
+                        {% for tag in note.tags %}
+                        <span class="note-tag-badge"
+                            style="background: #f0f0f0; color: #666; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; border: 1px solid #ddd;">{{
+                            tag }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                <div class="note-footer">
+                    <span class="note-date">
+                        <i class="far fa-clock"></i>
+                        {{ note.created_at|localtime }}
+                        <span
+                            style="display: inline-flex; align-items: center; gap: 0.2rem; background: #f5ebe7; color: #5a3328; border-radius: 20px; padding: 0.1rem 0.4rem; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem;">
+                            <i class="fas fa-lock" style="font-size: 0.55rem;"></i> Locked
+                        </span>
+                        {% if note.update_available %}
+                        <span class="update-badge"
+                            title="The original author has updated this note. Click Sync to pull updates."
+                            style="background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <i class="fas fa-exclamation-circle" style="animation: pulse-orange 2s infinite;"></i>
+                            Update available
+                        </span>
+                        {% endif %}
+                        {% if pending_proposals_map.get(note._id|string) %}
+                        <span class="proposal-badge"
+                            title="{{ pending_proposals_map[note._id|string]|length }} pending proposal(s) awaiting your review">
+                            <i class="fas fa-code-branch"></i> {{ pending_proposals_map[note._id|string]|length }}
+                            Proposal{{ 's' if pending_proposals_map[note._id|string]|length > 1 }}
+                        </span>
+                        {% endif %}
+                    </span>
+                    {% set note_id_str = note._id|string %}
+                    {% if locked_shares_map.get(note_id_str) %}
+                    <div class="active-links-badge"
+                        style="position: relative; display: inline-flex; align-items: center;">
+                        <button type="button" class="active-link-toggle"
+                            style="background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; border-radius: 20px; padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;"
+                            title="This note has active share links" aria-label="This note has active share links">
+                            <i class="fas fa-link"></i> {{ locked_shares_map[note_id_str]|length }} Link{{ 's' if
+                            locked_shares_map[note_id_str]|length > 1 }}
+                        </button>
+                        <div class="share-dropdown"
+                            style="display: none; position: absolute; top: 100%; right: 0; margin-top: 0.4rem; background: white; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 0.35rem; min-width: 220px; z-index: 100;">
+                            {% for share in locked_shares_map[note_id_str] %}
+                            <div class="share-link-item"
+                                style="display: flex; align-items: center; gap: 0.25rem; padding: 0.3rem 0.4rem; border-radius: 6px; background: #f9f9f9; margin-bottom: 0.2rem; font-size: 0.66rem;">
+                                <span
+                                    style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; display: inline-flex; align-items: center; gap: 3px;">
+                                    {% if share.surprise_theme != 'none' %}<i class="fas fa-gift"
+                                        style="color: #ff4d6d;"></i>{% endif %}
+                                    <i class="fas fa-{{ 'pen' if share.permissions == 'edit' else 'eye' }}"
+                                        style="color: #888;" title="{{ share.permissions }} access"></i>
+                                    <span style="overflow: hidden; text-overflow: ellipsis;">{{
+                                        share.share_url[-8:] }}</span>
+                                </span>
+                                <a href="{{ share.share_url }}" target="_blank" rel="noopener noreferrer"
+                                    title="Open link"
+                                    style="background: #2e7d32; color: white; border: none; border-radius: 5px; padding: 0.15rem 0.32rem; font-size: 0.62rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; line-height: 1;">
+                                    <i class="fas fa-external-link-alt"></i>
+                                </a>
+                                <a href="/share/settings/{{ share.share_id }}" rel="noopener"
+                                    title="Share Settings — surprise theme, time capsule, photos, auto-approve"
+                                    style="background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; border-radius: 5px; padding: 0.15rem 0.32rem; font-size: 0.62rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; line-height: 1;">
+                                    <i class="fas fa-cog"></i>
+                                </a>
+                                <button type="button" class="copy-btn" data-copy-text="{{ share.share_url }}"
+                                    title="Copy link" aria-label="Copy link"
+                                    style="background: #3e2217; color: white; border: none; border-radius: 5px; padding: 0.15rem 0.32rem; font-size: 0.62rem; cursor: pointer; display: inline-flex; align-items: center; line-height: 1;">
+                                    <i class="far fa-copy"></i>
+                                </button>
+                                <button type="button" class="revoke-btn" data-share-id="{{ share.share_id }}"
+                                    title="Revoke link" aria-label="Revoke link"
+                                    style="background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; border-radius: 5px; padding: 0.15rem 0.32rem; font-size: 0.62rem; cursor: pointer; display: inline-flex; align-items: center; line-height: 1;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="note-actions">
+                        <button type="button" class="copy-btn" title="Copy note" aria-label="Copy note" data-copy-text="{{ note.content }}">
+                            <i class="far fa-copy"></i>{% if show_icon_labels %}<span class="action-label">Copy</span>{%
+                            endif %}
+                        </button>
+                        <button type="button" class="btn-icon edit-note-btn" title="Edit note" aria-label="Edit note" data-id="{{ note._id }}"
+                            data-raw="{{ note.content | e }}" data-reference="{{ note.reference or '' }}"
+                            data-tags='{{ (note.tags or []) | tojson | safe }}'
+                            data-updated-at="{{ (note.updated_at or note.created_at).isoformat() if (note.updated_at or note.created_at) else '' }}">
+                            <i class="fas fa-pen"></i>{% if show_icon_labels %}<span class="action-label">Edit</span>{%
+                            endif %}
+                        </button>
+                        {% if note.surprise_theme and note.surprise_theme != 'none' and not note.source_share_id %}
+                        <a href="{{ url_for('sharing.view_saved_note', note_id=note._id) }}" class="btn-icon"
+                            title="View your saved surprise" aria-label="View your saved surprise" target="_blank"
+                            style="color: #ff4d6d; text-decoration: none;">
+                            <i class="fas fa-gift"></i>{% if show_icon_labels %}<span class="action-label">View</span>{%
+                            endif %}
+                        </a>
+                        {% endif %}
+                        {% if note.source_note_id and note.source_share_id %}
+                        <a href="{{ url_for('sharing.view_shared_note', share_id=note.source_share_id) }}"
+                            class="btn-icon" title="View original shared note &amp; discussion" aria-label="View original shared note &amp; discussion" target="_blank"
+                            style="color: #7b1fa2; text-decoration: none;">
+                            <i class="fas fa-external-link-alt"></i>{% if show_icon_labels %}<span
+                                class="action-label">Original</span>{% endif %}
+                        </a>
+                        <button type="button"
+                            class="btn-icon sync-note-btn {% if note.update_available %}update-pending-btn{% endif %}"
+                            title="Sync with original" aria-label="Sync with original" data-id="{{ note._id }}"
+                            data-source-share-id="{{ note.source_share_id }}">
+                            <i class="fas fa-sync-alt" {% if note.update_available
+                                %}style="color: #e65100; font-weight: bold;" {% endif %}></i>
+                            {% if show_icon_labels or note.update_available %}
+                            <span class="action-label" {% if note.update_available
+                                %}style="color: #e65100; font-weight: 600;" {% endif %}>{{ 'Sync Now' if
+                                note.update_available else 'Sync' }}</span>
+                            {% endif %}
+                        </button>
+                        {% endif %}
+                        <button type="button" class="btn-icon share-note-btn" title="Share note" aria-label="Share note"
+                            data-id="{{ note._id }}">
+                            <i class="fas fa-share-alt"></i>{% if show_icon_labels %}<span
+                                class="action-label">Share</span>{% endif %}
+                        </button>
+                        <button type="button" class="btn-icon lock-note-btn is-locked" title="Unlock note" aria-label="Unlock note"
+                            data-id="{{ note._id }}">
+                            <i class="fas fa-lock-open"></i>{% if show_icon_labels %}<span
+                                class="action-label">Unlock</span>{% endif %}
+                        </button>
+                        <button type="button" class="btn-icon version-history-btn" title="Version history" aria-label="Version history"
+                            data-id="{{ note._id }}">
+                            <i class="fas fa-clock-rotate-left"></i>{% if show_icon_labels %}<span
+                                class="action-label">History</span>{% endif %}
+                        </button>
+                        {% if pending_proposals_map.get(note._id|string) %}
+                        <button type="button" class="proposal-view-btn" title="Review pending proposals" aria-label="Review pending proposals"
+                            onclick="document.querySelector('[data-tab=activity]').click(); window.location.hash = 'activity';">
+                            <i class="fas fa-code-branch"></i> Review
+                        </button>
+                        {% endif %}
+                        {% set nid_str = note._id|string %}
+                        <form action="{{ url_for('notes.delete_personal_post', post_id=note._id) }}" method="POST"
+                            style="display:inline;" class="delete-note-form"
+                            data-has-shares="{{ 'true' if locked_shares_map.get(nid_str) else 'false' }}"
+                            data-has-clones="{{ 'true' if locked_clones_map.get(nid_str) else 'false' }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="button" class="delete-btn" title="Delete note" aria-label="Delete note">
+                                <i class="far fa-trash-alt"></i>{% if show_icon_labels %}<span
+                                    class="action-label">Delete</span>{% endif %}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Pagination for Locked Notes -->
+        {% if total_locked_pages > 1 %}
+        <nav class="pagination-nav" style="margin-top: 2rem;">
+            <ul class="pagination">
+                {% if locked_page > 1 %}
+                <li class="page-item">
+                    <a class="page-link"
+                        href="{{ url_for('notes.personal_space', locked_page=locked_page-1, notes_page=notes_page, saved_page=saved_page) }}#locked">Previous</a>
+                </li>
+                {% endif %}
+
+                {% set max_visible = [8, locked_page + 1] | max %}
+                {% for p in range(1, [max_visible + 1, total_locked_pages + 1] | min) %}
+                <li class="page-item {% if p == locked_page %}active{% endif %}">
+                    <a class="page-link"
+                        href="{{ url_for('notes.personal_space', locked_page=p, notes_page=notes_page, saved_page=saved_page) }}#locked">{{
+                        p }}</a>
+                </li>
+                {% endfor %}
+
+                {% if max_visible < total_locked_pages - 1 %} <li class="page-item disabled"><span
+                        class="page-link">...</span></li>
+                    {% endif %}
+
+                    {% if max_visible < total_locked_pages %} <li
+                        class="page-item {% if total_locked_pages == locked_page %}active{% endif %}">
+                        <a class="page-link"
+                            href="{{ url_for('notes.personal_space', locked_page=total_locked_pages, notes_page=notes_page, saved_page=saved_page) }}#locked">{{
+                            total_locked_pages }}</a>
+                        </li>
+                        {% endif %}
+
+                        {% if locked_page < total_locked_pages %} <li class="page-item">
+                            <a class="page-link"
+                                href="{{ url_for('notes.personal_space', locked_page=locked_page+1, notes_page=notes_page, saved_page=saved_page) }}#locked">Next</a>
+                            </li>
+                            {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-lock" style="opacity: 0.4;"></i>
+            <h3>No locked notes</h3>
+            <p>Lock notes from the Notes tab using the <i class="fas fa-lock" style="font-size: 0.9em;"></i> button.</p>
+        </div>
+        {% endif %}
+        </div><!-- /locked-notes-content -->
+        {% endif %}

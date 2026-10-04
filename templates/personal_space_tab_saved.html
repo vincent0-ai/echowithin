@@ -1,0 +1,93 @@
+        {% if saved_posts %}
+        <div class="search-filter">
+            <input type="text" id="saved-search" placeholder="Search saved posts..." aria-label="Search saved posts">
+        </div>
+        <div class="saved-posts-list" id="saved-posts-container">
+            {% for post in saved_posts %}
+            <div class="saved-post-card" data-title="{{ post.title|lower }}" data-author="{{ post.author|lower }}">
+                {% if post.image_urls and post.image_urls|length > 0 %}
+                <img src="{{ post.image_urls[0] }}" alt="" class="saved-post-thumb" loading="lazy">
+                {% elif post.image_url %}
+                <img src="{{ post.image_url }}" alt="" class="saved-post-thumb" loading="lazy">
+                {% else %}
+                <div class="saved-post-thumb-placeholder">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                {% endif %}
+                <div class="saved-post-info">
+                    <h3 class="saved-post-title">
+                        <a href="{{ url_for('blog.view_post', slug=post.slug) }}">{{ post.title }}</a>
+                    </h3>
+                    <div class="saved-post-meta">
+                        <i class="fas fa-user"></i> {{ post.author }} &bull;
+                        <i class="fas fa-calendar"></i> {{ post.timestamp|localtime('%b %d, %Y') }}
+                        {% if post.view_count %}
+                        &bull; <i class="fas fa-eye"></i> {{ post.view_count }}
+                        {% endif %}
+                    </div>
+                    <div class="saved-post-actions">
+                        <a href="{{ url_for('blog.view_post', slug=post.slug) }}" class="btn-icon btn-view">
+                            Read
+                        </a>
+                        <form action="{{ url_for('blog.toggle_save_post', post_id=post._id) }}" method="POST"
+                            style="display:inline;" class="unsave-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn-icon btn-remove">
+                                Unsave
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination for Saved Posts -->
+        {% if total_saved_pages > 1 %}
+        <nav class="pagination-nav" style="margin-top: 2rem;">
+            <ul class="pagination">
+                {% if saved_page > 1 %}
+                <li class="page-item">
+                    <a class="page-link"
+                        href="{{ url_for('notes.personal_space', saved_page=saved_page-1, notes_page=notes_page, locked_page=locked_page) }}#saved">Previous</a>
+                </li>
+                {% endif %}
+
+                {% set max_visible = [8, saved_page + 1] | max %}
+                {% for p in range(1, [max_visible + 1, total_saved_pages + 1] | min) %}
+                <li class="page-item {% if p == saved_page %}active{% endif %}">
+                    <a class="page-link"
+                        href="{{ url_for('notes.personal_space', saved_page=p, notes_page=notes_page, locked_page=locked_page) }}#saved">{{
+                        p }}</a>
+                </li>
+                {% endfor %}
+
+                {% if max_visible < total_saved_pages - 1 %} <li class="page-item disabled"><span
+                        class="page-link">...</span></li>
+                    {% endif %}
+
+                    {% if max_visible < total_saved_pages %} <li
+                        class="page-item {% if total_saved_pages == saved_page %}active{% endif %}">
+                        <a class="page-link"
+                            href="{{ url_for('notes.personal_space', saved_page=total_saved_pages, notes_page=notes_page, locked_page=locked_page) }}#saved">{{
+                            total_saved_pages }}</a>
+                        </li>
+                        {% endif %}
+
+                        {% if saved_page < total_saved_pages %} <li class="page-item">
+                            <a class="page-link"
+                                href="{{ url_for('notes.personal_space', saved_page=saved_page+1, notes_page=notes_page, locked_page=locked_page) }}#saved">Next</a>
+                            </li>
+                            {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <div class="empty-state">
+            <i class="far fa-bookmark"></i>
+            <h3>No saved posts yet</h3>
+            <p>Save posts you want to read later by clicking the bookmark icon on any post.</p>
+            <a href="{{ url_for('blog.blog') }}" class="btn comment-btn" style="margin-top: 1rem;">Explore Posts</a>
+        </div>
+        {% endif %}

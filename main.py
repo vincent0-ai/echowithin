@@ -1642,8 +1642,8 @@ def add_security_headers(response):
 
     # --- Static asset caching ---
     if request.path.startswith('/static/'):
-        # Immutable assets (fonts, logos, images) — cache for 1 year
-        if any(request.path.endswith(ext) for ext in ('.woff', '.woff2', '.ttf', '.eot', '.png', '.ico', '.svg')):
+        # Immutable assets (fonts, logos, images) or versioned assets (?v=) — cache for 1 year
+        if request.args.get('v') or any(request.path.endswith(ext) for ext in ('.woff', '.woff2', '.ttf', '.eot', '.png', '.ico', '.svg')):
             response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
         else:
             # CSS/JS — cache for 1 hour, revalidate after

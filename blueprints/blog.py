@@ -1287,8 +1287,9 @@ def post():
             try:
                 if m.redis_cache:
                     m.redis_cache.delete('sitemap_index_xml')
+                import requests
                 ping_url = 'https://www.google.com/ping?sitemap=https://echowithin.xyz/sitemap_index.xml'
-                urllib.request.urlopen(ping_url, timeout=5)
+                requests.get(ping_url, timeout=5)
             except Exception as e:
                 current_app.logger.debug(f"Sitemap ping failed (non-critical): {e}")
 
@@ -1335,7 +1336,7 @@ def encrypted_uploaded_file(filename):
             elif ext == '.webp':
                 mime = 'image/webp'
 
-            etag = f'"{hashlib.md5(filename.encode("utf-8")).hexdigest()}"'
+            etag = f'"{hashlib.md5(filename.encode("utf-8"), usedforsecurity=False).hexdigest()}"'
             if request.headers.get('If-None-Match') == etag:
                 return Response(status=304)
 

@@ -1185,10 +1185,11 @@ def _generate_ai_question_gemini(relationship_label, recent_questions=None, skip
     # Try each key; skip to next on 429 quota errors
     for key in keys:
         url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}'
-        req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
         try:
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
+            import requests as _requests
+            resp = _requests.post(url, data=payload, headers={'Content-Type': 'application/json'}, timeout=15)
+            if resp.status_code == 200:
+                data = resp.json()
                 raw_text = (data.get('candidates', [{}])[0]
                             .get('content', {})
                             .get('parts', [{}])[0]
@@ -1196,14 +1197,13 @@ def _generate_ai_question_gemini(relationship_label, recent_questions=None, skip
                 cleaned = _clean_ai_question(raw_text)
                 if cleaned:
                     return cleaned
-        except urllib.error.HTTPError as e:
-            status_code = e.code
-            if status_code == 429:
+            elif resp.status_code == 429:
                 # Quota exhausted on this key, try next
                 current_app.logger.info(f'Gemini key ...{key[-6:]} quota exhausted, trying next')
                 continue
-            current_app.logger.warning(f'Gemini API error HTTP {status_code} with key ...{key[-6:]}')
-            return None
+            else:
+                current_app.logger.warning(f'Gemini API error HTTP {resp.status_code} with key ...{key[-6:]}')
+                return None
         except Exception as e:
             current_app.logger.warning(f'Gemini API request failed: {e}')
             return None

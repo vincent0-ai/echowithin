@@ -500,7 +500,7 @@ def fetch_community_trivia(amount=10, category=None, difficulty=None):
             url,
             headers={'User-Agent': 'EchoWithin-Trivia/1.0 (Mozilla/5.0 Compatible)'}
         )
-        with urllib.request.urlopen(req, timeout=3.5) as resp:
+        with urllib.request.urlopen(req, timeout=3.5) as resp:  # nosec B310
             data = json.loads(resp.read().decode('utf-8'))
             if data.get('response_code') == 0 and data.get('results'):
                 questions = []

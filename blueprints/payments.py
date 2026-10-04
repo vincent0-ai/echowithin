@@ -135,7 +135,7 @@ def paystack_initialize():
     if plan_code and not is_donation:
         data["plan"] = plan_code
     try:
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=15)
         result = response.json()
         if result.get('status'):
             return jsonify({'authorization_url': result['data']['authorization_url']})
@@ -161,7 +161,7 @@ def paystack_callback():
     url = f"https://api.paystack.co/transaction/verify/{reference}"
     headers = {"Authorization": f"Bearer {secret_key}"}
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=15)
         result = response.json()
         if result.get('status') and result['data']['status'] == 'success':
             metadata = result['data'].get('metadata', {})

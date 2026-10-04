@@ -126,7 +126,7 @@ import cloudinary
 import cloudinary.uploader
 import json
 from logging.handlers import RotatingFileHandler
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger import json as jsonlogger
 from requests_oauthlib import OAuth2Session
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -299,7 +299,7 @@ def serve_encrypted_media(public_id):
     if not media_serve_token_valid(public_id, expires, sig):
         return abort(403)
 
-    etag = f'"{hashlib.md5(public_id.encode("utf-8")).hexdigest()}"'
+    etag = f'"{hashlib.md5(public_id.encode("utf-8"), usedforsecurity=False).hexdigest()}"'
     if request.headers.get('If-None-Match') == etag:
         return Response(status=304)
 

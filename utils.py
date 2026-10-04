@@ -7,7 +7,7 @@ import ipaddress
 from urllib.parse import urlparse, urljoin
 
 from flask import url_for
-from markupsafe import Markup
+from markupsafe import Markup, escape
 import bleach
 import markdown
 import requests
@@ -591,7 +591,7 @@ def localtime_filter(dt, fmt='%b %d, %Y at %I:%M %p'):
             # (avoids "Jan 2026 UTC" on month-only formats like %B %Y).
             if any(tok in fmt for tok in ('%H', '%I', '%M', '%S', '%p', '%X')):
                 fallback = f"{fallback} UTC"
-            return Markup(f"<time class=\"local-time\" datetime=\"{iso}\">{fallback}</time>")
+            return Markup(f'<time class="local-time" datetime="{escape(iso)}">{escape(fallback)}</time>')  # nosec B704
         return str(dt)
     except (ValueError, TypeError, AttributeError):
         return str(dt)
@@ -1511,7 +1511,7 @@ def is_safe_fetch_url(url):
             return False
         hl = hostname.lower()
         # Block well-known SSRF targets (including IPv6-mapped forms).
-        if hl in ('localhost', '169.254.169.254', '0.0.0.0', '::', '::1'):
+        if hl in ('localhost', '169.254.169.254', '0.0.0.0', '::', '::1'):  # nosec B104
             return False
         if '169.254.169.254' in hl or 'metadata.google.internal' in hl:
             return False

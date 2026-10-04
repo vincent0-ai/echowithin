@@ -19,18 +19,28 @@ def _geolocate_ip(ip):
     Called once per login, well within the 45 req/min free tier limit."""
     if not ip or ip in ('127.0.0.1', '::1', 'localhost'):
         return {'city': 'Local', 'country': ''}
+    import ipaddress
     try:
-        import urllib.request, json as _json
-        resp = urllib.request.urlopen(
-            f'http://ip-api.com/json/{ip}?fields=city,country,countryCode',
+        ip_obj = ipaddress.ip_address(str(ip).strip())
+        if not ip_obj.is_global:
+            return {'city': 'Local', 'country': ''}
+    except ValueError:
+        return {'city': '', 'country': ''}
+
+    try:
+        import requests
+        resp = requests.get(
+            f'http://ip-api.com/json/{ip_obj}?fields=city,country,countryCode',
             timeout=3
         )
-        data = _json.loads(resp.read())
-        return {
-            'city': data.get('city', ''),
-            'country': data.get('countryCode', ''),
-            'country_name': data.get('country', '')
-        }
+        if resp.status_code == 200:
+            data = resp.json()
+            return {
+                'city': data.get('city', ''),
+                'country': data.get('countryCode', ''),
+                'country_name': data.get('country', '')
+            }
+        return {'city': '', 'country': ''}
     except Exception:
         return {'city': '', 'country': ''}
 

@@ -158,7 +158,7 @@
         </section>
     </div>
 
-    <div class="contact-footer" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #ddd;">
+    <div class="contact-footer" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
         <p>Questions about these terms? <a href="{{ url_for('pages.about') }}" style="color: var(--primary-color); font-weight: 600;">Contact us</a> or see our <a href="{{ url_for('pages.faq') }}" style="color: var(--primary-color); font-weight: 600;">FAQ</a>.</p>
     </div>
 </div>
@@ -176,8 +176,13 @@
 
     .terms-container p,
     .terms-container li {
-        color: #444;
-        line-height: 1.6;
+        color: var(--text-dark-color);
+        line-height: 1.7;
+    }
+
+    .terms-container strong {
+        color: var(--text-dark-color);
+        font-weight: 600;
     }
 
     .terms-container ul {
@@ -187,8 +192,12 @@
 
     .last-updated {
         font-style: italic;
-        color: #777;
+        color: var(--text-secondary);
         margin-bottom: 2rem;
+    }
+
+    .contact-footer p {
+        color: var(--text-dark-color);
     }
 </style>
 {% endblock %}

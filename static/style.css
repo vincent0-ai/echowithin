@@ -3150,6 +3150,95 @@ body {
     color: var(--text-dark-color) !important;
 }
 
+/* --- FAQ & Terms Page Dark Mode Styles --- */
+[data-theme="dark"] .faq-header {
+    background: var(--surface-bg) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+[data-theme="dark"] .faq-header h1 {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .faq-header p {
+    color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .faq-section-title {
+    color: var(--primary-color) !important;
+    border-bottom-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .faq-question {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .faq-question:hover {
+    color: var(--primary-color) !important;
+}
+
+[data-theme="dark"] .faq-answer-inner {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .faq-answer-inner p,
+[data-theme="dark"] .faq-answer-inner strong {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .faq-answer-inner a {
+    color: var(--primary-color) !important;
+}
+
+[data-theme="dark"] .faq-answer-inner code {
+    background: var(--code-bg) !important;
+    color: var(--text-dark-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .faq-contact {
+    background: var(--surface-bg) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .faq-contact h3 {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .faq-contact p {
+    color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .faq-contact a.btn {
+    background: var(--primary-color) !important;
+    color: var(--text-light-color) !important;
+}
+
+[data-theme="dark"] .faq-contact a.btn:hover {
+    background: var(--primary-dark-color) !important;
+}
+
+[data-theme="dark"] .terms-container p,
+[data-theme="dark"] .terms-container li {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .terms-container strong {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .last-updated {
+    color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .contact-footer {
+    border-top-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .contact-footer p {
+    color: var(--text-dark-color) !important;
+}
+
 /* --- Blog cards --- */
 [data-theme="dark"] .card,
 [data-theme="dark"] .post-detail-card {
@@ -3846,15 +3935,55 @@ body {
     color: var(--text-dark-color) !important;
 }
 
-/* --- DM Input Action Buttons (Microphone, Clock, Attachments) --- */
-[data-theme="dark"] #chat-form .action-btn {
+/* --- DM Input Action Buttons (Microphone, Clock, Attachments, Games) --- */
+[data-theme="dark"] #chat-form .action-btn,
+[data-theme="dark"] .chat-input-form .action-btn,
+[data-theme="dark"] .dm-action-btn {
     background: var(--surface-bg) !important;
-    color: var(--primary-color) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-dark-color) !important;
 }
-[data-theme="dark"] #chat-form #send-btn {
+[data-theme="dark"] #chat-form .action-btn:hover,
+[data-theme="dark"] .chat-input-form .action-btn:hover,
+[data-theme="dark"] .dm-action-btn:hover {
+    background: var(--surface-hover-bg) !important;
+    color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+}
+[data-theme="dark"] #chat-form #send-btn,
+[data-theme="dark"] #send-btn {
     background: var(--primary-color) !important;
     color: var(--text-light-color) !important;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+}
+[data-theme="dark"] #chat-form #send-btn:hover,
+[data-theme="dark"] #send-btn:hover {
+    background: var(--primary-dark-color) !important;
+}
+
+/* --- Messages Desktop Layout Optimization --- */
+.container:has(.messages-container) {
+    padding: 0.5rem 1rem !important;
+}
+
+@media (min-width: 1200px) {
+    .messages-container {
+        max-width: min(1680px, 98vw) !important;
+        height: calc(100vh - 85px) !important;
+        height: calc(100dvh - 85px) !important;
+    }
+    .messages-sidebar {
+        width: 360px !important;
+    }
+}
+
+@media (min-width: 1600px) {
+    .messages-container {
+        max-width: 1800px !important;
+    }
+    .messages-sidebar {
+        width: 380px !important;
+    }
 }
 
 /* --- Universal Overrides for Hardcoded Light Pinkish Color (#f5ebe7) --- */

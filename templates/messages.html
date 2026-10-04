@@ -1,8 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="messages-container"
-    style="max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; height: calc(100vh - 120px); height: calc(100dvh - 120px); display: flex; flex-direction: column;">
+<div class="messages-container">
     {% if current_user.is_authenticated and current_user.is_guest %}
     <div class="floating-tour-tooltip" id="tour-tooltip-messages" style="position: relative; margin-bottom: 1rem; background: var(--surface-bg, #ffffff); border: 1px solid var(--primary-color, #3e2217); border-radius: 12px; padding: 1rem 1.2rem; box-shadow: 0 4px 18px rgba(0,0,0,0.08); z-index: 100;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
@@ -93,8 +92,8 @@
                     style="padding: 0.8rem 1.5rem; display: flex; align-items: center; justify-content: space-between; cursor: pointer; background: #fdf4ee; transition: background 0.2s;"
                     onmouseover="this.style.background='#f5ebe7'" onmouseout="this.style.background='#fdf4ee'">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <i class="fas fa-user-plus" style="color: #3e2217; font-size: 0.85rem;"></i>
-                        <span style="font-weight: 600; color: #3e2217; font-size: 0.9rem;">Message Requests</span>
+                        <i class="fas fa-user-plus" style="color: var(--primary-color); font-size: 0.85rem;"></i>
+                        <span style="font-weight: 600; color: var(--text-dark-color); font-size: 0.9rem;">Message Requests</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <span id="request-badge" class="unread-badge"
@@ -189,15 +188,15 @@
                             style="text-decoration: none; display: flex; align-items: center; gap: 0.7rem;">
                             <div class="active-avatar"
                                 style="width: 40px; height: 40px; border-radius: 50%; background: #e8dcd5; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-                                <i class="fas fa-user" style="color: #3e2217;"></i>
+                                <i class="fas fa-user" style="color: var(--primary-color);"></i>
                             </div>
                             <div>
-                                <div id="active-chat-username" style="font-weight: 600; color: #3e2217;">{{
+                                <div id="active-chat-username" style="font-weight: 600; color: var(--text-dark-color);">{{
                                     active_chat.username if active_chat else 'Select a contact' }}</div>
                                 <div id="chat-status" style="font-size: 0.75rem; color: #64748b; display: none;">Online
                                 </div>
                                 <div id="typing-indicator"
-                                    style="font-size: 0.75rem; color: #3e2217; font-style: italic; display: none;">
+                                    style="font-size: 0.75rem; color: var(--primary-color); font-style: italic; display: none;">
                                     Typing...</div>
                             </div>
                         </a>
@@ -348,9 +347,9 @@
                             <input type="hidden" id="pending-image-mime" value="">
 
                             <!-- Image Upload Button -->
-                            <button type="button" class="action-btn"
+                            <button type="button" class="action-btn dm-action-btn"
                                 onclick="document.getElementById('dm-image-upload').click()"
-                                style="width: 36px; height: 36px; min-width: 36px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; flex: 0 0 36px; touch-action: manipulation; display: flex; align-items: center; justify-content: center;">
+                                title="Attach image or video">
                                 <i class="fas fa-paperclip"></i>
                             </button>
                             <input type="file" id="dm-image-upload" accept="image/*,video/*" style="display: none;"
@@ -362,29 +361,25 @@
                             </div>
 
                             <!-- Voice Message Button -->
-                            <button type="button" class="action-btn voice-msg-btn" id="voice-msg-btn"
+                            <button type="button" class="action-btn dm-action-btn voice-msg-btn" id="voice-msg-btn"
                                 onmousedown="startVoiceRecording(event)" ontouchstart="startVoiceRecording(event)"
-                                title="Hold to record voice message"
-                                style="width: 36px; height: 36px; min-width: 36px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; user-select: none; -webkit-user-select: none; flex: 0 0 36px; touch-action: manipulation;">
+                                title="Hold to record voice message">
                                 <i class="fas fa-microphone"></i>
                             </button>
 
                             <!-- Schedule Button -->
-                            <button type="button" class="action-btn" id="schedule-btn" onclick="openScheduleModal()"
-                                title="Schedule message"
-                                style="width: 36px; height: 36px; min-width: 36px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex: 0 0 36px; touch-action: manipulation;">
+                            <button type="button" class="action-btn dm-action-btn" id="schedule-btn" onclick="openScheduleModal()"
+                                title="Schedule message">
                                 <i class="far fa-clock"></i>
                             </button>
 
                             <!-- Game Invite Button -->
-                            <button type="button" class="action-btn" id="game-invite-btn" onclick="openGameInviteModal()"
-                                title="Invite to Game"
-                                style="width: 36px; height: 36px; min-width: 36px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex: 0 0 36px; touch-action: manipulation;">
+                            <button type="button" class="action-btn dm-action-btn" id="game-invite-btn" onclick="openGameInviteModal()"
+                                title="Invite to Game">
                                 <i class="fas fa-gamepad"></i>
                             </button>
 
-                            <button type="submit" class="btn" id="send-btn"
-                                style="background: #3e2217; color: white; width: 42px; height: 42px; min-width: 42px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2); transition: transform 0.2s; flex: 0 0 42px; touch-action: manipulation;">
+                            <button type="submit" class="btn" id="send-btn" title="Send message">
                                 <i class="fas fa-paper-plane"></i>
                             </button>
                         </form>
@@ -396,8 +391,118 @@
 </div>
 
 <style>
-    :root {
-        --primary-color: #3e2217;
+    /* Desktop layout optimization for Messages window */
+    .container:has(.messages-container),
+    body:has(.messages-container) .container {
+        padding: 0.5rem 1rem !important;
+    }
+
+    .messages-container {
+        width: 100%;
+        max-width: min(1680px, 98vw);
+        margin: 0 auto;
+        padding: 0.5rem 0.75rem 1rem;
+        height: calc(100vh - 85px);
+        height: calc(100dvh - 85px);
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+    }
+
+    @media (min-width: 1200px) {
+        .messages-container {
+            max-width: min(1680px, 98vw);
+        }
+        .messages-sidebar {
+            width: 360px !important;
+        }
+    }
+
+    @media (min-width: 1600px) {
+        .messages-container {
+            max-width: 1800px;
+        }
+        .messages-sidebar {
+            width: 380px !important;
+        }
+    }
+
+    /* DM action buttons */
+    .chat-input-form .action-btn,
+    .dm-action-btn {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        background: #f5ebe7;
+        border: 1px solid transparent;
+        color: #3e2217;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        flex: 0 0 36px;
+        touch-action: manipulation;
+    }
+
+    .chat-input-form .action-btn:hover,
+    .dm-action-btn:hover {
+        background: #e8dcd5;
+        color: #2a1810;
+    }
+
+    #send-btn {
+        background: var(--primary-color);
+        color: var(--text-light-color);
+        width: 42px;
+        height: 42px;
+        min-width: 42px;
+        border-radius: 50%;
+        border: none;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2);
+        transition: transform 0.2s, background-color 0.2s;
+        flex: 0 0 42px;
+        touch-action: manipulation;
+        cursor: pointer;
+    }
+
+    #send-btn:hover {
+        background: var(--primary-dark-color);
+        transform: translateY(-1px);
+    }
+
+    /* Dark mode DM action buttons & send button */
+    [data-theme="dark"] .chat-input-form .action-btn,
+    [data-theme="dark"] #chat-form .action-btn,
+    [data-theme="dark"] .dm-action-btn {
+        background: var(--surface-bg) !important;
+        border: 1px solid var(--border-color) !important;
+        color: var(--text-dark-color) !important;
+    }
+
+    [data-theme="dark"] .chat-input-form .action-btn:hover,
+    [data-theme="dark"] #chat-form .action-btn:hover,
+    [data-theme="dark"] .dm-action-btn:hover {
+        background: var(--surface-hover-bg) !important;
+        color: var(--primary-color) !important;
+        border-color: var(--primary-color) !important;
+    }
+
+    [data-theme="dark"] #chat-form #send-btn,
+    [data-theme="dark"] #send-btn {
+        background: var(--primary-color) !important;
+        color: var(--text-light-color) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+    }
+
+    [data-theme="dark"] #chat-form #send-btn:hover,
+    [data-theme="dark"] #send-btn:hover {
+        background: var(--primary-dark-color) !important;
     }
 
     /* Android keyboard & touch behavior fixes */
@@ -5672,6 +5777,12 @@
 
 <script nonce="{{ csp_nonce }}">
 (function() {
+    try {
+        var cont = document.querySelector('.messages-container');
+        if (cont && cont.parentElement && cont.parentElement.classList.contains('container')) {
+            cont.parentElement.style.padding = '0.5rem 1rem';
+        }
+    } catch(e) {}
     const emitWhisperSocket = (event, data) => {
         if (window.socket && typeof window.socket.emit === 'function') {
             window.socket.emit(event, data);

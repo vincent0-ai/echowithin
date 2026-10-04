@@ -1,7 +1,7 @@
 {
-  "versionCode": 47,
-  "versionName": "1.13.2",
+  "versionCode": 48,
+  "versionName": "1.13.3",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.13.2 Note Details Modal & Enlarge Snake Game:\n• Moved creation/updated time info to a dedicated Note Info modal in the three-dots options menu\n• Greatly enlarged Retro Snake game window by removing D-pad buttons and adding responsive swipe steering",
-  "sha256": "BB39130EA334ADCCCCCB97371C527CD4AA5FC2D49D07C28BB7C30E9E90A511B3"
+  "changelog": "v1.13.3 Note Visitor Recognition & Form Version History:\n• Authenticated browser session handover for shared notes to properly recognize viewer identity\n• Form responses version history and seamless alignment across form edits",
+  "sha256": "05E79D072A80BC5AABF4CA22AB074C360E9F6A70FB85C3C842FCB22E4424D115"
 }

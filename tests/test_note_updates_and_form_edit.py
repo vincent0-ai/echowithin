@@ -339,3 +339,152 @@ class TestFormQuestionAlignment:
         assert aligned['q_new_id'] is not None
         assert aligned['q_new_id']['value'] == 'Bob'
         assert len(retired) == 0
+
+
+class TestFormVersionHistory:
+    """Test version snapshots, legacy version synthesis, and multi-version tracking."""
+
+    def test_resolve_form_versions_with_snapshots(self):
+        from blueprints.forms import _resolve_form_versions
+
+        v1_created = datetime.datetime(2026, 9, 1, 10, 0, tzinfo=datetime.timezone.utc)
+        v2_created = datetime.datetime(2026, 10, 1, 12, 0, tzinfo=datetime.timezone.utc)
+
+        form = {
+            '_id': ObjectId(),
+            'title': 'Test Questionnaire',
+            'version': 2,
+            'created_at': v1_created,
+            'updated_at': v2_created,
+            'questions': [
+                {'id': 'q_current_1', 'label': 'Current Q1', 'type': 'short_text'},
+                {'id': 'q_current_2', 'label': 'Current Q2', 'type': 'paragraph'}
+            ],
+            'versions': [
+                {
+                    'version': 1,
+                    'title': 'Test Questionnaire v1',
+                    'questions': [
+                        {'id': 'q_old_1', 'label': 'Old Q1', 'type': 'short_text'},
+                        {'id': 'q_old_2', 'label': 'Old Q2', 'type': 'short_text'}
+                    ],
+                    'created_at': v1_created,
+                    'archived_at': v2_created
+                }
+            ]
+        }
+
+        r1 = {
+            '_id': ObjectId(),
+            'form_version': 1,
+            'submitter_username': 'user1',
+            'answers': [{'question_id': 'q_old_1', 'label': 'Old Q1', 'value': 'Ans1'}]
+        }
+        r2 = {
+            '_id': ObjectId(),
+            'form_version': 2,
+            'submitter_username': 'user2',
+            'answers': [{'question_id': 'q_current_1', 'label': 'Current Q1', 'value': 'Ans2'}]
+        }
+
+        versions_list, version_map = _resolve_form_versions(form, [r1, r2])
+
+        assert len(versions_list) == 2
+        assert versions_list[0]['version'] == 2
+        assert versions_list[0]['is_current'] is True
+        assert versions_list[0]['response_count'] == 1
+        assert versions_list[1]['version'] == 1
+        assert versions_list[1]['is_current'] is False
+        assert versions_list[1]['response_count'] == 1
+
+        assert r1['version_label'] == 'Version 1'
+        assert r2['version_label'] == 'Version 2 (Current)'
+
+    def test_legacy_form_version_synthesis(self):
+        from blueprints.forms import _resolve_form_versions
+
+        t1 = datetime.datetime(2026, 9, 4, 10, 0, tzinfo=datetime.timezone.utc)
+        t_edit = datetime.datetime(2026, 10, 3, 10, 0, tzinfo=datetime.timezone.utc)
+
+        # Form with no versions array, but edited on Oct 3
+        form = {
+            '_id': ObjectId(),
+            'title': 'Legacy Form',
+            'created_at': t1,
+            'updated_at': t_edit,
+            'questions': [
+                {'id': 'q_new_1', 'label': 'New Q1'},
+                {'id': 'q_new_2', 'label': 'New Q2'}
+            ]
+        }
+
+        # Response from Sep 4 answering old question IDs
+        r_legacy = {
+            '_id': ObjectId(),
+            'submitted_at': t1,
+            'submitter_username': 'maryel',
+            'answers': [
+                {'question_id': 'q_legacy_a', 'label': 'Legacy A', 'value': 'A1'},
+                {'question_id': 'q_legacy_b', 'label': 'Legacy B', 'value': 'B1'}
+            ]
+        }
+
+        versions_list, version_map = _resolve_form_versions(form, [r_legacy])
+
+        assert len(versions_list) == 2
+        assert 1 in version_map
+        assert 2 in version_map
+        assert version_map[1]['label'] == 'Version 1 (Initial)'
+        assert version_map[2]['label'] == 'Version 2 (Current)'
+        assert version_map[1]['response_count'] == 1
+        assert r_legacy['form_version'] == 1
+
+    def test_multi_version_user_submission_linking(self):
+        from blueprints.forms import _resolve_form_versions
+
+        form = {
+            '_id': ObjectId(),
+            'version': 2,
+            'questions': [{'id': 'q2', 'label': 'Q2'}],
+            'versions': [{'version': 1, 'questions': [{'id': 'q1', 'label': 'Q1'}]}]
+        }
+
+        r1 = {
+            '_id': ObjectId('507f1f77bcf86cd799439011'),
+            'form_version': 1,
+            'submitter_id': 'user_abc',
+            'submitter_username': 'maryel',
+            'submitted_at_formatted': 'Sep 4, 2026',
+            'answers': [{'question_id': 'q1', 'label': 'Q1', 'value': 'v1 answer'}]
+        }
+        r2 = {
+            '_id': ObjectId('507f1f77bcf86cd799439012'),
+            'form_version': 2,
+            'submitter_id': 'user_abc',
+            'submitter_username': 'maryel',
+            'submitted_at_formatted': 'Oct 4, 2026',
+            'answers': [{'question_id': 'q2', 'label': 'Q2', 'value': 'v2 answer'}]
+        }
+
+        versions_list, version_map = _resolve_form_versions(form, [r1, r2])
+
+        assert r1.get('has_multiple_submissions') is True
+        assert r2.get('has_multiple_submissions') is True
+        assert len(r1['other_submissions']) == 1
+        assert r1['other_submissions'][0]['version'] == 2
+        assert len(r2['other_submissions']) == 1
+        assert r2['other_submissions'][0]['version'] == 1
+
+
+class TestVisitorTrackingAndAuth:
+    """Test bot user-agent filtering and token auth in requests."""
+
+    def test_is_bot_user_agent(self):
+        from blueprints.sharing import _is_bot_user_agent
+
+        assert _is_bot_user_agent('WhatsApp/2.21.12.21 A') is True
+        assert _is_bot_user_agent('TelegramBot (like TwitterBot)') is True
+        assert _is_bot_user_agent('facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)') is True
+        assert _is_bot_user_agent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/601.2.4 (KHTML, like Gecko) Version/9.0.1 Safari/601.2.4 facebookexternalhit/1.1 Facebot Twitterbot/1.0') is True
+        assert _is_bot_user_agent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36') is False
+        assert _is_bot_user_agent('Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36') is False

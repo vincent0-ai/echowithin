@@ -1906,9 +1906,10 @@ class TestFormResponsesViewObjectIdSerialization:
         }
 
         mock_cursor = MagicMock()
-        mock_cursor.sort.return_value = mock_cursor
+        mock_cursor.sort.return_value = [resp_doc]
         mock_cursor.skip.return_value = mock_cursor
         mock_cursor.limit.return_value = [resp_doc]
+        mock_cursor.__iter__.return_value = iter([resp_doc])
 
         with patch.object(m.forms_conf, 'find_one', return_value=form_doc), \
              patch.object(m.form_responses_conf, 'count_documents', return_value=1), \

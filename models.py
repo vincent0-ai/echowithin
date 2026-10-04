@@ -129,6 +129,12 @@ def load_user_from_request(req):
         token = req.cookies.get('x_app_token', '').strip()
         token_src = "x_app_token cookie"
 
+    # 4. Fallback: query parameter for share routes (/share/, /saved_note/)
+    if not token and (req.path.startswith('/share/') or req.path.startswith('/saved_note/')):
+        token = (req.args.get('token') or req.args.get('x_app_token') or '').strip()
+        if token:
+            token_src = "query parameter"
+
     if not token:
         # Don't log normal web requests that have no tokens
         if req.path.startswith('/api/') and req.path not in ('/api/messages/schedule/process', '/api/bonds/calendar/reminders/process'):
@@ -196,4 +202,15 @@ def load_user_from_request(req):
 
     if _REQ_LOADER_DEBUG:
         print(f"[DEBUG REQ_LOADER] User authenticated successfully: '{user_data.get('username')}'", flush=True)
+
+    # When authenticated via query parameter on web routes, seed Flask session so
+    # subsequent in-browser navigation and actions stay authenticated.
+    if token_src == "query parameter":
+        try:
+            from flask import session
+            session['_user_id'] = str(user_data['_id'])
+            session['_fresh'] = False
+        except Exception:
+            pass
+
     return User(user_data)

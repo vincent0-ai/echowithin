@@ -104,6 +104,25 @@ def _decrypt_form_definition(form):
         q['options'] = [decrypt_form_response(o, fid) for o in (q.get('options') or [])]
         dec_q.append(q)
     form['questions'] = dec_q
+
+    dec_versions = []
+    for v in (form.get('versions') or []):
+        v = dict(v)
+        if v.get('title'):
+            v['title'] = decrypt_form_response(v['title'], fid)
+        if v.get('description'):
+            v['description'] = decrypt_form_response(v['description'], fid)
+        v_qs = []
+        for vq in (v.get('questions') or []):
+            vq = dict(vq)
+            if vq.get('label'):
+                vq['label'] = decrypt_form_response(vq['label'], fid)
+            vq['options'] = [decrypt_form_response(o, fid) for o in (vq.get('options') or [])]
+            v_qs.append(vq)
+        v['questions'] = v_qs
+        dec_versions.append(v)
+    form['versions'] = dec_versions
+
     return form
 
 
@@ -181,6 +200,8 @@ def forms_create():
             'response_count': 0,
             'max_responses': max_responses,
             'allow_anonymous': allow_anonymous,
+            'version': 1,
+            'versions': [],
         }
         m.forms_conf.insert_one(doc)
         flash('Form created — share link copied.', 'success')
@@ -237,6 +258,8 @@ def api_create_form():
         'response_count': 0,
         'max_responses': max_responses,
         'allow_anonymous': bool(data.get('allow_anonymous', True) if not isinstance(data.get('allow_anonymous'), str) else data.get('allow_anonymous', '1') not in ('0', 'false', 'no')),
+        'version': 1,
+        'versions': [],
     }
     m.forms_conf.insert_one(doc)
     share_url = url_for('forms.view_form', share_id=share_id, _external=True)
@@ -306,10 +329,25 @@ def forms_edit(share_id):
             str(raw_form['_id']), title, description, questions
         )
 
+        current_version = raw_form.get('version', 1)
+        existing_versions = list(raw_form.get('versions') or [])
+        version_snapshot = {
+            'version': current_version,
+            'title': raw_form.get('title'),
+            'description': raw_form.get('description'),
+            'questions': raw_form.get('questions'),
+            'archived_at': now,
+            'created_at': raw_form.get('created_at') if current_version == 1 else raw_form.get('updated_at', now)
+        }
+        existing_versions.append(version_snapshot)
+        new_version = current_version + 1
+
         update_fields = {
             'title': enc_title,
             'description': enc_description,
             'questions': enc_questions,
+            'version': new_version,
+            'versions': existing_versions,
             'updated_at': now,
             'max_responses': max_responses,
             'allow_anonymous': allow_anonymous,
@@ -370,10 +408,25 @@ def api_edit_form(share_id):
         str(raw_form['_id']), title, description, questions
     )
 
+    current_version = raw_form.get('version', 1)
+    existing_versions = list(raw_form.get('versions') or [])
+    version_snapshot = {
+        'version': current_version,
+        'title': raw_form.get('title'),
+        'description': raw_form.get('description'),
+        'questions': raw_form.get('questions'),
+        'archived_at': now,
+        'created_at': raw_form.get('created_at') if current_version == 1 else raw_form.get('updated_at', now)
+    }
+    existing_versions.append(version_snapshot)
+    new_version = current_version + 1
+
     update_fields = {
         'title': enc_title,
         'description': enc_description,
         'questions': enc_questions,
+        'version': new_version,
+        'versions': existing_versions,
         'updated_at': now,
         'max_responses': max_responses,
         'allow_anonymous': bool(data.get('allow_anonymous', True) if not isinstance(data.get('allow_anonymous'), str) else data.get('allow_anonymous', '1') not in ('0', 'false', 'no')),
@@ -412,7 +465,13 @@ def view_form(share_id):
         return render_template('form_submit.html', form=form, login_required=True, msg='Account required. The creator of this form requires respondents to log in.', share_id=share_id), 200
     # success param shows thank-you state
     submitted = request.args.get('submitted') == '1'
-    return render_template('form_submit.html', form=form, submitted=submitted, share_id=share_id)
+    prior_submission = None
+    if current_user.is_authenticated:
+        prior_submission = m.form_responses_conf.find_one(
+            {'form_id': form['_id'], 'submitter_id': current_user.id},
+            sort=[('submitted_at', -1)]
+        )
+    return render_template('form_submit.html', form=form, submitted=submitted, share_id=share_id, prior_submission=prior_submission)
 
 
 @bp.route('/f/<share_id>/submit', methods=['POST'])
@@ -571,6 +630,7 @@ def submit_form(share_id):
     doc = {
         'form_id': form['_id'],
         'share_id': share_id,
+        'form_version': form.get('version', 1),
         'answers': answers,
         'submitted_at': datetime.datetime.now(datetime.timezone.utc),
         'submitter_id': submitter_id,
@@ -717,6 +777,159 @@ def _align_response_answers(form_questions, answers):
     return aligned, retired
 
 
+def _resolve_form_versions(form, responses):
+    """Organize form definitions and responses into discrete versions.
+
+    Returns:
+      (sorted_versions, version_map)
+      - sorted_versions: list of version dicts, sorted with current version first, then historical versions descending (e.g. v2, v1)
+      - version_map: dict mapping version_num (int) -> version dict
+    """
+    raw_versions = form.get('versions') or []
+    current_version_num = form.get('version') or (len(raw_versions) + 1 if raw_versions else 1)
+
+    version_dict = {}
+
+    # 1. Register historical versions from form['versions']
+    for v in raw_versions:
+        v_num = v.get('version', 1)
+        version_dict[v_num] = {
+            'version': v_num,
+            'is_current': False,
+            'title': v.get('title') or form.get('title'),
+            'description': v.get('description') or form.get('description'),
+            'questions': v.get('questions', []),
+            'created_at': v.get('created_at'),
+            'archived_at': v.get('archived_at'),
+            'responses': [],
+            'label': f"Version {v_num}"
+        }
+
+    # 2. Register current version
+    current_created = form.get('updated_at') if raw_versions else form.get('created_at')
+    version_dict[current_version_num] = {
+        'version': current_version_num,
+        'is_current': True,
+        'title': form.get('title'),
+        'description': form.get('description'),
+        'questions': form.get('questions', []),
+        'created_at': current_created,
+        'archived_at': None,
+        'responses': [],
+        'label': f"Version {current_version_num} (Current)" if raw_versions or current_version_num > 1 else "Version 1 (Current)"
+    }
+
+    # 3. Detect legacy edits: if form['versions'] is empty, but we have responses
+    # whose question IDs differ from current questions or were submitted before updated_at:
+    if not raw_versions and responses:
+        curr_qids = set(q['id'] for q in form.get('questions', []))
+        legacy_responses = []
+        for r in responses:
+            r_qids = set(a.get('question_id') for a in r.get('answers', []) if a.get('question_id'))
+            if (r_qids and not r_qids.issubset(curr_qids)) or (form.get('updated_at') and r.get('submitted_at') and r['submitted_at'] < form['updated_at']):
+                legacy_responses.append(r)
+
+        if legacy_responses:
+            # Reconstruct Version 1 from the legacy response's questions
+            v1_questions = []
+            seen_qids = set()
+            for r in legacy_responses:
+                for a in r.get('answers', []):
+                    qid = a.get('question_id')
+                    if qid and qid not in seen_qids:
+                        seen_qids.add(qid)
+                        v1_questions.append({
+                            'id': qid,
+                            'label': a.get('label') or qid,
+                            'type': a.get('type') or 'short_text',
+                            'required': False,
+                            'options': []
+                        })
+
+            version_dict[1] = {
+                'version': 1,
+                'is_current': False,
+                'title': form.get('title'),
+                'description': form.get('description'),
+                'questions': v1_questions,
+                'created_at': form.get('created_at'),
+                'archived_at': form.get('updated_at'),
+                'responses': [],
+                'label': "Version 1 (Initial)"
+            }
+            version_dict[2] = {
+                'version': 2,
+                'is_current': True,
+                'title': form.get('title'),
+                'description': form.get('description'),
+                'questions': form.get('questions', []),
+                'created_at': form.get('updated_at'),
+                'archived_at': None,
+                'responses': [],
+                'label': "Version 2 (Current)"
+            }
+            current_version_num = 2
+
+    # 4. Map each response to its version
+    for r in responses:
+        target_v = None
+        if r.get('form_version') and r['form_version'] in version_dict:
+            target_v = r['form_version']
+        else:
+            r_qids = set(a.get('question_id') for a in r.get('answers', []) if a.get('question_id'))
+            best_v = None
+            best_overlap = -1
+            for v_num, v_data in version_dict.items():
+                v_qids = set(q['id'] for q in v_data.get('questions', []))
+                overlap = len(r_qids & v_qids)
+                if overlap > best_overlap:
+                    best_overlap = overlap
+                    best_v = v_num
+            target_v = best_v or current_version_num
+
+        r['form_version'] = target_v
+        r['version_label'] = version_dict[target_v]['label']
+        version_dict[target_v]['responses'].append(r)
+
+    # 5. Check multi-submissions by same user across versions
+    user_submissions = {}
+    for r in responses:
+        uid = r.get('submitter_id') or r.get('submitter_username') or r.get('submitter_ip_hash')
+        if uid:
+            user_submissions.setdefault(str(uid), []).append(r)
+
+    for uid, u_resps in user_submissions.items():
+        if len(u_resps) > 1:
+            for r in u_resps:
+                r['has_multiple_submissions'] = True
+                r['other_submissions'] = [
+                    {
+                        'id': str(other['_id']),
+                        'version': other.get('form_version'),
+                        'version_label': other.get('version_label'),
+                        'submitted_at_formatted': other.get('submitted_at_formatted')
+                    }
+                    for other in u_resps if str(other['_id']) != str(r['_id'])
+                ]
+
+    # 6. Set response count and formatted date
+    for v_num, v_data in version_dict.items():
+        v_data['response_count'] = len(v_data['responses'])
+        if v_data.get('created_at'):
+            ts = v_data['created_at']
+            if ts.tzinfo is None: ts = ts.replace(tzinfo=datetime.timezone.utc)
+            v_data['created_at_formatted'] = ts.strftime('%b %d, %Y')
+        else:
+            v_data['created_at_formatted'] = ''
+
+    sorted_versions = sorted(
+        version_dict.values(),
+        key=lambda v: (0 if v['is_current'] else 1, -v['version'])
+    )
+
+    return sorted_versions, version_dict
+
+
 # --- Owner views ---
 
 @bp.route('/forms/<share_id>/responses')
@@ -730,54 +943,80 @@ def form_responses_view(share_id):
     if str(form['owner_id']) != str(current_user.id) and not getattr(current_user, 'is_admin', False):
         flash('Not authorized', 'danger')
         return redirect(url_for('forms.forms_list'))
-    page = max(1, int(request.args.get('page', 1) or 1))
-    per_page = 20
-    total = m.form_responses_conf.count_documents({'form_id': form['_id']})
-    responses = list(m.form_responses_conf.find({'form_id': form['_id']}).sort('submitted_at', -1).skip((page-1)*per_page).limit(per_page))
 
-    # Decrypt and align answers for display
-    retired_questions_map = {}
-    raw_responses = []
-    for r in responses:
+    # Load all responses for this form to properly resolve versions and counts
+    all_responses = list(m.form_responses_conf.find({'form_id': form['_id']}).sort('submitted_at', -1))
+
+    for r in all_responses:
         if '_id' in r:
             r['_id'] = str(r['_id'])
         if 'form_id' in r:
             r['form_id'] = str(r['form_id'])
         if 'user_id' in r:
             r['user_id'] = str(r['user_id'])
-
         for a in r.get('answers', []):
             try:
-                a['value_plain'] = decrypt_form_response(a.get('value',''), str(form['_id']))
+                a['value_plain'] = decrypt_form_response(a.get('value', ''), str(form['_id']))
             except Exception:
-                a['value_plain'] = a.get('value','')
-
-        aligned, retired = _align_response_answers(form.get('questions', []), r.get('answers', []))
-        r['aligned_answers'] = aligned
-        r['retired_answers'] = retired
-
-        for ra in retired:
-            lbl = (ra.get('label') or '').strip()
-            if lbl:
-                clean_lbl = _clean_text(lbl)
-                if clean_lbl not in retired_questions_map:
-                    retired_questions_map[clean_lbl] = {
-                        'id': ra.get('question_id') or clean_lbl,
-                        'label': lbl
-                    }
-
+                a['value_plain'] = a.get('value', '')
         if r.get('submitted_at'):
             ts = r['submitted_at']
             if ts.tzinfo is None: ts = ts.replace(tzinfo=datetime.timezone.utc)
-            r['submitted_at_iso'] = ts.isoformat().replace('+00:00','Z')
+            r['submitted_at_iso'] = ts.isoformat().replace('+00:00', 'Z')
             r['submitted_at_formatted'] = ts.strftime('%b %d, %Y, %I:%M %p')
         else:
             r['submitted_at_formatted'] = '—'
 
+    versions_list, version_map = _resolve_form_versions(form, all_responses)
+
+    selected_version_arg = (request.args.get('version') or '').strip()
+    if selected_version_arg == 'all':
+        selected_version = 'all'
+        target_responses = all_responses
+        display_questions = form.get('questions', [])
+    elif selected_version_arg.isdigit() and int(selected_version_arg) in version_map:
+        selected_version = int(selected_version_arg)
+        v_data = version_map[selected_version]
+        target_responses = v_data['responses']
+        display_questions = v_data['questions']
+    else:
+        # Default version: current if it has responses, else latest version that has responses
+        current_v = next((v for v in versions_list if v['is_current']), versions_list[0])
+        if current_v['response_count'] > 0:
+            selected_version = current_v['version']
+            target_responses = current_v['responses']
+            display_questions = current_v['questions']
+        else:
+            v_with_resps = next((v for v in versions_list if v['response_count'] > 0), None)
+            if v_with_resps:
+                selected_version = v_with_resps['version']
+                target_responses = v_with_resps['responses']
+                display_questions = v_with_resps['questions']
+            else:
+                selected_version = current_v['version']
+                target_responses = current_v['responses']
+                display_questions = current_v['questions']
+
+    page = max(1, int(request.args.get('page', 1) or 1))
+    per_page = 20
+    total = len(target_responses)
+    start_idx = (page - 1) * per_page
+    paginated_responses = target_responses[start_idx : start_idx + per_page]
+
+    # Map answers to display_questions
+    for r in paginated_responses:
+        ans_map = {a.get('question_id'): a for a in r.get('answers', [])}
+        r['aligned_answers'] = {q['id']: ans_map.get(q['id']) for q in display_questions}
+
+    raw_responses = []
+    for r in paginated_responses:
         raw_responses.append({
             'submitter_username': r.get('submitter_username'),
             'submitted_at_formatted': r.get('submitted_at_formatted'),
             'submitted_at_iso': r.get('submitted_at_iso'),
+            'version_label': r.get('version_label'),
+            'has_multiple_submissions': r.get('has_multiple_submissions', False),
+            'other_submissions': r.get('other_submissions', []),
             'answers': [
                 {
                     'label': a.get('label') or 'Question',
@@ -787,43 +1026,45 @@ def form_responses_view(share_id):
             ]
         })
 
-    retired_questions = list(retired_questions_map.values())
-
-    # Stats for charts: use aligned answers to prevent data pollution from replaced questions
+    # Stats for charts
     stats = {}
-    if responses:
-        for q in form.get('questions', []):
+    if target_responses:
+        for q in display_questions:
             if q['type'] == 'single_choice':
-                counts = {o:0 for o in q['options']}
+                counts = {o: 0 for o in q.get('options', [])}
                 total_q = 0
-                for r in m.form_responses_conf.find({'form_id': form['_id']}, {'answers':1}):
-                    aligned, _ = _align_response_answers(form.get('questions', []), r.get('answers', []))
-                    matched_a = aligned.get(q['id'])
+                for r in target_responses:
+                    ans_map = {a.get('question_id'): a for a in r.get('answers', [])}
+                    matched_a = ans_map.get(q['id'])
                     if matched_a:
-                        v = decrypt_form_response(matched_a.get('value',''), str(form['_id']))
+                        v = matched_a.get('value_plain', '')
                         if v in counts:
-                            counts[v]+=1
-                            total_q+=1
-                stats[q['id']] = {'type':'single_choice','label':q['label'],'counts':counts,'total':total_q}
+                            counts[v] += 1
+                            total_q += 1
+                stats[q['id']] = {'type': 'single_choice', 'label': q['label'], 'counts': counts, 'total': total_q}
             elif q['type'] == 'rating':
-                vals=[]
-                for r in m.form_responses_conf.find({'form_id': form['_id']}, {'answers':1}):
-                    aligned, _ = _align_response_answers(form.get('questions', []), r.get('answers', []))
-                    matched_a = aligned.get(q['id'])
+                vals = []
+                for r in target_responses:
+                    ans_map = {a.get('question_id'): a for a in r.get('answers', [])}
+                    matched_a = ans_map.get(q['id'])
                     if matched_a:
-                        v=decrypt_form_response(matched_a.get('value',''), str(form['_id']))
+                        v = matched_a.get('value_plain', '')
                         try: vals.append(int(v))
-                        except: pass
-                avg = round(sum(vals)/len(vals),2) if vals else None
-                stats[q['id']] = {'type':'rating','label':q['label'],'avg':avg,'count':len(vals),'distribution':{str(i):vals.count(i) for i in range(1,6)}}
-    total_pages = max(1, (total + per_page -1)//per_page)
+                        except Exception: pass
+                avg = round(sum(vals)/len(vals), 2) if vals else None
+                stats[q['id']] = {'type': 'rating', 'label': q['label'], 'avg': avg, 'count': len(vals), 'distribution': {str(i): vals.count(i) for i in range(1, 6)}}
+
+    total_pages = max(1, (total + per_page - 1) // per_page)
     return render_template(
         'form_responses.html',
         form=form,
-        responses=responses,
+        versions_list=versions_list,
+        selected_version=selected_version,
+        display_questions=display_questions,
+        responses=paginated_responses,
         raw_responses=raw_responses,
-        retired_questions=retired_questions,
         total=total,
+        total_all_versions=len(all_responses),
         page=page,
         per_page=per_page,
         total_pages=total_pages,
@@ -838,79 +1079,79 @@ def form_responses_export(share_id):
     import csv, io
     form = _decrypt_form_definition(m.forms_conf.find_one({'share_id': share_id}))
     if not form:
-        return jsonify({'error':'Form not found'}),404
+        return jsonify({'error': 'Form not found'}), 404
     if str(form['owner_id']) != str(current_user.id) and not getattr(current_user, 'is_admin', False):
-        return jsonify({'error':'Not authorized'}),403
+        return jsonify({'error': 'Not authorized'}), 403
     fmt = (request.args.get('format') or 'csv').lower()
-    responses = list(m.form_responses_conf.find({'form_id': form['_id']}).sort('submitted_at', -1))
+    all_responses = list(m.form_responses_conf.find({'form_id': form['_id']}).sort('submitted_at', -1))
 
-    # Pre-scan and align all responses
-    retired_map = {}
-    for r in responses:
-        aligned, retired = _align_response_answers(form.get('questions', []), r.get('answers', []))
-        r['_aligned'] = aligned
-        r['_retired'] = retired
-        for ra in retired:
-            lbl = (ra.get('label') or '').strip()
-            if lbl:
-                clean_lbl = _clean_text(lbl)
-                if clean_lbl not in retired_map:
-                    retired_map[clean_lbl] = lbl
+    # Decrypt all
+    for r in all_responses:
+        for a in r.get('answers', []):
+            try:
+                a['value_plain'] = decrypt_form_response(a.get('value', ''), str(form['_id']))
+            except Exception:
+                a['value_plain'] = a.get('value', '')
 
-    retired_headers = list(retired_map.values())
+    versions_list, version_map = _resolve_form_versions(form, all_responses)
+    version_arg = (request.args.get('version') or '').strip()
+
+    if version_arg.isdigit() and int(version_arg) in version_map:
+        target_v = version_map[int(version_arg)]
+        export_responses = target_v['responses']
+        export_questions = target_v['questions']
+        is_single_version = True
+    else:
+        export_responses = all_responses
+        export_questions = form.get('questions', [])
+        is_single_version = False
 
     if fmt == 'json':
         out = []
-        for r in responses:
+        for r in export_responses:
             ts = r.get('submitted_at')
-            if ts and ts.tzinfo is None:
-                ts = ts.replace(tzinfo=datetime.timezone.utc)
+            if ts and ts.tzinfo is None: ts = ts.replace(tzinfo=datetime.timezone.utc)
             row = {
-                'submitted_at': ts.isoformat().replace('+00:00','Z') if ts else None,
+                'submitted_at': ts.isoformat().replace('+00:00', 'Z') if ts else None,
                 'respondent': r.get('submitter_username') or 'Anonymous',
-                'is_authenticated': bool(r.get('is_authenticated'))
+                'is_authenticated': bool(r.get('is_authenticated')),
+                'form_version': r.get('form_version'),
+                'version_label': r.get('version_label'),
             }
-            # Active current questions
-            for q in form.get('questions', []):
-                ans = r['_aligned'].get(q['id'])
-                val = decrypt_form_response(ans.get('value',''), str(form['_id'])) if ans else None
-                row[q['label']] = val
-            # Historical retired answers
-            if retired_headers:
-                row['historical_answers'] = {}
-                for ra in r['_retired']:
-                    rlbl = ra.get('label') or 'Question'
-                    row['historical_answers'][rlbl] = decrypt_form_response(ra.get('value',''), str(form['_id']))
+            ans_map = {a.get('question_id'): a.get('value_plain', '') for a in r.get('answers', [])}
+            for q in export_questions:
+                row[q['label']] = ans_map.get(q['id'])
             out.append(row)
-        return jsonify({'form':{'title':form['title'],'share_id':share_id},'count':len(out),'responses':out})
+        return jsonify({'form': {'title': form['title'], 'share_id': share_id}, 'count': len(out), 'responses': out})
 
-    # CSV export: aligned current questions first, then historical questions
-    q_labels = [q['label'] for q in form.get('questions',[])]
-    extra_headers = [f"[Historical] {rh}" for rh in retired_headers]
-    headers = ['submitted_at', 'respondent'] + q_labels + extra_headers
+    # CSV export
     output = io.StringIO()
     w = csv.writer(output)
+    q_labels = [q['label'] for q in export_questions]
+    if is_single_version:
+        headers = ['submitted_at', 'respondent'] + q_labels
+    else:
+        headers = ['submitted_at', 'respondent', 'version'] + q_labels
     w.writerow(headers)
-    for r in responses:
+
+    for r in export_responses:
         ts = r.get('submitted_at')
-        if ts and ts.tzinfo is None:
-            ts = ts.replace(tzinfo=datetime.timezone.utc)
+        if ts and ts.tzinfo is None: ts = ts.replace(tzinfo=datetime.timezone.utc)
         sub_str = ts.strftime('%Y-%m-%d %H:%M:%S UTC') if ts else ''
         resp_str = r.get('submitter_username') or 'Anonymous'
-        row = [sub_str, resp_str]
-        # Current questions (dash / empty if new question not answered)
-        for q in form.get('questions',[]):
-            ans = r['_aligned'].get(q['id'])
-            row.append(decrypt_form_response(ans.get('value',''), str(form['_id'])) if ans else '')
-        # Retired questions
-        for rh in retired_headers:
-            r_match = next((ra for ra in r['_retired'] if _clean_text(ra.get('label','')) == _clean_text(rh)), None)
-            row.append(decrypt_form_response(r_match.get('value',''), str(form['_id'])) if r_match else '')
+        ans_map = {a.get('question_id'): a.get('value_plain', '') for a in r.get('answers', [])}
+        if is_single_version:
+            row = [sub_str, resp_str]
+        else:
+            row = [sub_str, resp_str, r.get('version_label') or f"v{r.get('form_version', 1)}"]
+        for q in export_questions:
+            row.append(ans_map.get(q['id'], ''))
         w.writerow(row)
+
     csv_data = output.getvalue()
     resp = make_response(csv_data)
-    resp.headers['Content-Type']='text/csv'
-    resp.headers['Content-Disposition']=f"attachment; filename=form_{share_id}_responses.csv"
+    resp.headers['Content-Type'] = 'text/csv'
+    resp.headers['Content-Disposition'] = f"attachment; filename=form_{share_id}_responses.csv"
     return resp
 
 

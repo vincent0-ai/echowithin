@@ -6,6 +6,22 @@ from security import limits, brute_force_check, brute_force_record_failure, brut
 
 bp = Blueprint('sharing', __name__, template_folder='templates')
 
+_BOT_USER_AGENTS = (
+    'bot', 'crawl', 'spider', 'slurp', 'facebookexternalhit',
+    'whatsapp', 'telegrambot', 'slackbot', 'discordbot',
+    'twitterbot', 'applebot', 'googlebot', 'bingbot', 'yandex',
+    'baiduspider', 'embedly', 'quora link preview', 'pinterest',
+    'linkedinbot', 'vkshare', 'skypeuripreview', 'curl', 'wget',
+    'python-requests', 'aiohttp', 'httpx'
+)
+
+
+def _is_bot_user_agent(ua_string):
+    if not ua_string:
+        return False
+    ua_lower = ua_string.lower()
+    return any(bot in ua_lower for bot in _BOT_USER_AGENTS)
+
 
 @bp.route('/api/share/<share_id>/ping', methods=['POST'])
 @login_required
@@ -282,8 +298,9 @@ def view_shared_note(share_id):
     if not surprise_theme:
         surprise_theme = 'valentine' if share.get('is_valentine') else 'none'
     
-    # Record unlock notification for surprise notes (once per session)
+    # Record unlock notification for shared notes
     is_owner = current_user.is_authenticated and str(current_user.id) == str(share.get('owner_id', ''))
+    is_bot = _is_bot_user_agent(request.headers.get('User-Agent', ''))
     
     if is_owner:
         # Mark all unread notifications for this share as read when owner views it
@@ -292,13 +309,41 @@ def view_shared_note(share_id):
                 {'share_id': share_id, 'owner_id': share['owner_id'], 'is_read': False},
                 {'$set': {'is_read': True}}
             )
+            # Owner clean-up: remove any unlock notification accidentally created by the owner
+            # testing or previewing their own note (either recorded in session or matching owner IP)
+            notif_id_key = f'notif_id_{share_id}'
+            anon_notif_id = session.pop(notif_id_key, None)
+            session.pop(f'notified_{share_id}', None)
+            if anon_notif_id:
+                try:
+                    m.unlock_notifications_conf.delete_one({'_id': ObjectId(anon_notif_id)})
+                except Exception:
+                    pass
+            # Also clean up any notification where owner is recorded as unlocker
+            m.unlock_notifications_conf.delete_many({
+                'share_id': share_id,
+                'unlocked_by': str(current_user.id)
+            })
+            # And delete anonymous notifications created from the owner's client IP
+            owner_client_ip = _bf_get_client_ip()
+            if owner_client_ip:
+                m.unlock_notifications_conf.delete_many({
+                    'share_id': share_id,
+                    'owner_id': share['owner_id'],
+                    'unlocked_by': None,
+                    'client_ip': owner_client_ip
+                })
         except Exception as e:
-            current_app.logger.error(f"Failed to mark notifications as read: {e}")
+            current_app.logger.error(f"Failed to handle owner view clean-up: {e}")
+    elif is_bot:
+        # Crawlers and preview bots (WhatsApp, Telegram, Applebot, etc.) must NEVER trigger unlock notifications
+        pass
     else:
         # Record access history for ALL shared notes (standard and surprises)
         try:
             notif_id_key = f'notif_id_{share_id}'
             notif_id = session.get(notif_id_key)
+            client_ip = _bf_get_client_ip()
             
             visitor_name = 'Anonymous visitor'
             visitor_id = None
@@ -311,44 +356,84 @@ def view_shared_note(share_id):
                 else:
                     visitor_name = getattr(current_user, 'username', 'Anonymous visitor')
             
-            if not notif_id:
-                # First time in session: Record notification
-                res = m.unlock_notifications_conf.insert_one({
+            if current_user.is_authenticated:
+                # Check if this user already has an unlock notification on this share
+                existing_user_notif = m.unlock_notifications_conf.find_one({
                     'share_id': share_id,
-                    'note_id': share['note_id'],
-                    'owner_id': share['owner_id'],
-                    'unlocked_by': visitor_id,
-                    'unlocked_by_name': visitor_name,
-                    'unlocked_at': datetime.datetime.now(datetime.timezone.utc),
-                    'surprise_theme': surprise_theme,
-                    'is_read': False
+                    'unlocked_by': visitor_id
                 })
-                # PRIVACY: share_id IS the secret link — never log it in plaintext.
-                # Use a short, non-reversible fingerprint for log correlation instead.
-                share_fp = hashlib.sha256(share_id.encode('utf-8')).hexdigest()[:10]
-                current_app.logger.info(f"Recorded access history for share fp={share_fp} by {visitor_name}")
-                session[notif_id_key] = str(res.inserted_id)
-                session[f'notified_{share_id}'] = True # Backward compatibility
-            elif current_user.is_authenticated:
-                # Promotion logic: Update this notification if it was recorded anonymously
-                m.unlock_notifications_conf.update_one(
-                    {'_id': ObjectId(notif_id), 'unlocked_by': None},
-                    {'$set': {'unlocked_by': visitor_id, 'unlocked_by_name': visitor_name}}
-                )
-                # Also update name on this notification if it was recorded with a stale/generic name
-                m.unlock_notifications_conf.update_one(
-                    {'_id': ObjectId(notif_id), 'unlocked_by': visitor_id, 'unlocked_by_name': {'$nin': [visitor_name]}},
-                    {'$set': {'unlocked_by_name': visitor_name}}
-                )
-                # Fix any OTHER old records from this user on this share that have generic names
-                m.unlock_notifications_conf.update_many(
-                    {
+                if existing_user_notif:
+                    session[notif_id_key] = str(existing_user_notif['_id'])
+                    if existing_user_notif.get('unlocked_by_name') != visitor_name:
+                        m.unlock_notifications_conf.update_one(
+                            {'_id': existing_user_notif['_id']},
+                            {'$set': {'unlocked_by_name': visitor_name}}
+                        )
+                else:
+                    # Check if there is an anonymous notification to promote:
+                    promoted = False
+                    if notif_id:
+                        res = m.unlock_notifications_conf.update_one(
+                            {'_id': ObjectId(notif_id), 'unlocked_by': None},
+                            {'$set': {'unlocked_by': visitor_id, 'unlocked_by_name': visitor_name, 'client_ip': client_ip}}
+                        )
+                        if res.modified_count > 0:
+                            promoted = True
+                    # If not promoted via session ID, promote recent anonymous notification for this share (e.g. from pre-login or preview within 24h)
+                    if not promoted:
+                        recent_cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
+                        anon_query = {
+                            'share_id': share_id,
+                            'unlocked_by': None,
+                            'unlocked_at': {'$gte': recent_cutoff}
+                        }
+                        anon_notif = None
+                        if client_ip:
+                            anon_notif = m.unlock_notifications_conf.find_one({**anon_query, 'client_ip': client_ip}, sort=[('unlocked_at', -1)])
+                        if not anon_notif:
+                            anon_notif = m.unlock_notifications_conf.find_one(anon_query, sort=[('unlocked_at', -1)])
+                        if anon_notif:
+                            m.unlock_notifications_conf.update_one(
+                                {'_id': anon_notif['_id']},
+                                {'$set': {'unlocked_by': visitor_id, 'unlocked_by_name': visitor_name, 'client_ip': client_ip}}
+                            )
+                            session[notif_id_key] = str(anon_notif['_id'])
+                            promoted = True
+                    # If no existing anonymous record to promote, insert a new record
+                    if not promoted:
+                        res = m.unlock_notifications_conf.insert_one({
+                            'share_id': share_id,
+                            'note_id': share['note_id'],
+                            'owner_id': share['owner_id'],
+                            'unlocked_by': visitor_id,
+                            'unlocked_by_name': visitor_name,
+                            'unlocked_at': datetime.datetime.now(datetime.timezone.utc),
+                            'surprise_theme': surprise_theme,
+                            'is_read': False,
+                            'client_ip': client_ip
+                        })
+                        share_fp = hashlib.sha256(share_id.encode('utf-8')).hexdigest()[:10]
+                        current_app.logger.info(f"Recorded access history for share fp={share_fp} by {visitor_name}")
+                        session[notif_id_key] = str(res.inserted_id)
+                        session[f'notified_{share_id}'] = True
+            else:
+                # Unauthenticated visitor: record once per session
+                if not notif_id:
+                    res = m.unlock_notifications_conf.insert_one({
                         'share_id': share_id,
-                        'unlocked_by': visitor_id,
-                        'unlocked_by_name': {'$in': ['Someone', 'Anonymous visitor', 'Unknown', '', None]}
-                    },
-                    {'$set': {'unlocked_by_name': visitor_name}}
-                )
+                        'note_id': share['note_id'],
+                        'owner_id': share['owner_id'],
+                        'unlocked_by': None,
+                        'unlocked_by_name': 'Anonymous visitor',
+                        'unlocked_at': datetime.datetime.now(datetime.timezone.utc),
+                        'surprise_theme': surprise_theme,
+                        'is_read': False,
+                        'client_ip': client_ip
+                    })
+                    share_fp = hashlib.sha256(share_id.encode('utf-8')).hexdigest()[:10]
+                    current_app.logger.info(f"Recorded access history for share fp={share_fp} by Anonymous visitor")
+                    session[notif_id_key] = str(res.inserted_id)
+                    session[f'notified_{share_id}'] = True
         except Exception as e:
             current_app.logger.error(f"Failed to handle unlock notification: {e}")
     
@@ -733,6 +818,24 @@ def api_save_shared_note(share_id):
         'use_typewriter': share.get('use_typewriter', False),
         'permissions': share.get('permissions', 'view')
     })
+
+    # Promote any pending anonymous unlock notification for this share to this user
+    try:
+        fresh_user = m.users_conf.find_one({'_id': ObjectId(current_user.id)}, {'username': 1})
+        v_name = fresh_user.get('username') if fresh_user else current_user.username
+        notif_id = session.get(f'notif_id_{share_id}')
+        if notif_id:
+            m.unlock_notifications_conf.update_one(
+                {'_id': ObjectId(notif_id), 'unlocked_by': None},
+                {'$set': {'unlocked_by': str(current_user.id), 'unlocked_by_name': v_name}}
+            )
+        else:
+            m.unlock_notifications_conf.update_one(
+                {'share_id': share_id, 'unlocked_by': None},
+                {'$set': {'unlocked_by': str(current_user.id), 'unlocked_by_name': v_name}}
+            )
+    except Exception:
+        pass
 
     return jsonify({'success': True, 'message': 'Note saved to your personal space!'})
 
@@ -1772,6 +1875,25 @@ def api_post_note_comment(share_id):
         'author_name': comment['author_name'],
         'type': 'comment'
     }, room=share_id)
+
+    # Promote any pending anonymous unlock notification for this share to this user
+    try:
+        if not is_community and share.get('owner_id') and str(share['owner_id']) != str(current_user.id):
+            fresh_user = m.users_conf.find_one({'_id': ObjectId(current_user.id)}, {'username': 1})
+            v_name = fresh_user.get('username') if fresh_user else current_user.username
+            notif_id = session.get(f'notif_id_{share_id}')
+            if notif_id:
+                m.unlock_notifications_conf.update_one(
+                    {'_id': ObjectId(notif_id), 'unlocked_by': None},
+                    {'$set': {'unlocked_by': str(current_user.id), 'unlocked_by_name': v_name}}
+                )
+            else:
+                m.unlock_notifications_conf.update_one(
+                    {'share_id': share_id, 'unlocked_by': None},
+                    {'$set': {'unlocked_by': str(current_user.id), 'unlocked_by_name': v_name}}
+                )
+    except Exception:
+        pass
 
     return jsonify({
         'success': True,

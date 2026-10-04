@@ -708,6 +708,9 @@ def get_my_commented_posts_json():
         unlock_activities = []
         for notif in unlock_notifs:
             u_id = notif.get('unlocked_by')
+            # Exclude self-activity: owners should never see notifications about unlocking their own notes
+            if u_id and str(u_id) == str(current_user.id):
+                continue
             u_name = _unlock_users_map.get(str(u_id), notif.get('unlocked_by_name', 'Someone')) if u_id else notif.get('unlocked_by_name', 'Someone')
 
             unlock_activities.append({

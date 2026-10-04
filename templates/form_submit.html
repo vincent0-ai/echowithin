@@ -40,6 +40,11 @@
           <span>Submitting anonymously</span>
         {% endif %}
       </div>
+      {% if prior_submission %}
+        <div style="margin-top: 0.75rem; padding: 0.55rem 0.8rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4;">
+          You previously submitted a response{% if prior_submission.submitted_at %} on {{ prior_submission.submitted_at.strftime('%b %d, %Y') if prior_submission.submitted_at.strftime is defined else prior_submission.submitted_at }}{% endif %}. Submitting again will record your new answers for this questionnaire.
+        </div>
+      {% endif %}
     </div>
     <form method="POST" action="{{ url_for('forms.submit_form', share_id=share_id) }}" class="ew-card" id="form-response">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

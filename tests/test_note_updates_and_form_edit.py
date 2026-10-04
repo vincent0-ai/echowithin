@@ -439,6 +439,77 @@ class TestFormVersionHistory:
         assert version_map[1]['response_count'] == 1
         assert r_legacy['form_version'] == 1
 
+    def test_legacy_form_submissions_split_between_v1_and_v2(self):
+        from blueprints.forms import _resolve_form_versions
+
+        t_create = datetime.datetime(2026, 9, 1, 10, 0, tzinfo=datetime.timezone.utc)
+        t_sub_v1 = datetime.datetime(2026, 9, 4, 10, 53, tzinfo=datetime.timezone.utc)
+        t_edit = datetime.datetime(2026, 10, 3, 15, 0, tzinfo=datetime.timezone.utc)
+        t_sub_v2 = datetime.datetime(2026, 10, 4, 14, 35, tzinfo=datetime.timezone.utc)
+
+        form = {
+            '_id': ObjectId(),
+            'title': 'Our Love Form',
+            'created_at': t_create,
+            'updated_at': t_edit,
+            'questions': [
+                {'id': 'unyw', 'label': 'Q1'},
+                {'id': 'tyee', 'label': 'Q2'},
+                {'id': '09rc', 'label': 'Q3 (New)'},
+                {'id': 'd4o0', 'label': 'Q4'}
+            ]
+        }
+
+        # Sub 1: Sep 04 (6 questions, before edit, form_version defaulted to 1)
+        r1 = {
+            '_id': ObjectId(),
+            'submitted_at': t_sub_v1,
+            'submitter_username': 'maryel',
+            'form_version': 1,
+            'answers': [
+                {'question_id': 'i473', 'label': 'Old Q1', 'value': 'A1'},
+                {'question_id': '94b2', 'label': 'Old Q2', 'value': 'A2'},
+                {'question_id': 'unyw', 'label': 'Q1', 'value': 'A3'},
+                {'question_id': 'tyee', 'label': 'Q2', 'value': 'A4'},
+                {'question_id': 'o4g4', 'label': 'Old Q5', 'value': 'A5'},
+                {'question_id': 'd4o0', 'label': 'Q4', 'value': 'A6'}
+            ]
+        }
+
+        # Sub 2: Oct 04 (4 questions, after edit, form_version was also 1 due to legacy default)
+        r2 = {
+            '_id': ObjectId(),
+            'submitted_at': t_sub_v2,
+            'submitter_username': 'maryel',
+            'form_version': 1,
+            'answers': [
+                {'question_id': 'unyw', 'label': 'Q1', 'value': 'New A1'},
+                {'question_id': 'tyee', 'label': 'Q2', 'value': 'New A2'},
+                {'question_id': '09rc', 'label': 'Q3 (New)', 'value': 'New A3'},
+                {'question_id': 'd4o0', 'label': 'Q4', 'value': 'New A4'}
+            ]
+        }
+
+        versions_list, version_map = _resolve_form_versions(form, [r1, r2])
+
+        assert len(versions_list) == 2
+        assert version_map[1]['label'] == 'Version 1 (Initial)'
+        assert version_map[2]['label'] == 'Version 2 (Current)'
+        assert version_map[1]['response_count'] == 1
+        assert version_map[2]['response_count'] == 1
+
+        # r1 must be mapped to Version 1
+        assert r1['form_version'] == 1
+        assert r1['version_label'] == 'Version 1 (Initial)'
+
+        # r2 must be mapped to Version 2
+        assert r2['form_version'] == 2
+        assert r2['version_label'] == 'Version 2 (Current)'
+
+        # Multi-submission detected
+        assert r1['has_multiple_submissions'] is True
+        assert r2['has_multiple_submissions'] is True
+
     def test_multi_version_user_submission_linking(self):
         from blueprints.forms import _resolve_form_versions
 

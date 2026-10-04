@@ -628,10 +628,11 @@ def submit_form(share_id):
     submitter_name = (getattr(current_user, 'display_name', '') or getattr(current_user, 'full_name', '') or getattr(current_user, 'username', '')) if is_auth else None
     submitter_avatar = getattr(current_user, 'profile_image_url', None) if is_auth else None
 
+    current_form_version = form.get('version') or (2 if form.get('updated_at') else 1)
     doc = {
         'form_id': form['_id'],
         'share_id': share_id,
-        'form_version': form.get('version', 1),
+        'form_version': current_form_version,
         'answers': answers,
         'submitted_at': datetime.datetime.now(datetime.timezone.utc),
         'submitter_id': submitter_id,
@@ -871,26 +872,76 @@ def _resolve_form_versions(form, responses):
             }
             current_version_num = 2
 
+    # Auto-heal form document in MongoDB if version is missing on an edited form
+    if form.get('_id') and (not form.get('version') or form.get('version') < current_version_num):
+        try:
+            import main as m
+            m.forms_conf.update_one(
+                {'_id': form['_id']},
+                {'$set': {'version': current_version_num}}
+            )
+            form['version'] = current_version_num
+        except Exception:
+            pass
+
     # 4. Map each response to its version
     for r in responses:
         target_v = None
-        if r.get('form_version') and r['form_version'] in version_dict:
+
+        # If form has explicit version snapshots array (modern forms) and response has valid version > 1:
+        if raw_versions and r.get('form_version') and r['form_version'] in version_dict:
+            target_v = r['form_version']
+        elif r.get('form_version') and r['form_version'] in version_dict and r['form_version'] > 1:
             target_v = r['form_version']
         else:
-            r_qids = set(a.get('question_id') for a in r.get('answers', []) if a.get('question_id'))
-            best_v = None
-            best_overlap = -1
-            for v_num, v_data in version_dict.items():
-                v_qids = set(q['id'] for q in v_data.get('questions', []))
-                overlap = len(r_qids & v_qids)
-                if overlap > best_overlap:
-                    best_overlap = overlap
-                    best_v = v_num
-            target_v = best_v or current_version_num
+            # For legacy forms without raw_versions, or submissions defaulting to form_version=1:
+            # 1. Compare submission time against form updated_at
+            if form.get('updated_at') and r.get('submitted_at'):
+                r_sub = r['submitted_at']
+                f_upd = form['updated_at']
+                if isinstance(r_sub, datetime.datetime) and isinstance(f_upd, datetime.datetime):
+                    if r_sub.tzinfo is None: r_sub = r_sub.replace(tzinfo=datetime.timezone.utc)
+                    if f_upd.tzinfo is None: f_upd = f_upd.replace(tzinfo=datetime.timezone.utc)
+                    if r_sub >= f_upd:
+                        target_v = current_version_num
+                    else:
+                        target_v = 1
+
+            # 2. Check question ID alignment if timestamp comparison wasn't conclusive
+            if target_v is None:
+                r_qids = set(a.get('question_id') for a in r.get('answers', []) if a.get('question_id'))
+                curr_qids = set(q['id'] for q in version_dict[current_version_num].get('questions', []))
+
+                # If answers match current questions:
+                if r_qids and r_qids.issubset(curr_qids):
+                    target_v = current_version_num
+                else:
+                    best_v = None
+                    best_overlap = -1
+                    for v_num, v_data in version_dict.items():
+                        v_q = set(q['id'] for q in v_data.get('questions', []))
+                        overlap = len(r_qids & v_q)
+                        if overlap > best_overlap:
+                            best_overlap = overlap
+                            best_v = v_num
+                    target_v = best_v or current_version_num
 
         r['form_version'] = target_v
         r['version_label'] = version_dict[target_v]['label']
         version_dict[target_v]['responses'].append(r)
+
+        # Auto-heal database record if form_version differs
+        if r.get('_id'):
+            try:
+                import main as m
+                from bson import ObjectId
+                oid = r['_id'] if isinstance(r['_id'], ObjectId) else ObjectId(str(r['_id']))
+                m.form_responses_conf.update_one(
+                    {'_id': oid, 'form_version': {'$ne': target_v}},
+                    {'$set': {'form_version': target_v}}
+                )
+            except Exception:
+                pass
 
     # 5. Check multi-submissions by same user across versions
     user_submissions = {}

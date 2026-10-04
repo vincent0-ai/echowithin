@@ -199,7 +199,7 @@ if (typeof QRCode === 'undefined') {
 <script nonce="{{ csp_nonce }}">
 let rawResponses = [];
 try {
-  rawResponses = {{ responses|tojson|safe }};
+  rawResponses = {{ (raw_responses if raw_responses is defined else responses)|tojson|safe }};
 } catch(e) {
   rawResponses = [];
 }

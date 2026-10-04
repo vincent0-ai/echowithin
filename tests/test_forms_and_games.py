@@ -1866,6 +1866,62 @@ class TestLiveMultiplayerTriviaAndThumbnails:
         assert 'id="fields-multi-q" style="display:none;' in html
 
 
+class TestFormResponsesViewObjectIdSerialization:
+    """Verify form responses view renders without ObjectId serialization errors."""
+
+    def test_mongo_json_provider_serializes_objectid_and_sets(self, app):
+        """Verify MongoJSONProvider handles ObjectId and set objects in app.json.dumps."""
+        oid = ObjectId('691c949cd9459e67782ea2fd')
+        res = app.json.dumps({'id': oid, 'tags': {'tag1', 'tag2'}})
+        assert '"691c949cd9459e67782ea2fd"' in res
+        assert '"tag1"' in res
+        assert '"tag2"' in res
+
+    def test_form_responses_view_handles_objectids_in_responses(self, auth_client, mock_user):
+        """Verify GET /forms/<share_id>/responses renders 200 OK when responses contain ObjectIds."""
+        import main as m
+
+        form_oid = ObjectId()
+        share_id = 'test_form_share_123'
+        form_doc = {
+            '_id': form_oid,
+            'share_id': share_id,
+            'owner_id': mock_user['_id'],
+            'title': 'Test Feedback Form',
+            'questions': [
+                {'id': 'q1', 'label': 'How was your experience?', 'type': 'short_text'}
+            ],
+            'deactivated': False
+        }
+
+        resp_doc = {
+            '_id': ObjectId(),
+            'form_id': form_oid,
+            'user_id': ObjectId(),
+            'submitter_username': 'respondent1',
+            'submitted_at': datetime.datetime.now(datetime.timezone.utc),
+            'answers': [
+                {'question_id': 'q1', 'label': 'How was your experience?', 'value': 'great'}
+            ]
+        }
+
+        mock_cursor = MagicMock()
+        mock_cursor.sort.return_value = mock_cursor
+        mock_cursor.skip.return_value = mock_cursor
+        mock_cursor.limit.return_value = [resp_doc]
+
+        with patch.object(m.forms_conf, 'find_one', return_value=form_doc), \
+             patch.object(m.form_responses_conf, 'count_documents', return_value=1), \
+             patch.object(m.form_responses_conf, 'find', return_value=mock_cursor):
+            res = auth_client.get(f'/forms/{share_id}/responses')
+            assert res.status_code == 200
+            html = res.get_data(as_text=True)
+            assert 'Test Feedback Form' in html
+            assert 'respondent1' in html
+            assert 'rawResponses =' in html
+
+
+
 
 
 

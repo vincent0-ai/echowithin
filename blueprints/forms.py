@@ -737,7 +737,15 @@ def form_responses_view(share_id):
 
     # Decrypt and align answers for display
     retired_questions_map = {}
+    raw_responses = []
     for r in responses:
+        if '_id' in r:
+            r['_id'] = str(r['_id'])
+        if 'form_id' in r:
+            r['form_id'] = str(r['form_id'])
+        if 'user_id' in r:
+            r['user_id'] = str(r['user_id'])
+
         for a in r.get('answers', []):
             try:
                 a['value_plain'] = decrypt_form_response(a.get('value',''), str(form['_id']))
@@ -765,6 +773,19 @@ def form_responses_view(share_id):
             r['submitted_at_formatted'] = ts.strftime('%b %d, %Y, %I:%M %p')
         else:
             r['submitted_at_formatted'] = '—'
+
+        raw_responses.append({
+            'submitter_username': r.get('submitter_username'),
+            'submitted_at_formatted': r.get('submitted_at_formatted'),
+            'submitted_at_iso': r.get('submitted_at_iso'),
+            'answers': [
+                {
+                    'label': a.get('label') or 'Question',
+                    'value_plain': a.get('value_plain', '')
+                }
+                for a in r.get('answers', [])
+            ]
+        })
 
     retired_questions = list(retired_questions_map.values())
 
@@ -800,6 +821,7 @@ def form_responses_view(share_id):
         'form_responses.html',
         form=form,
         responses=responses,
+        raw_responses=raw_responses,
         retired_questions=retired_questions,
         total=total,
         page=page,

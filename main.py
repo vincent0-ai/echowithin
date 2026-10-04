@@ -69,6 +69,7 @@ import time
 import secrets
 
 from flask import Flask, g, request, jsonify, render_template, url_for, redirect, session, flash, Response, abort
+from flask.json.provider import DefaultJSONProvider
 import logging
 import math
 import redis
@@ -225,7 +226,18 @@ __all__ = [
 # Shared thread pool for background tasks (avoids overhead of creating new pools)
 executor = ThreadPoolExecutor(max_workers=10)
 
+class MongoJSONProvider(DefaultJSONProvider):
+    """Custom JSON provider supporting MongoDB ObjectId and Python sets."""
+    def default(self, obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        if isinstance(obj, set):
+            return list(obj)
+        return super().default(obj)
+
 app = Flask(__name__)
+app.json_provider_class = MongoJSONProvider
+app.json = MongoJSONProvider(app)
 csrf = CSRFProtect(app)
 
 # Register all blueprints

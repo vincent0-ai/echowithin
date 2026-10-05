@@ -157,4 +157,21 @@ class TestPersonalSpaceTabs:
         res = auth_client.get('/personal_space/tab/unknown')
         assert res.status_code == 404
 
+    def test_personal_space_tab_pagination_args(self, auth_client):
+        res_locked = auth_client.get('/personal_space/tab/locked?locked_page=2')
+        assert res_locked.status_code == 200
+        res_saved = auth_client.get('/personal_space/tab/saved?saved_page=2')
+        assert res_saved.status_code == 200
+
+    def test_personal_space_active_tab_inference(self, auth_client):
+        # Visiting with locked_page should infer active_tab='locked'
+        res = auth_client.get('/personal_space?locked_page=2')
+        assert res.status_code == 200
+        assert b'id="tab-locked"' in res.data
+        # Visiting with saved_page should infer active_tab='saved'
+        res_saved = auth_client.get('/personal_space?saved_page=2')
+        assert res_saved.status_code == 200
+        assert b'id="tab-saved"' in res_saved.data
+
+
 

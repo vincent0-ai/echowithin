@@ -1095,6 +1095,20 @@ class TestRealtimeDeliveryRegressionFixes:
         assert "emitSocket('viewing_chat', { partner_id: window.whisperState.partnerId });" in content
 
 
+def test_socketio_session_context_compatibility(app):
+    """Verify that SocketIO event handlers execute without 'RequestContext.session has no setter' AttributeError."""
+    import main as m
+    client = m.socketio.test_client(app)
+    assert client.is_connected()
+    client.emit('join_inbox')
+    client.emit('viewing_chat', {'partner_id': '691cd05de2fd1a568be4ea11'})
+    client.emit('typing', {'recipient_id': '691cd05de2fd1a568be4ea11'})
+    client.emit('stop_typing', {'recipient_id': '691cd05de2fd1a568be4ea11'})
+    client.emit('leave_chat', {'partner_id': '691cd05de2fd1a568be4ea11'})
+    client.disconnect()
+
+
+
 
 
 

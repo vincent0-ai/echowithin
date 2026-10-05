@@ -447,8 +447,15 @@ def personal_space():
     import main as m
     user = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
 
-    # Active tab requested (defaults to 'notes')
-    active_tab = request.args.get('tab', 'notes')
+    # Active tab requested (defaults to 'notes', but infers if tab-specific page param is present)
+    active_tab = request.args.get('tab')
+    if not active_tab:
+        if 'locked_page' in request.args:
+            active_tab = 'locked'
+        elif 'saved_page' in request.args:
+            active_tab = 'saved'
+        else:
+            active_tab = 'notes'
 
     # Handle note_id parameter to jump to a specific note
     target_note_id = request.args.get('note_id')

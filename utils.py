@@ -1810,7 +1810,7 @@ def get_zen_quote():
     try:
         # Fetch from ZenQuotes API
         # Free version restricted to 5 requests per 30 seconds
-        response = requests.get("https://zenquotes.io/api/random", timeout=5)
+        response = requests.get("https://zenquotes.io/api/random", timeout=(1.5, 3.0))
         if response.status_code == 200:
             quote_data = response.json()
             if quote_data and isinstance(quote_data, list) and len(quote_data) > 0:

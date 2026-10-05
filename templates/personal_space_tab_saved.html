@@ -49,7 +49,7 @@
                 {% if saved_page > 1 %}
                 <li class="page-item">
                     <a class="page-link"
-                        href="{{ url_for('notes.personal_space', saved_page=saved_page-1, notes_page=notes_page, locked_page=locked_page) }}#saved">Previous</a>
+                        href="{{ url_for('notes.personal_space', tab='saved', saved_page=saved_page-1, notes_page=notes_page, locked_page=locked_page) }}#saved">Previous</a>
                 </li>
                 {% endif %}
 
@@ -57,7 +57,7 @@
                 {% for p in range(1, [max_visible + 1, total_saved_pages + 1] | min) %}
                 <li class="page-item {% if p == saved_page %}active{% endif %}">
                     <a class="page-link"
-                        href="{{ url_for('notes.personal_space', saved_page=p, notes_page=notes_page, locked_page=locked_page) }}#saved">{{
+                        href="{{ url_for('notes.personal_space', tab='saved', saved_page=p, notes_page=notes_page, locked_page=locked_page) }}#saved">{{
                         p }}</a>
                 </li>
                 {% endfor %}
@@ -69,14 +69,14 @@
                     {% if max_visible < total_saved_pages %} <li
                         class="page-item {% if total_saved_pages == saved_page %}active{% endif %}">
                         <a class="page-link"
-                            href="{{ url_for('notes.personal_space', saved_page=total_saved_pages, notes_page=notes_page, locked_page=locked_page) }}#saved">{{
+                            href="{{ url_for('notes.personal_space', tab='saved', saved_page=total_saved_pages, notes_page=notes_page, locked_page=locked_page) }}#saved">{{
                             total_saved_pages }}</a>
                         </li>
                         {% endif %}
 
                         {% if saved_page < total_saved_pages %} <li class="page-item">
                             <a class="page-link"
-                                href="{{ url_for('notes.personal_space', saved_page=saved_page+1, notes_page=notes_page, locked_page=locked_page) }}#saved">Next</a>
+                                href="{{ url_for('notes.personal_space', tab='saved', saved_page=saved_page+1, notes_page=notes_page, locked_page=locked_page) }}#saved">Next</a>
                             </li>
                             {% endif %}
             </ul>

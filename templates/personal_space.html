@@ -3579,8 +3579,9 @@
         window.renderMarkdownWithMath = renderMarkdownWithMath;
 
         // Render all saved notes on page load
-        function renderAllNotes() {
-            document.querySelectorAll('.rendered-note').forEach(el => {
+        function renderAllNotes(container) {
+            const root = container || document;
+            root.querySelectorAll('.rendered-note').forEach(el => {
                 // Skip lazy-loaded notes – their content is fetched asynchronously
                 // and replacing the shimmer placeholder early would blank the card.
                 if (el.dataset.lazy === 'true') return;
@@ -3593,6 +3594,7 @@
                 el.dataset.rendered = 'true';
             });
         }
+        window.renderAllNotes = renderAllNotes;
 
         // --- Collapsible Long Notes ---
         const COLLAPSE_THRESHOLD = 200; // px
@@ -3734,16 +3736,56 @@
             }
         }
 
+        function attachTabPagination(tabId, panel) {
+            if (!panel) return;
+            const links = panel.querySelectorAll('.pagination a.page-link');
+            links.forEach(link => {
+                link.addEventListener('click', async (e) => {
+                    const href = link.getAttribute('href');
+                    if (!href || href.startsWith('javascript:')) return;
+                    e.preventDefault();
+                    try {
+                        const url = new URL(href, window.location.origin);
+                        const fetchUrl = '/personal_space/tab/' + tabId + url.search;
+                        const resp = await echoFetch(fetchUrl);
+                        if (!resp.ok) throw new Error('Failed to load page');
+                        const html = await resp.text();
+                        panel.innerHTML = html;
+                        panel.setAttribute('data-loaded', 'true');
+                        history.pushState(null, '', href);
+                        attachTabPagination(tabId, panel);
+
+                        if (tabId === 'locked') {
+                            panel.querySelectorAll('script').forEach(oldScript => {
+                                const newScript = document.createElement('script');
+                                Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+                                newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                                oldScript.parentNode.replaceChild(newScript, oldScript);
+                            });
+                            if (window.initCollapsibleNotes) window.initCollapsibleNotes();
+                            if (window.renderAllNotes) window.renderAllNotes(panel);
+                        }
+                        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    } catch (err) {
+                        console.error('Pagination load error:', err);
+                        window.location.href = href;
+                    }
+                });
+            });
+        }
+
         async function loadTabIfNeeded(tabId, panel) {
             if (tabId === 'notes' || panel.getAttribute('data-loaded') === 'true') {
                 return;
             }
             try {
-                const resp = await echoFetch('/personal_space/tab/' + tabId);
+                const searchParams = window.location.search || '';
+                const resp = await echoFetch('/personal_space/tab/' + tabId + searchParams);
                 if (!resp.ok) throw new Error('Failed to load tab');
                 const html = await resp.text();
                 panel.innerHTML = html;
                 panel.setAttribute('data-loaded', 'true');
+                attachTabPagination(tabId, panel);
 
                 if (tabId === 'locked') {
                     panel.querySelectorAll('script').forEach(oldScript => {
@@ -3753,6 +3795,7 @@
                         oldScript.parentNode.replaceChild(newScript, oldScript);
                     });
                     if (window.initCollapsibleNotes) window.initCollapsibleNotes();
+                    if (window.renderAllNotes) window.renderAllNotes(panel);
                 }
             } catch (err) {
                 console.error('Tab loading error:', err);
@@ -3811,6 +3854,14 @@
         if (initialTab) {
             switchToTab(initialTab);
         }
+
+        // Attach pagination handlers to any server-rendered tabs
+        ['locked', 'saved'].forEach(tabId => {
+            const p = document.getElementById('tab-' + tabId);
+            if (p && p.getAttribute('data-loaded') === 'true') {
+                attachTabPagination(tabId, p);
+            }
+        });
 
         // Deep-link support from other pages: open picker immediately.
         // Only trigger once per browser session to avoid re-opening on every page reload
@@ -5122,6 +5173,209 @@
 </div>
 
 <script src="{{ url_for('static', filename='personal_space_export.js') }}?v=1.0.0" defer></script>
+
+<script nonce="{{ csp_nonce }}">
+    // ====== Fullscreen Note Creation ======
+    document.addEventListener('DOMContentLoaded', function () {
+        const noteInput = document.getElementById('note-input');
+        const createNoteCard = document.querySelector('.create-note-card');
+
+        if (noteInput && createNoteCard) {
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'close-fullscreen-btn';
+            closeBtn.innerHTML = '<i class="fas fa-times" aria-hidden="true"></i>';
+            closeBtn.type = 'button';
+            closeBtn.title = 'Close fullscreen (Esc)';
+            createNoteCard.appendChild(closeBtn);
+
+            function openFullscreen() {
+                if (!createNoteCard.classList.contains('fullscreen-active')) {
+                    createNoteCard.classList.add('fullscreen-active');
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+
+            function closeFullscreen() {
+                if (createNoteCard.classList.contains('fullscreen-active')) {
+                    createNoteCard.classList.remove('fullscreen-active');
+                    document.body.style.overflow = '';
+                    noteInput.blur();
+                }
+            }
+
+            noteInput.addEventListener('focus', openFullscreen);
+            closeBtn.addEventListener('click', closeFullscreen);
+
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && createNoteCard.classList.contains('fullscreen-active')) {
+                    closeFullscreen();
+                }
+            });
+        }
+    });
+
+    // --- IndexedDB Note Cache for Offline Support ---
+    const NoteCache = {
+        DB_NAME: 'echowithin_notes',
+        DB_VERSION: 1,
+        STORE: 'previews',
+        _db: null,
+
+        open() {
+            if (this._db) return Promise.resolve(this._db);
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(this.STORE)) {
+                        db.createObjectStore(this.STORE, { keyPath: 'id' });
+                    }
+                };
+                req.onsuccess = (e) => { this._db = e.target.result; resolve(this._db); };
+                req.onerror = () => reject(req.error);
+            });
+        },
+
+        async putMany(entries) {
+            // entries: [{id, content, ts}]
+            try {
+                const db = await this.open();
+                const tx = db.transaction(this.STORE, 'readwrite');
+                const store = tx.objectStore(this.STORE);
+                for (const entry of entries) {
+                    store.put(entry);
+                }
+                return new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+            } catch (e) { console.warn('NoteCache putMany failed:', e); }
+        },
+
+        async getMany(ids) {
+            // Returns {id: content} map
+            try {
+                const db = await this.open();
+                const tx = db.transaction(this.STORE, 'readonly');
+                const store = tx.objectStore(this.STORE);
+                const results = {};
+                const promises = ids.map(id => new Promise((resolve) => {
+                    const req = store.get(id);
+                    req.onsuccess = () => {
+                        if (req.result) results[id] = req.result.content;
+                        resolve();
+                    };
+                    req.onerror = () => resolve();
+                }));
+                await Promise.all(promises);
+                return results;
+            } catch (e) { console.warn('NoteCache getMany failed:', e); return {}; }
+        }
+    };
+
+    // --- Lazy-load note previews with IndexedDB offline fallback ---
+    (function () {
+        const lazyNodes = document.querySelectorAll('.note-content[data-lazy="true"]');
+        if (!lazyNodes.length) return;
+
+        const noteIds = [];
+        const nodeMap = {};
+        lazyNodes.forEach(node => {
+            const card = node.closest('.note-card');
+            if (card) {
+                const noteId = card.getAttribute('data-note-id');
+                if (noteId) {
+                    noteIds.push(noteId);
+                    nodeMap[noteId] = { contentEl: node, card: card };
+                }
+            }
+        });
+
+        if (!noteIds.length) return;
+
+        function renderPreview(noteId, preview) {
+            const entry = nodeMap[noteId];
+            if (!entry) return;
+            const el = entry.contentEl;
+            const card = entry.card;
+            el.setAttribute('data-raw', preview);
+            el.removeAttribute('data-lazy');
+            if (window.renderMarkdownWithMath) {
+                el.innerHTML = window.renderMarkdownWithMath(preview);
+            } else {
+                el.textContent = preview.substring(0, 300);
+            }
+            const copyBtn = card.querySelector('.copy-btn[data-copy-text]');
+            if (copyBtn && !copyBtn.getAttribute('data-copy-text')) {
+                copyBtn.setAttribute('data-copy-text', preview);
+            }
+            const editBtn = card.querySelector('.edit-note-btn[data-raw]');
+            if (editBtn && !editBtn.getAttribute('data-raw')) {
+                editBtn.setAttribute('data-raw', preview);
+            }
+        }
+
+        function removeShimmers() {
+            lazyNodes.forEach(node => {
+                const shimmer = node.querySelector('.note-shimmer');
+                if (shimmer) shimmer.remove();
+            });
+        }
+
+        // Try API first, fall back to IndexedDB
+        echoFetch('/api/v1/notes/previews', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: noteIds })
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.previews) return;
+                const cacheEntries = [];
+                for (const [noteId, preview] of Object.entries(data.previews)) {
+                    renderPreview(noteId, preview);
+                    cacheEntries.push({ id: noteId, content: preview, ts: Date.now() });
+                }
+                // Save to IndexedDB for offline use
+                if (cacheEntries.length) {
+                    NoteCache.putMany(cacheEntries);
+                }
+                if (window.formatDecryptionErrors) {
+                    window.formatDecryptionErrors(document.getElementById('notes-list-container'));
+                }
+                // Re-run collapsible detection now that lazy content is rendered
+                requestAnimationFrame(() => {
+                    if (window.initCollapsibleNotes) window.initCollapsibleNotes();
+                });
+            })
+            .catch(async (err) => {
+                console.warn('Note preview fetch failed, trying offline cache:', err);
+                removeShimmers();
+                try {
+                    const cached = await NoteCache.getMany(noteIds);
+                    let foundAny = false;
+                    for (const noteId of noteIds) {
+                        if (cached[noteId]) {
+                            renderPreview(noteId, cached[noteId]);
+                            foundAny = true;
+                        } else {
+                            const entry = nodeMap[noteId];
+                            if (entry && !entry.contentEl.textContent.trim()) {
+                                entry.contentEl.innerHTML = '<div style="color:#999;font-size:0.82rem;padding:0.5rem 0;font-style:italic;">This note has not been cached yet. View it online first to enable offline access.</div>';
+                            }
+                        }
+                    }
+                    if (foundAny && window.formatDecryptionErrors) {
+                        window.formatDecryptionErrors(document.getElementById('notes-list-container'));
+                    }
+                } catch (dbErr) {
+                    console.warn('IndexedDB fallback also failed:', dbErr);
+                    lazyNodes.forEach(node => {
+                        if (!node.textContent.trim()) {
+                            node.innerHTML = '<div style="color:#999;font-size:0.82rem;padding:0.5rem 0;font-style:italic;">Content unavailable offline.</div>';
+                        }
+                    });
+                }
+            });
+    })();
+</script>
 
 <!-- Interactive Studio Modal: Note Sharing & Surprise Links -->
 <!-- Share Feature Overview Modal -->

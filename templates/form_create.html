@@ -99,10 +99,10 @@ function render(){
   }
   c.innerHTML = questions.map((q, idx)=> `
     <div class="ew-card" style="background:var(--surface-bg); margin-bottom:1rem; border:1px solid var(--border-color); padding:1rem 1.1rem;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.7rem; flex-wrap:wrap; gap:0.5rem;">
-        <div style="display:flex; align-items:center; gap:0.5rem;">
-          <span style="font-weight:700; font-size:0.85rem; color:var(--text-dark-color);">Q${idx+1}</span>
-          <select onchange="changeQuestionType(${idx}, this.value)" class="form-input" style="padding:0.25rem 0.55rem; font-size:0.82rem; font-weight:600; border-radius:6px; cursor:pointer; width:auto; margin:0;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.7rem; flex-wrap:wrap; gap:0.5rem; max-width:100%;">
+        <div style="display:flex; align-items:center; gap:0.4rem; min-width:0; flex:1 1 auto; max-width:100%;">
+          <span style="font-weight:700; font-size:0.85rem; color:var(--text-dark-color); flex-shrink:0;">Q${idx+1}</span>
+          <select onchange="changeQuestionType(${idx}, this.value)" class="form-input" style="padding:0.25rem 0.4rem; font-size:0.8rem; font-weight:600; border-radius:6px; cursor:pointer; width:auto; max-width:min(100%, 180px); margin:0; text-overflow:ellipsis;">
             <option value="short_text" ${q.type==='short_text'?'selected':''}>Short text (single line)</option>
             <option value="paragraph" ${q.type==='paragraph'?'selected':''}>Paragraph (long answer)</option>
             <option value="single_choice" ${q.type==='single_choice'?'selected':''}>Single choice (radio)</option>

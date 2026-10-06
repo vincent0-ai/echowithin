@@ -433,16 +433,22 @@
 
     @media (max-width: 600px) {
         .home-quick-actions {
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr));
             gap: 0.6rem;
         }
 
         .quick-action-card {
-            padding: 0.85rem 0.9rem;
+            padding: 0.85rem 0.8rem;
         }
 
         .quick-action-card strong {
             font-size: 0.88rem;
+        }
+    }
+
+    @media (max-width: 340px) {
+        .home-quick-actions {
+            grid-template-columns: 1fr;
         }
     }
 </style>

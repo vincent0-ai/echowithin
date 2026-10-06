@@ -1939,26 +1939,31 @@ body {
         gap: 0.4rem;
     }
 
-    /* Keep nav-left left-aligned on mobile */
+    /* Keep nav-left fluid and wrapped on mobile */
     .nav-left {
         width: 100%;
-        justify-content: flex-start;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.25rem 0.4rem;
     }
 
-    /* Display nav links directly in the navbar on mobile - CENTERED */
+    /* Display nav links directly in the navbar on mobile - fluid spacing */
     .nav-links {
         display: flex;
         flex-direction: row;
-        gap: 0.15rem 0.3rem;
+        gap: 0.1rem clamp(0.15rem, 0.8vw, 0.3rem);
         justify-content: center;
         width: 100%;
-        flex-wrap: nowrap;
+        max-width: 100%;
+        flex-wrap: wrap;
     }
 
     .nav-links a {
         white-space: nowrap;
-        font-size: 0.85rem;
-        padding: 0.3rem 0.3rem;
+        font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+        padding: 0.25rem clamp(0.2rem, 0.6vw, 0.35rem);
     }
 
     /* Hide overflow items on mobile, show More dropdown */
@@ -1970,13 +1975,18 @@ body {
         position: relative;
     }
     .nav-more-btn {
-        font-size: 0.85rem;
-        padding: 0.3rem 0.3rem;
+        font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+        padding: 0.25rem clamp(0.2rem, 0.6vw, 0.35rem);
+    }
+    .nav-more-menu {
+        right: 0;
+        left: auto;
+        max-width: calc(100vw - 16px);
     }
 
     /* Spacing between brand row elements on mobile */
     .nav-socials {
-        margin-left: 0.3rem;
+        margin-left: auto;
         gap: 0.4rem;
     }
 
@@ -2188,15 +2198,16 @@ body {
     .nav-links {
         display: flex;
         flex-direction: row;
-        flex-wrap: nowrap;
-        gap: 0.1rem 0.2rem;
+        flex-wrap: wrap;
+        gap: 0.1rem clamp(0.1rem, 0.6vw, 0.25rem);
         width: 100%;
+        max-width: 100%;
         justify-content: center;
     }
 
     .nav-links a {
-        font-size: 0.8rem;
-        padding: 0.25rem 0.25rem;
+        font-size: clamp(0.72rem, 2.3vw, 0.8rem);
+        padding: 0.2rem clamp(0.15rem, 0.5vw, 0.25rem);
         white-space: nowrap;
     }
 
@@ -2209,8 +2220,13 @@ body {
         position: relative;
     }
     .nav-more-btn {
-        font-size: 0.8rem;
-        padding: 0.25rem 0.25rem;
+        font-size: clamp(0.72rem, 2.3vw, 0.8rem);
+        padding: 0.2rem clamp(0.15rem, 0.5vw, 0.25rem);
+    }
+    .nav-more-menu {
+        right: 0;
+        left: auto;
+        max-width: calc(100vw - 16px);
     }
 
     /* Tab responsiveness on very small screens */
@@ -2221,22 +2237,23 @@ body {
     }
 
     .nav-brand {
-        font-size: 1.1rem;
+        font-size: clamp(0.95rem, 3.5vw, 1.1rem);
         /* Slightly smaller brand on very small screens */
     }
 
     .nav-logo {
-        height: 32px;
+        height: 28px;
         /* Smaller logo on small screens */
     }
 
-    /* Keep brand and socials left-aligned on small screens */
+    /* Keep brand and socials fluid on small screens */
     .nav-left {
         width: 100%;
         display: flex;
         align-items: center;
-        justify-content: flex-start;
-        gap: 0.25rem;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.2rem 0.35rem;
     }
 
     /* Keep socials next to brand */
@@ -2244,18 +2261,18 @@ body {
         display: flex;
         gap: 0.35rem;
         align-items: center;
-        margin-left: 0.2rem;
+        margin-left: auto;
     }
 
     .nav-socials a {
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         color: white;
     }
 
     .nav-logout {
         margin-left: 0.15rem;
-        padding: 3px 6px;
-        font-size: 0.85rem;
+        padding: 2px 5px;
+        font-size: 0.8rem;
     }
 
     .container {

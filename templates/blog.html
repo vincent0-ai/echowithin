@@ -91,22 +91,37 @@
         <h4>Share your real ideas, experiences, and perspectives.</h4>
 
         <!-- Search Form -->
-        <form action="{{ url_for('blog.blog') }}" method="GET" class="search-form"
+        <form action="{{ url_for('blog.blog') }}" method="GET" class="search-form" id="blog-search-form"
             style="margin-top: 1rem; display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
             <div class="search-input-group" style="display: flex; flex-grow: 1; max-width: 500px;">
                 <input type="text" name="query" class="form-input" placeholder="Search posts..."
                     value="{{ query or '' }}"
                     style="flex-grow: 1; min-width: 150px; border-top-right-radius: 0; border-bottom-right-radius: 0;">
-                <button type="submit" class="form-button"
+                <button type="submit" id="btn-blog-search-submit" class="form-button"
                     style="width: auto; padding: 0 1rem; border-top-left-radius: 0; border-bottom-left-radius: 0;">
                     Search
                 </button>
             </div>
-            <a href="{{ url_for('pages.search') }}" class="form-button btn-advanced-search"
+            <a href="{{ url_for('pages.search') }}{% if query %}?q={{ query }}{% endif %}" class="form-button btn-advanced-search"
                 style="width: auto; padding: 0 1rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; color: var(--text-light-color);">
                 <i class="fa-solid fa-sliders"></i> Advanced Search
             </a>
         </form>
+
+        {% if query %}
+        <div class="search-live-indicator" style="margin-top: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span style="font-size: 0.88rem; color: var(--text-secondary, #555); font-weight: 500;">
+                <i class="fa-solid fa-magnifying-glass" style="color: var(--primary-color);"></i>
+                Found <strong>{{ total_posts|default(posts|length) }}</strong> result{{ 's' if (total_posts|default(posts|length)) != 1 else '' }} for "<em>{{ query }}</em>"
+            </span>
+            <a href="#search-results" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 20px; font-size: 0.75rem; padding: 0.2rem 0.65rem; text-decoration: none; font-weight: 600;">
+                Jump to results <i class="fa-solid fa-arrow-down" style="font-size: 0.7rem;"></i>
+            </a>
+            <a href="{{ url_for('blog.blog') }}" style="font-size: 0.8rem; color: var(--text-muted, #888); text-decoration: underline; margin-left: 0.25rem;">
+                Clear
+            </a>
+        </div>
+        {% endif %}
 
         {% if current_user.is_authenticated and current_user.is_admin %}
         <div class="admin-actions" style="margin-top: 1rem;">
@@ -219,14 +234,30 @@
     {% from '_macros.html' import render_post_item %}
 
     {% if query %}
-    <div class="posts-section">
-        <h2>Search Results for "{{ query }}"</h2>
+    <div class="posts-section" id="search-results" style="scroll-margin-top: 20px;">
+        <div class="search-results-banner" style="background: var(--surface-bg, #fff); border: 1px solid var(--border-color, #eee); border-radius: 10px; padding: 0.9rem 1.1rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+                <h2 style="margin: 0; font-size: 1.15rem; color: var(--text-dark-color, #222);">Search Results for "{{ query }}"</h2>
+                <span style="font-size: 0.82rem; color: var(--text-muted, #777);">{{ total_posts|default(posts|length) }} post{{ 's' if (total_posts|default(posts|length)) != 1 else '' }} found</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <a href="{{ url_for('pages.search') }}?q={{ query }}" class="btn btn-sm" style="border: 1px solid var(--border-color); color: var(--text-dark-color); font-size: 0.8rem; padding: 0.3rem 0.65rem; border-radius: 6px; text-decoration: none;">
+                    <i class="fa-solid fa-sliders"></i> Advanced Filters
+                </a>
+                <a href="{{ url_for('blog.blog') }}" class="btn btn-sm" style="background: #f0f0f0; color: #333; font-size: 0.8rem; padding: 0.3rem 0.65rem; border-radius: 6px; text-decoration: none;">
+                    <i class="fa-solid fa-times"></i> Clear
+                </a>
+            </div>
+        </div>
         {% if posts %}
         {% for post in posts %}
         {{ render_post_item(post, current_user, now) }}
         {% endfor %}
         {% else %}
-        <p>No posts found for your search. Try a different query.</p>
+        <div class="no-results" style="background: var(--background-light-color); border: 1px solid var(--border-color); color: var(--text-dark-color); padding: 2rem; border-radius: 8px; text-align: center;">
+            <p style="margin: 0 0 0.5rem 0; font-weight: 600; font-size: 1.05rem;">No posts found for "{{ query }}"</p>
+            <p style="margin: 0; font-size: 0.88rem; color: var(--text-muted);">Try different keywords or try <a href="{{ url_for('pages.search') }}?q={{ query }}" style="color: var(--primary-color); font-weight: 600;">Advanced Search</a> with filters.</p>
+        </div>
         {% endif %}
     </div>
 
@@ -857,6 +888,28 @@
             });
         })();
 
+        // Auto-scroll to search results on page load if search query is present
+        var urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('query')) {
+            var resultsEl = document.getElementById('search-results');
+            if (resultsEl) {
+                setTimeout(function() {
+                    resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 180);
+            }
+        }
+
+        // Search submit button loading state
+        var searchForm = document.getElementById('blog-search-form');
+        if (searchForm) {
+            searchForm.addEventListener('submit', function() {
+                var btn = document.getElementById('btn-blog-search-submit');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Searching...';
+                }
+            });
+        }
     });
 </script>
 

@@ -104,3 +104,38 @@ class TestBlogEndpointsAccess:
         res = client.post('/api/posts/507f1f77bcf86cd799439011/save')
         assert res.status_code in [302, 401, 404]
 
+    def test_blog_search_empty_query_redirect(self, client):
+        res = client.get('/blog?query=   ')
+        assert res.status_code == 302
+
+    def test_blog_search_with_query(self, client):
+        res = client.get('/blog?query=reflection')
+        assert res.status_code == 200
+        assert b'Search Results for "reflection"' in res.data or b'reflection' in res.data
+
+    def test_blog_search_typesense_mock(self, client):
+        import main as m
+        mock_hit = {
+            'document': {
+                'id': '507f1f77bcf86cd799439011',
+                'title': 'Mocked Search Post',
+                'slug': 'mocked-search-post',
+                'author_username': 'tester',
+                'content': 'Searching content via Typesense'
+            }
+        }
+        with patch.object(m._t, 'ts_posts', 'posts'), \
+             patch.object(m._t, '_ts_search', return_value={'found': 1, 'hits': [mock_hit]}):
+            res = client.get('/blog?query=Mocked')
+            assert res.status_code == 200
+
+    def test_advanced_search_endpoint(self, client):
+        res = client.get('/search')
+        assert res.status_code == 200
+        assert b'Advanced Search' in res.data
+
+    def test_advanced_search_query_execution(self, client):
+        res = client.get('/search?q=hello&sort=newest')
+        assert res.status_code == 200
+
+

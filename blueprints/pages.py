@@ -126,7 +126,7 @@ def search():
                 except ValueError:
                     pass
             filter_expr = ' && '.join(filter_clauses) if filter_clauses else ''
-            search_params = {'q': query or '*', 'query_by': 'title,content', 'per_page': per_page, 'page': page, 'highlight_full_fields': 'title,content', 'highlight_start_tag': '<span class="highlighted-match">', 'highlight_end_tag': '</span>'}
+            search_params = {'q': query or '*', 'query_by': 'title,content,tags,author_username', 'per_page': per_page, 'page': page, 'highlight_full_fields': 'title,content', 'highlight_start_tag': '<span class="highlighted-match">', 'highlight_end_tag': '</span>'}
             if filter_expr:
                 search_params['filter_by'] = filter_expr
             if sort == 'newest':
@@ -160,13 +160,29 @@ def search():
 
     if not results and query:
         try:
-            cursor = m.posts_conf.find(m.get_public_posts_filter({'$text': {'$search': query}}), {'score': {'$meta': 'textScore'}}).sort([('score', {'$meta': 'textScore'})]).skip(max(0, (page - 1) * per_page)).limit(per_page)
+            mongo_filter = m.get_public_posts_filter({'$text': {'$search': query}})
+            total = m.posts_conf.count_documents(mongo_filter)
+            if total == 0:
+                escaped_q = re.escape(query)
+                mongo_filter = m.get_public_posts_filter({
+                    '$or': [
+                        {'title': {'$regex': escaped_q, '$options': 'i'}},
+                        {'content': {'$regex': escaped_q, '$options': 'i'}},
+                        {'tags': {'$regex': escaped_q, '$options': 'i'}},
+                        {'author': {'$regex': escaped_q, '$options': 'i'}},
+                    ]
+                })
+                total = m.posts_conf.count_documents(mongo_filter)
+            cursor = m.posts_conf.find(mongo_filter).sort([('timestamp', -1)]).skip(max(0, (page - 1) * per_page)).limit(per_page)
             import html
             for p in cursor:
                 results.append({'id': str(p.get('_id')), 'title': html.escape(p.get('title', '')), 'slug': p.get('slug'), 'author': p.get('author'), 'created_at': p.get('timestamp'), 'excerpt': html.escape((p.get('content') or '')[:300])})
-            total = m.posts_conf.count_documents(m.get_public_posts_filter({'$text': {'$search': query}}))
         except Exception as fallback_e:
             current_app.logger.error(f'MongoDB fallback search error: {fallback_e}')
+    try:
+        total = int(total)
+    except Exception:
+        total = 0
     try:
         available_tags = sorted([t for t in m.posts_conf.distinct('tags') if t])
     except Exception:

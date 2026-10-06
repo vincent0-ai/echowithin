@@ -84,19 +84,80 @@ def get_latest_posts_feed():
 def blog():
     import main as m
     query = request.args.get('query', None)
-    if query:
-        search_filter = m.get_public_posts_filter({"$text": {"$search": query}})
+    if query is not None:
+        query_str = query.strip()
+        if not query_str:
+            return redirect(url_for('blog.blog'))
         page = request.args.get('page', 1, type=int)
         posts_per_page = 10
-        total_posts = _safe_count(m.posts_conf, search_filter)
-        total_pages = math.ceil(total_posts / posts_per_page)
-        skip = (page - 1) * posts_per_page
-        search_results = list(m.posts_conf.find(search_filter).sort('timestamp', -1).skip(skip).limit(posts_per_page))
-        with current_app.app_context():
-            search_results = m.prepare_posts(search_results)
-        page_title = f"Search results for '{query}'"
-        page_description = f"Displaying search results for '{query}' on EchoWithin."
-        return render_template("blog.html", posts=search_results, active_page='blog', page=page, total_pages=total_pages, query=query, title=page_title, description=page_description)
+        search_results = []
+        total_posts = 0
+
+        # Primary: Typesense full-text search across titles, content, tags, author_username
+        if m._t.ts_posts:
+            try:
+                search_params = {
+                    'q': query_str,
+                    'query_by': 'title,content,tags,author_username',
+                    'per_page': posts_per_page,
+                    'page': page,
+                    'highlight_full_fields': 'title,content',
+                    'highlight_start_tag': '<mark class="search-highlight">',
+                    'highlight_end_tag': '</mark>',
+                }
+                search_result = m._t._ts_search('posts', search_params)
+                hits = search_result.get('hits', [])
+                total_posts = search_result.get('found', 0)
+                doc_ids = [h.get('document', {}).get('id') for h in hits if h.get('document', {}).get('id')]
+                valid_ids = [ObjectId(did) for did in doc_ids if ObjectId.is_valid(did)]
+                if valid_ids:
+                    public_filter = m.get_public_posts_filter({'_id': {'$in': valid_ids}})
+                    mongo_posts = {str(p['_id']): p for p in m.posts_conf.find(public_filter)}
+                    ordered_posts = [mongo_posts[did] for did in doc_ids if did in mongo_posts]
+                    with current_app.app_context():
+                        search_results = m.prepare_posts(ordered_posts)
+            except Exception as e:
+                current_app.logger.warning(f'Typesense blog search error, falling back to MongoDB: {e}')
+                search_results = []
+                total_posts = 0
+
+        # Fallback: MongoDB text / regex search if Typesense is unavailable or errored
+        if not search_results and not (m._t.ts_posts and total_posts == 0):
+            try:
+                search_filter = m.get_public_posts_filter({"$text": {"$search": query_str}})
+                total_posts = _safe_count(m.posts_conf, search_filter)
+                if total_posts == 0:
+                    escaped_q = re.escape(query_str)
+                    search_filter = m.get_public_posts_filter({
+                        "$or": [
+                            {"title": {"$regex": escaped_q, "$options": "i"}},
+                            {"content": {"$regex": escaped_q, "$options": "i"}},
+                            {"tags": {"$regex": escaped_q, "$options": "i"}},
+                            {"author": {"$regex": escaped_q, "$options": "i"}},
+                        ]
+                    })
+                    total_posts = _safe_count(m.posts_conf, search_filter)
+                skip = (page - 1) * posts_per_page
+                raw_results = list(m.posts_conf.find(search_filter).sort('timestamp', -1).skip(skip).limit(posts_per_page))
+                with current_app.app_context():
+                    search_results = m.prepare_posts(raw_results)
+            except Exception as fallback_e:
+                current_app.logger.error(f'MongoDB fallback blog search error: {fallback_e}')
+
+        total_pages = math.ceil(total_posts / posts_per_page) if total_posts else 1
+        page_title = f"Search results for '{query_str}'"
+        page_description = f"Displaying search results for '{query_str}' on EchoWithin."
+        return render_template(
+            "blog.html",
+            posts=search_results,
+            active_page='blog',
+            page=page,
+            total_pages=total_pages,
+            total_posts=total_posts,
+            query=query_str,
+            title=page_title,
+            description=page_description,
+        )
     latest_posts_prepared = get_latest_posts_feed()
     page_title = "EchoWithin Blog - Community & Collaboration"
     page_description = "Explore the latest posts, collaborative discussions, and ideas from the EchoWithin community."

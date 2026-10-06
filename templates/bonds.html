@@ -1936,6 +1936,70 @@
     </div>
     {% endif %}
 
+    <script nonce="{{ csp_nonce }}">
+        // Early definition of switchBond, toggleSection and loader stubs so clicks never encounter ReferenceError
+        function switchBond(bondId, btn) {
+            var allCards = document.querySelectorAll('.bonds-section > .bond-card');
+            allCards.forEach(function (c) { c.style.display = 'none'; });
+            var target = document.getElementById('bond-' + bondId);
+            if (target) target.style.display = 'block';
+            document.querySelectorAll('.bond-tab').forEach(function (t) { t.classList.remove('active'); });
+            if (btn) btn.classList.add('active');
+        }
+        window.switchBond = switchBond;
+
+        function toggleSection(id, btn) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            var isCurrentlyActive = el.classList.contains('active');
+            var bondCard = el.closest('.bond-card');
+
+            if (bondCard) {
+                // Close all expanded sections for this bond card
+                bondCard.querySelectorAll('.bond-expand-section').forEach(function (sec) {
+                    sec.classList.remove('active');
+                });
+                // Remove active highlight from all section buttons for this bond card
+                bondCard.querySelectorAll('.bond-actions .btn-bond-section').forEach(function (b) {
+                    b.classList.remove('active');
+                });
+            }
+
+            if (!isCurrentlyActive) {
+                el.classList.add('active');
+                if (btn) btn.classList.add('active');
+                // Mark section as read
+                var parts = id.split('-');
+                if (parts.length >= 2) {
+                    var sectionName = parts.slice(0, -1).join('-');
+                    var bondId = parts[parts.length - 1];
+                    if (typeof window.markSectionRead === 'function') {
+                        window.markSectionRead(bondId, sectionName);
+                    }
+                }
+                if (id.startsWith('goals-')) {
+                    var gBondId = id.replace('goals-', '');
+                    if (typeof window.loadGoals === 'function') {
+                        window.loadGoals(gBondId);
+                    }
+                }
+            }
+        }
+        window.toggleSection = toggleSection;
+
+        // Stub loader functions so early clicks do not throw ReferenceError
+        ['loadMood', 'loadQotd', 'loadGoals', 'loadJournal', 'loadHabits', 'loadInsights', 'loadCalendar', 'loadCountdowns', 'loadAlbum', 'loadBucketlist', 'loadRecommendations', 'loadPulses', 'loadBondH2H', 'showGoalModal', 'respondBond', 'markSectionRead'].forEach(function (fn) {
+            if (!window[fn]) {
+                window[fn] = function () {
+                    var args = arguments;
+                    if (window['_' + fn + '_impl']) {
+                        window['_' + fn + '_impl'].apply(null, args);
+                    }
+                };
+            }
+        });
+    </script>
+
     {% if has_app_lock and not is_unlocked %}
     <div class="locked-gate">
         <h3>Bonds is Locked</h3>
@@ -2006,18 +2070,6 @@
 
     <!-- Active Bonds -->
     {% if bonds %}
-    <script nonce="{{ csp_nonce }}">
-        // Early definition of switchBond so tab clicks never encounter ReferenceError
-        function switchBond(bondId, btn) {
-            var allCards = document.querySelectorAll('.bonds-section > .bond-card');
-            allCards.forEach(function (c) { c.style.display = 'none'; });
-            var target = document.getElementById('bond-' + bondId);
-            if (target) target.style.display = 'block';
-            document.querySelectorAll('.bond-tab').forEach(function (t) { t.classList.remove('active'); });
-            if (btn) btn.classList.add('active');
-        }
-        window.switchBond = switchBond;
-    </script>
     <div class="bonds-section">
         <div class="bonds-section-title">Your Bonds</div>
         {% if bonds|length > 1 %}
@@ -3797,6 +3849,7 @@
             }
         }
     }
+    window.toggleSection = toggleSection;
 
     // --- Unread Badge Functions ---
     function markSectionRead(bondId, section) {
@@ -3808,6 +3861,7 @@
             body: JSON.stringify({ section: section })
         }).catch(function () { });
     }
+    window.markSectionRead = markSectionRead;
 
     // --- Goals ---
     function loadGoals(bondId) {
@@ -4466,9 +4520,12 @@
     }
 
     // Close modal on overlay click
-    document.getElementById('goal-modal').addEventListener('click', function (e) {
-        if (e.target === this) closeGoalModal();
-    });
+    const goalModalEl = document.getElementById('goal-modal');
+    if (goalModalEl) {
+        goalModalEl.addEventListener('click', function (e) {
+            if (e.target === this) closeGoalModal();
+        });
+    }
 
     // --- Mood ---
     const moodEmojis = {{ bond_moods| tojson }};
@@ -8756,6 +8813,94 @@
             if (window.showCustomAlert) showCustomAlert('Failed to remove past bond from archive.', 'danger');
         });
     }
+
+    // Expose all bond interaction functions on window for inline HTML handlers
+    window.toggleSection = toggleSection;
+    window.switchBond = switchBond;
+    window.markSectionRead = markSectionRead;
+    window.loadGoals = loadGoals;
+    window.showGoalModal = showGoalModal;
+    window.closeGoalModal = closeGoalModal;
+    window.submitGoal = submitGoal;
+    window.submitCheckin = submitCheckin;
+    window.toggleCheckinForm = toggleCheckinForm;
+    window.showGoalEditForm = showGoalEditForm;
+    window.submitGoalEdit = submitGoalEdit;
+    window.deleteGoal = deleteGoal;
+    window.completeGoal = completeGoal;
+    window.abandonGoal = abandonGoal;
+    window.restartGoal = restartGoal;
+    window.reactivateGoal = reactivateGoal;
+    window.approveGoal = approveGoal;
+    window.addMilestoneInput = addMilestoneInput;
+    window.toggleMilestone = toggleMilestone;
+    window.loadJournal = loadJournal;
+    window.createJournalEntry = createJournalEntry;
+    window.deleteJournalEntry = deleteJournalEntry;
+    window.showJournalEditForm = showJournalEditForm;
+    window.hideJournalEditForm = hideJournalEditForm;
+    window.submitJournalEdit = submitJournalEdit;
+    window.respondBond = respondBond;
+    window.breakBond = breakBond;
+    window.doBreakBond = doBreakBond;
+    window.loadMood = loadMood;
+    window.selectAndLogMood = selectAndLogMood;
+    window.loadQotd = loadQotd;
+    window.submitQotdAnswer = submitQotdAnswer;
+    window.reactToQotd = reactToQotd;
+    window.skipQotd = skipQotd;
+    window.showSkipOptions = showSkipOptions;
+    window.toggleThemedDays = toggleThemedDays;
+    window.toggleAiConsent = toggleAiConsent;
+    window.generateAiQotd = generateAiQotd;
+    window.showCustomQotdInput = showCustomQotdInput;
+    window.hideCustomQotdInput = hideCustomQotdInput;
+    window.submitCustomQotd = submitCustomQotd;
+    window.toggleQotdHistory = toggleQotdHistory;
+    window.loadQotdHistory = loadQotdHistory;
+    window.loadMoreQotdHistory = loadMoreQotdHistory;
+    window.showHistoryCatchupInput = showHistoryCatchupInput;
+    window.hideHistoryCatchupInput = hideHistoryCatchupInput;
+    window.submitCatchupAnswer = submitCatchupAnswer;
+    window.dismissCatchup = dismissCatchup;
+    window.toggleQotdSettings = toggleQotdSettings;
+    window.loadBucketlist = loadBucketlist;
+    window.createBucketlistItem = createBucketlistItem;
+    window.deleteBucketlistItem = deleteBucketlistItem;
+    window.doneBucketlistItem = doneBucketlistItem;
+    window.agreeBucketlistItem = agreeBucketlistItem;
+    window.showAddBucketlistForm = showAddBucketlistForm;
+    window.hideAddBucketlistForm = hideAddBucketlistForm;
+    window.loadPulses = loadPulses;
+    window.sendPulse = sendPulse;
+    window.loadHabits = loadHabits;
+    window.createHabit = createHabit;
+    window.toggleHabit = toggleHabit;
+    window.deleteHabit = deleteHabit;
+    window.showAddHabitForm = showAddHabitForm;
+    window.hideAddHabitForm = hideAddHabitForm;
+    window.loadInsights = loadInsights;
+    window.loadTimeline = loadTimeline;
+    window.loadBondH2H = loadBondH2H;
+    window.sendBondChallenge = sendBondChallenge;
+    window.loadCountdowns = loadCountdowns;
+    window.createCountdown = createCountdown;
+    window.deleteCountdown = deleteCountdown;
+    window.showAddCountdownForm = showAddCountdownForm;
+    window.hideAddCountdownForm = hideAddCountdownForm;
+    window.promoteCountdownToEvent = promoteCountdownToEvent;
+    window.loadCalendar = loadCalendar;
+    window.changeCalendarMonth = changeCalendarMonth;
+    window.selectCalendarDate = selectCalendarDate;
+    window.resetCalendarToToday = resetCalendarToToday;
+    window.showAddEventForm = showAddEventForm;
+    window.hideAddEventForm = hideAddEventForm;
+    window.saveCalendarEvent = saveCalendarEvent;
+    window.deleteCalendarEvent = deleteCalendarEvent;
+    window.rsvpCalendarEvent = rsvpCalendarEvent;
+    window.openCalendarFromGlance = openCalendarFromGlance;
+    window.useStreakShield = useStreakShield;
+    window.exportMemoryBook = exportMemoryBook;
 
 </script>
 {% endblock %}

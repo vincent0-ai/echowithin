@@ -511,30 +511,47 @@ def api_dm_status(target_user_id):
 def api_search_dm_users():
     import main as m
     try:
-        query = request.args.get('q', '').strip()
-        if not query:
-            return jsonify({'users': []})
-
-        safe_query = re.escape(query)
+        raw_query = request.args.get('q', '').strip()
+        query = raw_query.lstrip('@').strip()
         current_uid_str = str(current_user.id)
         current_uid_oid = ObjectId(current_user.id)
 
-        cursor = m.users_conf.find(
-            {'username': {'$regex': safe_query, '$options': 'i'}},
-            {
-                '_id': 1, 'username': 1, 'bio': 1, 'bio_encrypted': 1,
-                'profile_image_url': 1, 'dm_privacy': 1, 'is_demo_bot': 1,
-                'is_banned': 1
-            }
-        )
-        if not isinstance(cursor, list):
-            if hasattr(cursor, 'sort'):
-                try:
-                    cursor = cursor.sort('username', 1)
-                except Exception:
-                    pass
-            if hasattr(cursor, 'limit'):
-                cursor = cursor.limit(15)
+        if query:
+            safe_query = re.escape(query)
+            cursor = m.users_conf.find(
+                {'username': {'$regex': safe_query, '$options': 'i'}},
+                {
+                    '_id': 1, 'username': 1, 'bio': 1, 'bio_encrypted': 1,
+                    'profile_image_url': 1, 'dm_privacy': 1, 'is_demo_bot': 1,
+                    'is_banned': 1
+                }
+            )
+            if not isinstance(cursor, list):
+                if hasattr(cursor, 'sort'):
+                    try:
+                        cursor = cursor.sort('username', 1)
+                    except Exception:
+                        pass
+                if hasattr(cursor, 'limit'):
+                    cursor = cursor.limit(15)
+        else:
+            # When q is empty, provide active users suggestions
+            cursor = m.users_conf.find(
+                {'is_banned': {'$ne': True}},
+                {
+                    '_id': 1, 'username': 1, 'bio': 1, 'bio_encrypted': 1,
+                    'profile_image_url': 1, 'dm_privacy': 1, 'is_demo_bot': 1,
+                    'is_banned': 1
+                }
+            )
+            if not isinstance(cursor, list):
+                if hasattr(cursor, 'sort'):
+                    try:
+                        cursor = cursor.sort('last_active', -1)
+                    except Exception:
+                        pass
+                if hasattr(cursor, 'limit'):
+                    cursor = cursor.limit(10)
 
         raw_candidates = list(cursor)
         candidates = [

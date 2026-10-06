@@ -23,7 +23,7 @@
             <button type="button" onclick="dismissTourTooltip('tour-tooltip-messages')" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); border-radius: 6px; font-size: 0.75rem; padding: 0.25rem 0.75rem; font-weight: 600;">Got it</button>
         </div>
     </div>
-    <script>
+    <script nonce="{{ csp_nonce }}">
         function dismissTourTooltip(id) {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
@@ -55,7 +55,7 @@
             <button type="button" onclick="this.closest('div[id=tour-complete-card]').style.display='none'" class="btn btn-sm" style="background: transparent; color: var(--text-secondary, #555); border: 1px solid var(--border-color, #ddd); border-radius: 6px; font-size: 0.78rem; padding: 0.35rem 0.75rem; font-weight: 600;">Keep Exploring</button>
         </div>
     </div>
-    <script>
+    <script nonce="{{ csp_nonce }}">
     (function() {
         try {
             if (localStorage.getItem('dismissed_tour-tooltip-messages') === '1') {
@@ -75,6 +75,7 @@
             <div class="sidebar-header" style="padding: 1.25rem 1.5rem; border-bottom: 1px solid #f5ebe7; background: #fff; display: flex; align-items: center; justify-content: space-between;">
                 <h2 style="margin: 0; font-size: 1.25rem; color: #3e2217;">Messages</h2>
                 <button id="btn-search-new-user" type="button" title="Find a person to message or request"
+                    onclick="window.focusDmUserSearch && window.focusDmUserSearch()"
                     style="background: transparent; border: 1px solid #f5ebe7; border-radius: 8px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; color: #3e2217; cursor: pointer; transition: all 0.2s;"
                     onmouseover="this.style.backgroundColor='#fdf4ee'; this.style.borderColor='#e8dcd5';"
                     onmouseout="this.style.backgroundColor='transparent'; this.style.borderColor='#f5ebe7';">
@@ -2309,12 +2310,15 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     window.loadChat = window.loadChat || function () {
         window.__pendingLoadChatArgs = arguments;
     };
     window.setChatTheme = window.setChatTheme || function () {
         window.__pendingThemeArgs = arguments;
+    };
+    window.focusDmUserSearch = window.focusDmUserSearch || function () {
+        window.__pendingFocusDmSearch = true;
     };
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -2353,21 +2357,6 @@
         let recordingTimer = null;
         let recordingStartTime = null;
         let longPressTimer = null;
-
-        // --- Contact Search ---
-        const contactSearchInput = document.getElementById('contact-search-input');
-        if (contactSearchInput) {
-            contactSearchInput.addEventListener('input', function () {
-                const query = this.value.trim().toLowerCase();
-                document.querySelectorAll('#contact-list .contact-item').forEach(item => {
-                    const username = (item.querySelector('.contact-info span') || item.querySelector('.contact-username'));
-                    const name = username ? username.textContent.toLowerCase() : '';
-                    const lastMsg = item.querySelector('.contact-last-msg');
-                    const msg = lastMsg ? lastMsg.textContent.toLowerCase() : '';
-                    item.style.display = (!query || name.includes(query) || msg.includes(query)) ? '' : 'none';
-                });
-            });
-        }
 
         // --- Sidebar Relative Timestamps ---
         function updateSidebarTimestamps() {
@@ -4837,17 +4826,19 @@
         function hideDmSearchSuggestions() {
             if (dmSearchSuggestions) {
                 dmSearchSuggestions.hidden = true;
+                dmSearchSuggestions.style.display = 'none';
                 dmSearchSuggestions.innerHTML = '';
             }
         }
 
         function filterLocalContacts(term) {
-            const contactItems = document.querySelectorAll('.contact-list .contact-item');
-            const lower = term.toLowerCase();
+            const contactItems = document.querySelectorAll('#contact-list .contact-item');
+            const lower = (term || '').toLowerCase();
             let visibleCount = 0;
             contactItems.forEach(item => {
-                const username = (item.dataset.username || '').toLowerCase();
-                const matches = !lower || username.includes(lower);
+                const username = (item.dataset.username || item.querySelector('.contact-username')?.textContent || item.querySelector('.contact-info span')?.textContent || '').toLowerCase();
+                const lastMsg = (item.querySelector('.contact-last-msg')?.textContent || '').toLowerCase();
+                const matches = !lower || username.includes(lower) || lastMsg.includes(lower);
                 item.style.display = matches ? 'flex' : 'none';
                 if (matches) visibleCount++;
             });
@@ -4857,11 +4848,11 @@
                     noContactsEl = document.createElement('div');
                     noContactsEl.id = 'no-local-contacts-msg';
                     noContactsEl.style.cssText = 'padding: 1rem; text-align: center; color: #999; font-size: 0.85rem;';
-                    noContactsEl.textContent = 'No active chats match "' + term + '"';
+                    noContactsEl.textContent = 'No active chats match "' + escapeHtmlText(term) + '"';
                     const list = document.getElementById('contact-list');
                     if (list) list.appendChild(noContactsEl);
                 } else {
-                    noContactsEl.textContent = 'No active chats match "' + term + '"';
+                    noContactsEl.textContent = 'No active chats match "' + escapeHtmlText(term) + '"';
                     noContactsEl.style.display = 'block';
                 }
             } else if (noContactsEl) {
@@ -4870,8 +4861,9 @@
         }
 
         async function performDmUserSearch(query) {
+            query = (query || '').trim();
             if (dmSearchAbortController) {
-                dmSearchAbortController.abort();
+                try { dmSearchAbortController.abort(); } catch (e) {}
             }
             dmSearchAbortController = new AbortController();
 
@@ -4879,9 +4871,10 @@
 
             dmSearchSuggestions.innerHTML = `
                 <div class="dm-user-search-empty">
-                    <i class="fas fa-spinner fa-spin" style="margin-right: 6px;"></i> Searching people on EchoWithin...
+                    <i class="fas fa-spinner fa-spin" style="margin-right: 6px;"></i> ${query ? 'Searching people on EchoWithin...' : 'Finding people...'}
                 </div>`;
             dmSearchSuggestions.hidden = false;
+            dmSearchSuggestions.style.display = 'block';
 
             try {
                 const resp = await echoFetch('/api/messages/search-users?q=' + encodeURIComponent(query), {
@@ -4911,16 +4904,17 @@
                         <span>0 found</span>
                     </div>
                     <div class="dm-user-search-empty">
-                        No users found matching "${escapeHtmlText(query)}".
+                        ${query ? `No users found matching "${escapeHtmlText(query)}".` : 'No recommended users found right now.'}
                     </div>`;
                 dmSearchSuggestions.hidden = false;
+                dmSearchSuggestions.style.display = 'block';
                 return;
             }
 
             const header = document.createElement('div');
             header.className = 'dm-user-search-header';
             header.innerHTML = `
-                <span>People on EchoWithin</span>
+                <span>${query ? 'People on EchoWithin' : 'Suggested People'}</span>
                 <span>${users.length} found</span>`;
             dmSearchSuggestions.appendChild(header);
 
@@ -5040,6 +5034,7 @@
             });
 
             dmSearchSuggestions.hidden = false;
+            dmSearchSuggestions.style.display = 'block';
         }
 
         window.openDirectChat = function (userId, username, avatarUrl) {
@@ -5104,8 +5099,20 @@
             });
         };
 
+        window.focusDmUserSearch = function () {
+            const input = document.getElementById('contact-search-input');
+            if (input) {
+                input.focus();
+                performDmUserSearch(input.value.trim());
+            }
+        };
+        if (window.__pendingFocusDmSearch) {
+            window.__pendingFocusDmSearch = false;
+            window.focusDmUserSearch();
+        }
+
         if (contactSearchInput) {
-            contactSearchInput.addEventListener('input', function () {
+            const handleSearchInput = function () {
                 const term = contactSearchInput.value.trim();
                 filterLocalContacts(term);
 
@@ -5117,19 +5124,29 @@
                     clearTimeout(dmSearchDebounceTimer);
                 }
 
-                if (term.length < 1) {
-                    hideDmSearchSuggestions();
-                    return;
-                }
-
                 dmSearchDebounceTimer = setTimeout(() => {
                     performDmUserSearch(term);
                 }, 180);
-            });
+            };
 
-            contactSearchInput.addEventListener('keydown', function (e) {
+            contactSearchInput.addEventListener('input', handleSearchInput);
+            contactSearchInput.addEventListener('paste', function () {
+                setTimeout(handleSearchInput, 50);
+            });
+            contactSearchInput.addEventListener('keyup', function (e) {
                 if (e.key === 'Escape') {
                     hideDmSearchSuggestions();
+                    return;
+                }
+                if (e.key === 'Enter') {
+                    if (dmSearchDebounceTimer) clearTimeout(dmSearchDebounceTimer);
+                    performDmUserSearch(contactSearchInput.value.trim());
+                }
+            });
+            contactSearchInput.addEventListener('focus', function () {
+                const suggestions = document.getElementById('dm-user-search-suggestions');
+                if (!suggestions || suggestions.hidden || suggestions.style.display === 'none') {
+                    performDmUserSearch(this.value.trim());
                 }
             });
         }
@@ -5147,20 +5164,18 @@
         }
 
         if (btnSearchNewUser) {
-            btnSearchNewUser.addEventListener('click', function () {
-                if (contactSearchInput) {
-                    contactSearchInput.focus();
-                    if (contactSearchInput.value.trim()) {
-                        performDmUserSearch(contactSearchInput.value.trim());
-                    }
-                }
+            btnSearchNewUser.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                window.focusDmUserSearch();
             });
         }
 
         document.addEventListener('click', function (e) {
-            if (dmSearchSuggestions && !dmSearchSuggestions.hidden) {
+            if (dmSearchSuggestions && !dmSearchSuggestions.hidden && dmSearchSuggestions.style.display !== 'none') {
                 const searchContainer = document.querySelector('.contact-search');
-                if (searchContainer && !searchContainer.contains(e.target) && e.target !== btnSearchNewUser) {
+                const btnSearch = document.getElementById('btn-search-new-user');
+                if (searchContainer && !searchContainer.contains(e.target) && (!btnSearch || !btnSearch.contains(e.target))) {
                     hideDmSearchSuggestions();
                 }
             }

@@ -1820,6 +1820,10 @@ body {
     overflow-y: auto;
 }
 
+.dm-user-search-suggestions[hidden] {
+    display: none !important;
+}
+
 .dm-user-search-header {
     padding: 0.5rem 0.8rem;
     font-size: 0.75rem;

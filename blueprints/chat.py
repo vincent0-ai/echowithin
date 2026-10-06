@@ -505,6 +505,119 @@ def api_dm_status(target_user_id):
         return jsonify({'error': str(e)}), 400
 
 
+@bp.route('/api/messages/search-users')
+@login_required
+@limits(calls=60, period=60)
+def api_search_dm_users():
+    import main as m
+    try:
+        query = request.args.get('q', '').strip()
+        if not query:
+            return jsonify({'users': []})
+
+        safe_query = re.escape(query)
+        current_uid_str = str(current_user.id)
+        current_uid_oid = ObjectId(current_user.id)
+
+        cursor = m.users_conf.find(
+            {'username': {'$regex': safe_query, '$options': 'i'}},
+            {
+                '_id': 1, 'username': 1, 'bio': 1, 'bio_encrypted': 1,
+                'profile_image_url': 1, 'dm_privacy': 1, 'is_demo_bot': 1,
+                'is_banned': 1
+            }
+        )
+        if not isinstance(cursor, list):
+            if hasattr(cursor, 'sort'):
+                try:
+                    cursor = cursor.sort('username', 1)
+                except Exception:
+                    pass
+            if hasattr(cursor, 'limit'):
+                cursor = cursor.limit(15)
+
+        raw_candidates = list(cursor)
+        candidates = [
+            c for c in raw_candidates
+            if str(c.get('_id')) != current_uid_str and not c.get('is_banned')
+        ][:10]
+
+        if not candidates:
+            return jsonify({'users': []})
+
+        candidate_ids = [c['_id'] for c in candidates]
+        dm_perms = list(m.dm_permissions_conf.find({
+            '$or': [
+                {'requester_id': current_uid_oid, 'target_id': {'$in': candidate_ids}},
+                {'requester_id': {'$in': candidate_ids}, 'target_id': current_uid_oid}
+            ]
+        }))
+
+        perm_map = {}
+        for perm in dm_perms:
+            r_id = perm.get('requester_id')
+            t_id = perm.get('target_id')
+            other_oid = t_id if r_id == current_uid_oid else r_id
+            perm_map[str(other_oid)] = perm
+
+        is_guest = getattr(current_user, 'is_guest', False)
+        users_list = []
+
+        for candidate in candidates:
+            target_uid_str = str(candidate['_id'])
+
+            if is_guest and not candidate.get('is_demo_bot'):
+                dm_status = 'guest_restricted'
+                request_id = None
+            elif m.is_blocked_by(target_uid_str, current_uid_str) or m.is_blocked_by(current_uid_str, target_uid_str):
+                dm_status = 'disabled'
+                request_id = None
+            elif candidate.get('dm_privacy') == 'nobody':
+                dm_status = 'disabled'
+                request_id = None
+            elif m.can_dm(current_uid_str, target_uid_str):
+                dm_status = 'accepted'
+                request_id = None
+            else:
+                perm = perm_map.get(target_uid_str)
+                if perm and perm.get('status') == 'pending':
+                    if str(perm.get('requester_id')) == current_uid_str:
+                        dm_status = 'pending'
+                        request_id = str(perm.get('_id'))
+                    else:
+                        dm_status = 'incoming_request'
+                        request_id = str(perm.get('_id'))
+                elif perm and perm.get('status') == 'accepted':
+                    dm_status = 'accepted'
+                    request_id = None
+                else:
+                    dm_status = 'none'
+                    request_id = None
+
+            bio = candidate.get('bio', '')
+            if candidate.get('bio_encrypted') and bio:
+                try:
+                    bio = m.decrypt_note(bio, user_id=target_uid_str)
+                except Exception:
+                    pass
+
+            profile_img = candidate.get('profile_image_url') or url_for('static', filename='default_avatar.png')
+            users_list.append({
+                'user_id': target_uid_str,
+                'username': candidate.get('username'),
+                'bio': bio[:120] if bio else '',
+                'profile_image_url': profile_img,
+                'profile_url': url_for('profile.profile', username=candidate.get('username')),
+                'dm_status': dm_status,
+                'request_id': request_id
+            })
+
+        return jsonify({'users': users_list})
+    except Exception as e:
+        current_app.logger.error(f"Error in api_search_dm_users: {e}")
+        return jsonify({'error': 'Failed to search users'}), 400
+
+
 @bp.route('/api/messages/upload_image', methods=['POST'])
 @login_required
 @limits(calls=30, period=60)

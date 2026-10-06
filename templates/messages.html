@@ -72,17 +72,28 @@
         <!-- Sidebar: Contact List -->
         <div class="messages-sidebar"
             style="width: 320px; border-right: 1px solid #f5ebe7; display: flex; flex-direction: column; background: #faf8f7;">
-            <div class="sidebar-header" style="padding: 1.5rem; border-bottom: 1px solid #f5ebe7; background: #fff;">
+            <div class="sidebar-header" style="padding: 1.25rem 1.5rem; border-bottom: 1px solid #f5ebe7; background: #fff; display: flex; align-items: center; justify-content: space-between;">
                 <h2 style="margin: 0; font-size: 1.25rem; color: #3e2217;">Messages</h2>
+                <button id="btn-search-new-user" type="button" title="Find a person to message or request"
+                    style="background: transparent; border: 1px solid #f5ebe7; border-radius: 8px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; color: #3e2217; cursor: pointer; transition: all 0.2s;"
+                    onmouseover="this.style.backgroundColor='#fdf4ee'; this.style.borderColor='#e8dcd5';"
+                    onmouseout="this.style.backgroundColor='transparent'; this.style.borderColor='#f5ebe7';">
+                    <i class="fas fa-user-plus" style="font-size: 0.85rem;"></i>
+                </button>
             </div>
 
-            <div class="contact-search" style="padding: 1rem; border-bottom: 1px solid #f5ebe7;">
-                <div style="position: relative;">
+            <div class="contact-search" style="padding: 0.85rem 1rem; border-bottom: 1px solid #f5ebe7; position: relative;">
+                <div style="position: relative; display: flex; align-items: center;">
                     <i class="fas fa-search"
-                        style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #999; font-size: 0.85rem;"></i>
-                    <input type="text" id="contact-search-input" placeholder="Search contacts..."
-                        style="width: 100%; padding: 0.6rem 1rem 0.6rem 2.2rem; border-radius: 8px; border: 1px solid #eee; font-size: 0.9rem; outline: none;">
+                        style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #999; font-size: 0.85rem; pointer-events: none;"></i>
+                    <input type="text" id="contact-search-input" placeholder="Search contacts or find people..." autocomplete="off"
+                        style="width: 100%; padding: 0.6rem 2.2rem 0.6rem 2.2rem; border-radius: 8px; border: 1px solid #eee; font-size: 0.9rem; outline: none; transition: border-color 0.2s, box-shadow 0.2s; background: #fff;">
+                    <button id="contact-search-clear" type="button" style="display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #aaa; cursor: pointer; font-size: 0.9rem; padding: 4px;" title="Clear search">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
                 </div>
+                <!-- Floating dropdown for platform user search results -->
+                <div id="dm-user-search-suggestions" class="dm-user-search-suggestions" hidden></div>
             </div>
 
             <!-- Message Requests Section -->
@@ -4804,6 +4815,356 @@
             document.body.appendChild(toast);
             setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3000);
         }
+
+        // ==========================================
+        // DM USER & CONTACT SEARCH
+        // ==========================================
+        const contactSearchInput = document.getElementById('contact-search-input');
+        const contactSearchClear = document.getElementById('contact-search-clear');
+        const dmSearchSuggestions = document.getElementById('dm-user-search-suggestions');
+        const btnSearchNewUser = document.getElementById('btn-search-new-user');
+
+        let dmSearchDebounceTimer = null;
+        let dmSearchAbortController = null;
+
+        function escapeHtmlText(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function hideDmSearchSuggestions() {
+            if (dmSearchSuggestions) {
+                dmSearchSuggestions.hidden = true;
+                dmSearchSuggestions.innerHTML = '';
+            }
+        }
+
+        function filterLocalContacts(term) {
+            const contactItems = document.querySelectorAll('.contact-list .contact-item');
+            const lower = term.toLowerCase();
+            let visibleCount = 0;
+            contactItems.forEach(item => {
+                const username = (item.dataset.username || '').toLowerCase();
+                const matches = !lower || username.includes(lower);
+                item.style.display = matches ? 'flex' : 'none';
+                if (matches) visibleCount++;
+            });
+            let noContactsEl = document.getElementById('no-local-contacts-msg');
+            if (contactItems.length > 0 && visibleCount === 0 && lower) {
+                if (!noContactsEl) {
+                    noContactsEl = document.createElement('div');
+                    noContactsEl.id = 'no-local-contacts-msg';
+                    noContactsEl.style.cssText = 'padding: 1rem; text-align: center; color: #999; font-size: 0.85rem;';
+                    noContactsEl.textContent = 'No active chats match "' + term + '"';
+                    const list = document.getElementById('contact-list');
+                    if (list) list.appendChild(noContactsEl);
+                } else {
+                    noContactsEl.textContent = 'No active chats match "' + term + '"';
+                    noContactsEl.style.display = 'block';
+                }
+            } else if (noContactsEl) {
+                noContactsEl.style.display = 'none';
+            }
+        }
+
+        async function performDmUserSearch(query) {
+            if (dmSearchAbortController) {
+                dmSearchAbortController.abort();
+            }
+            dmSearchAbortController = new AbortController();
+
+            if (!dmSearchSuggestions) return;
+
+            dmSearchSuggestions.innerHTML = `
+                <div class="dm-user-search-empty">
+                    <i class="fas fa-spinner fa-spin" style="margin-right: 6px;"></i> Searching people on EchoWithin...
+                </div>`;
+            dmSearchSuggestions.hidden = false;
+
+            try {
+                const resp = await echoFetch('/api/messages/search-users?q=' + encodeURIComponent(query), {
+                    signal: dmSearchAbortController.signal
+                });
+                if (!resp.ok) {
+                    hideDmSearchSuggestions();
+                    return;
+                }
+                const data = await resp.json();
+                renderDmUserSearchResults(data.users || [], query);
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    hideDmSearchSuggestions();
+                }
+            }
+        }
+
+        function renderDmUserSearchResults(users, query) {
+            if (!dmSearchSuggestions) return;
+            dmSearchSuggestions.innerHTML = '';
+
+            if (!users || users.length === 0) {
+                dmSearchSuggestions.innerHTML = `
+                    <div class="dm-user-search-header">
+                        <span>Find People</span>
+                        <span>0 found</span>
+                    </div>
+                    <div class="dm-user-search-empty">
+                        No users found matching "${escapeHtmlText(query)}".
+                    </div>`;
+                dmSearchSuggestions.hidden = false;
+                return;
+            }
+
+            const header = document.createElement('div');
+            header.className = 'dm-user-search-header';
+            header.innerHTML = `
+                <span>People on EchoWithin</span>
+                <span>${users.length} found</span>`;
+            dmSearchSuggestions.appendChild(header);
+
+            users.forEach((user, index) => {
+                const row = document.createElement('div');
+                row.className = 'dm-user-search-item';
+                row.dataset.index = index;
+                row.dataset.userId = user.user_id;
+                row.dataset.username = user.username;
+
+                // Avatar
+                const avatarWrap = document.createElement('div');
+                avatarWrap.className = 'dm-user-search-avatar-wrap';
+                const avatar = document.createElement('img');
+                avatar.className = 'dm-user-search-avatar';
+                avatar.alt = user.username;
+                avatar.src = user.profile_image_url || '/static/default_avatar.png';
+                avatar.onerror = function () { this.src = '/static/default_avatar.png'; };
+                avatarWrap.appendChild(avatar);
+
+                // User Info
+                const info = document.createElement('div');
+                info.className = 'dm-user-search-info';
+                
+                const unameLink = document.createElement('a');
+                unameLink.className = 'dm-user-search-username';
+                unameLink.href = user.profile_url;
+                unameLink.textContent = user.username;
+                unameLink.title = 'View profile of ' + user.username;
+                unameLink.onclick = function (e) { e.stopPropagation(); };
+                info.appendChild(unameLink);
+
+                if (user.bio) {
+                    const bioSpan = document.createElement('span');
+                    bioSpan.className = 'dm-user-search-bio';
+                    bioSpan.textContent = user.bio;
+                    info.appendChild(bioSpan);
+                }
+
+                // Action Area
+                const actionWrap = document.createElement('div');
+                actionWrap.className = 'dm-user-search-action';
+
+                if (user.dm_status === 'accepted') {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'dm-btn-action dm-btn-chat';
+                    btn.innerHTML = '<i class="fas fa-comment"></i> Chat';
+                    btn.title = 'Open chat with ' + user.username;
+                    btn.onclick = function (e) {
+                        e.stopPropagation();
+                        window.openDirectChat(user.user_id, user.username, user.profile_image_url);
+                    };
+                    actionWrap.appendChild(btn);
+                } else if (user.dm_status === 'pending') {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'dm-btn-action dm-btn-pending';
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-clock"></i> Pending';
+                    btn.title = 'Request already sent';
+                    actionWrap.appendChild(btn);
+                } else if (user.dm_status === 'incoming_request') {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'dm-btn-action dm-btn-accept';
+                    btn.innerHTML = '<i class="fas fa-check"></i> Accept';
+                    btn.title = 'Accept message request';
+                    btn.onclick = function (e) {
+                        e.stopPropagation();
+                        window.acceptAndOpenChat(user.request_id, user.user_id, user.username);
+                    };
+                    actionWrap.appendChild(btn);
+                } else if (user.dm_status === 'disabled') {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'dm-btn-action dm-btn-disabled';
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-lock"></i> Disabled';
+                    btn.title = 'User is not accepting messages';
+                    actionWrap.appendChild(btn);
+                } else if (user.dm_status === 'guest_restricted') {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'dm-btn-action dm-btn-disabled';
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-user-lock"></i> Sign Up';
+                    btn.title = 'Sign up to connect with real users';
+                    actionWrap.appendChild(btn);
+                } else {
+                    // dm_status === 'none'
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'dm-btn-action dm-btn-request';
+                    btn.id = 'dm-search-req-btn-' + user.user_id;
+                    btn.innerHTML = '<i class="fas fa-user-plus"></i> Request';
+                    btn.title = 'Send message request to ' + user.username;
+                    btn.onclick = function (e) {
+                        e.stopPropagation();
+                        window.sendDmRequestFromSearch(user.user_id, user.username, btn);
+                    };
+                    actionWrap.appendChild(btn);
+                }
+
+                row.appendChild(avatarWrap);
+                row.appendChild(info);
+                row.appendChild(actionWrap);
+
+                if (user.dm_status === 'accepted') {
+                    row.style.cursor = 'pointer';
+                    row.onclick = function () {
+                        window.openDirectChat(user.user_id, user.username, user.profile_image_url);
+                    };
+                }
+
+                dmSearchSuggestions.appendChild(row);
+            });
+
+            dmSearchSuggestions.hidden = false;
+        }
+
+        window.openDirectChat = function (userId, username, avatarUrl) {
+            hideDmSearchSuggestions();
+            if (contactSearchInput) {
+                contactSearchInput.value = '';
+                if (contactSearchClear) contactSearchClear.style.display = 'none';
+            }
+            filterLocalContacts('');
+            upsertContactItem(userId, username, 'Direct chat', new Date().toISOString());
+            window.loadChat(userId, username, null);
+        };
+
+        window.acceptAndOpenChat = function (requestId, userId, username) {
+            hideDmSearchSuggestions();
+            if (contactSearchInput) {
+                contactSearchInput.value = '';
+                if (contactSearchClear) contactSearchClear.style.display = 'none';
+            }
+            filterLocalContacts('');
+            if (window.acceptRequest) {
+                window.acceptRequest(requestId);
+            }
+        };
+
+        window.sendDmRequestFromSearch = function (userId, username, btnEl) {
+            const btn = btnEl || document.getElementById('dm-search-req-btn-' + userId);
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+            }
+
+            echoFetch('/api/messages/request/' + userId, {
+                method: 'POST'
+            }).then(r => r.json()).then(d => {
+                if (d.status === 'accepted' || d.status === 'already_accepted') {
+                    showToast('Connected! Opening chat with ' + username);
+                    window.openDirectChat(userId, username);
+                } else if (d.status === 'pending') {
+                    if (btn) {
+                        btn.className = 'dm-btn-action dm-btn-pending';
+                        btn.innerHTML = '<i class="fas fa-clock"></i> Pending';
+                        btn.title = 'Request already sent';
+                        btn.disabled = true;
+                    }
+                    showToast(d.message || 'Message request sent to ' + username + '!');
+                } else if (d.error) {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.className = 'dm-btn-action dm-btn-request';
+                        btn.innerHTML = '<i class="fas fa-user-plus"></i> Request';
+                    }
+                    showToast(d.error);
+                }
+            }).catch(() => {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.className = 'dm-btn-action dm-btn-request';
+                    btn.innerHTML = '<i class="fas fa-user-plus"></i> Request';
+                }
+                showToast('Failed to send request. Please try again.');
+            });
+        };
+
+        if (contactSearchInput) {
+            contactSearchInput.addEventListener('input', function () {
+                const term = contactSearchInput.value.trim();
+                filterLocalContacts(term);
+
+                if (contactSearchClear) {
+                    contactSearchClear.style.display = term.length > 0 ? 'block' : 'none';
+                }
+
+                if (dmSearchDebounceTimer) {
+                    clearTimeout(dmSearchDebounceTimer);
+                }
+
+                if (term.length < 1) {
+                    hideDmSearchSuggestions();
+                    return;
+                }
+
+                dmSearchDebounceTimer = setTimeout(() => {
+                    performDmUserSearch(term);
+                }, 180);
+            });
+
+            contactSearchInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') {
+                    hideDmSearchSuggestions();
+                }
+            });
+        }
+
+        if (contactSearchClear) {
+            contactSearchClear.addEventListener('click', function () {
+                if (contactSearchInput) {
+                    contactSearchInput.value = '';
+                    contactSearchClear.style.display = 'none';
+                    filterLocalContacts('');
+                    hideDmSearchSuggestions();
+                    contactSearchInput.focus();
+                }
+            });
+        }
+
+        if (btnSearchNewUser) {
+            btnSearchNewUser.addEventListener('click', function () {
+                if (contactSearchInput) {
+                    contactSearchInput.focus();
+                    if (contactSearchInput.value.trim()) {
+                        performDmUserSearch(contactSearchInput.value.trim());
+                    }
+                }
+            });
+        }
+
+        document.addEventListener('click', function (e) {
+            if (dmSearchSuggestions && !dmSearchSuggestions.hidden) {
+                const searchContainer = document.querySelector('.contact-search');
+                if (searchContainer && !searchContainer.contains(e.target) && e.target !== btnSearchNewUser) {
+                    hideDmSearchSuggestions();
+                }
+            }
+        });
 
         // ==========================================
         // SCHEDULED MESSAGES

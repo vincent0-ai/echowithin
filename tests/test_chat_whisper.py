@@ -1108,6 +1108,68 @@ def test_socketio_session_context_compatibility(app):
     client.disconnect()
 
 
+class TestDmUserSearch:
+    """Tests for /api/messages/search-users endpoint."""
+
+    def test_search_dm_users_empty_query(self, auth_client):
+        """Searching with an empty query returns an empty user list."""
+        res = auth_client.get('/api/messages/search-users?q=')
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data == {'users': []}
+
+    def test_search_dm_users_matching_status(self, auth_client, mock_user):
+        """Searching returns matching users with their computed dm_status."""
+        import main as m
+
+        target_uid1 = ObjectId()
+        target_uid2 = ObjectId()
+
+        candidate1 = {
+            '_id': target_uid1,
+            'username': 'alice_w_test',
+            'bio': 'Test bio 1',
+            'profile_image_url': '/static/alice.png',
+            'dm_privacy': 'everyone'
+        }
+        candidate2 = {
+            '_id': target_uid2,
+            'username': 'alice_private_test',
+            'bio': '',
+            'dm_privacy': 'nobody'
+        }
+
+        mock_users_conf = MagicMock()
+        mock_users_conf.find.return_value = [candidate1, candidate2]
+        mock_perm_conf = MagicMock()
+        mock_perm_conf.find.return_value = []
+
+        with patch.object(m, 'users_conf', mock_users_conf), \
+             patch.object(m, 'dm_permissions_conf', mock_perm_conf), \
+             patch.object(m, 'is_blocked_by', return_value=False), \
+             patch.object(
+                 m, 'can_dm',
+                 side_effect=lambda a, b: str(b) == str(target_uid1)
+             ):
+
+            res = auth_client.get('/api/messages/search-users?q=alice_')
+            assert res.status_code == 200
+            data = res.get_json()
+            assert 'users' in data
+            assert len(data['users']) == 2
+
+            # candidate 1 is accepted (can_dm is True)
+            assert data['users'][0]['username'] == 'alice_w_test'
+            assert data['users'][0]['dm_status'] == 'accepted'
+
+            # candidate 2 has dm_privacy: nobody -> disabled
+            assert data['users'][1]['username'] == 'alice_private_test'
+            assert data['users'][1]['dm_status'] == 'disabled'
+
+
+
+
+
 
 
 

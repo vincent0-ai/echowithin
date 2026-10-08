@@ -2760,11 +2760,12 @@
                     const inferredType = bubble.classList.contains('message-sent') ? 'sent' : 'received';
                     addMessageActions(bubble, data.id, inferredType);
 
-                    // Re-attach long-press handlers now that we have the real server ID
+                    // Re-attach long-press and swipe handlers now that we have the real server ID
                     bubble.setAttribute('oncontextmenu', `return handleLongPress(event, '${data.id}', '${inferredType}')`);
                     bubble.addEventListener('touchstart', (e) => startPressTimer(e, data.id, inferredType), { passive: true });
                     bubble.addEventListener('touchend', cancelPressTimer, { passive: true });
                     bubble.addEventListener('touchmove', cancelPressTimer, { passive: true });
+                    setupSwipeToReply(bubble, data.id, inferredType);
                 }
             });
 
@@ -3399,52 +3400,6 @@
             setupSwipeToReply(newBubble, resolvedId, type);
         }
 
-        function setupSwipeToReply(bubble, msgId, type) {
-            if (!msgId) return;
-            let startX = 0;
-            let startY = 0;
-            let currentX = 0;
-            let isSwiping = false;
-
-            bubble.addEventListener('touchstart', (e) => {
-                if (e.touches.length !== 1) return;
-                startX = e.touches[0].clientX;
-                startY = e.touches[0].clientY;
-                isSwiping = false;
-            }, { passive: true });
-
-            bubble.addEventListener('touchmove', (e) => {
-                if (!startX) return;
-                const diffX = e.touches[0].clientX - startX;
-                const diffY = e.touches[0].clientY - startY;
-                if (Math.abs(diffY) > Math.abs(diffX)) return;
-
-                if (diffX > 10 && diffX < 80) {
-                    isSwiping = true;
-                    bubble.style.transform = `translateX(${diffX * 0.5}px)`;
-                    bubble.style.transition = 'none';
-                }
-            }, { passive: true });
-
-            bubble.addEventListener('touchend', (e) => {
-                if (!startX) return;
-                const endX = e.changedTouches[0] ? e.changedTouches[0].clientX : startX;
-                const diffX = endX - startX;
-                bubble.style.transform = '';
-                bubble.style.transition = 'transform 0.2s ease-out';
-                if (diffX > 45 && isSwiping) {
-                    if (navigator.vibrate) navigator.vibrate(10);
-                    const contentNode = bubble.querySelector('.message-content') || bubble.querySelector('.chat-image');
-                    let preview = contentNode ? (contentNode.tagName === 'IMG' ? '📸 Photo' : contentNode.textContent.substring(0, 30)) : 'Message';
-                    const senderName = type === 'sent' ? 'You' : (document.getElementById('active-chat-username') ? document.getElementById('active-chat-username').textContent : 'User');
-                    replyToMessage(msgId, preview, false, senderName);
-                }
-                startX = 0;
-                startY = 0;
-                isSwiping = false;
-            }, { passive: true });
-        }
-
         // Delegated click handler: retry failed messages
         chatHistory.addEventListener('click', function(e) {
             var bubble = e.target.closest('.message-bubble.message-failed');
@@ -3623,10 +3578,12 @@
         function showMobileActions(msgId, type) {
             if (!msgId) return;
             const bubble = document.querySelector(`.message-bubble[data-id="${msgId}"]`);
+            if (!bubble) return;
             const contentNode = bubble.querySelector('.message-content') || bubble.querySelector('.chat-image');
             let preview = contentNode ? (contentNode.tagName === 'IMG' ? '📸 Photo' : contentNode.textContent.substring(0, 30)) : 'Message';
             preview = preview.replace(/'/g, "\\'");
 
+            const hasText = !!bubble.querySelector('.message-content');
             const reactionOptions = ['❤️', '😂', '😮', '😢', '👍', '👎'];
             let quickReactions = reactionOptions.map(e =>
                 `<button class="react-btn" onclick="closeMobileActions(); reactToMessage('${msgId}', '${e}')">${e}</button>`
@@ -3644,16 +3601,20 @@
                 <div class="mobile-action-item" onclick="closeMobileActions(); togglePinMessage('${msgId}')">
                     <i class="fas fa-thumbtack"></i> Pin / Unpin
                 </div>
-                <div class="mobile-action-item" onclick="closeMobileActions(); copyMessageText('${msgId}')">
+                ${hasText ? `<div class="mobile-action-item" onclick="closeMobileActions(); copyMessageText('${msgId}')">
                     <i class="fas fa-copy"></i> Copy Text
-                </div>
+                </div>` : ''}
             `;
 
             if (type === 'sent') {
+                if (hasText) {
+                    html += `
+                        <div class="mobile-action-item" onclick="closeMobileActions(); editMessage('${msgId}')">
+                            <i class="fas fa-pencil-alt"></i> Edit
+                        </div>
+                    `;
+                }
                 html += `
-                    <div class="mobile-action-item" onclick="closeMobileActions(); editMessage('${msgId}')">
-                        <i class="fas fa-pencil-alt"></i> Edit
-                    </div>
                     <div class="mobile-action-item delete" onclick="closeMobileActions(); deleteMessage('${msgId}')">
                         <i class="fas fa-trash-alt"></i> Delete
                     </div>
@@ -3670,8 +3631,35 @@
 
         window.copyMessageText = function (msgId) {
             const bubble = document.querySelector(`.message-bubble[data-id="${msgId}"]`);
-            const text = bubble.querySelector('.message-content').textContent;
-            navigator.clipboard.writeText(text).then(() => showToast("Copied to clipboard"));
+            if (!bubble) return;
+            const contentNode = bubble.querySelector('.message-content');
+            const text = contentNode ? contentNode.textContent : '';
+            if (!text) return;
+
+            function fallbackCopy(str) {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = str;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    if (window.showToast) showToast("Copied to clipboard");
+                } catch (e) {
+                    console.error('Fallback copy failed:', e);
+                }
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    if (window.showToast) showToast("Copied to clipboard");
+                }).catch(() => fallbackCopy(text));
+            } else {
+                fallbackCopy(text);
+            }
         };
 
         window.togglePinMessage = function (msgId) {
@@ -5931,12 +5919,12 @@
         -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 1rem;
         display: flex; flex-direction: column; gap: 6px;
         position: relative; z-index: 1;
-        user-select: none; -webkit-user-select: none;
+        user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     }
     .whisper-msg {
         max-width: 75%; padding: 0.5rem 0.8rem; border-radius: 12px;
         font-size: 0.9rem; line-height: 1.4;
-        user-select: none; -webkit-user-select: none;
+        user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
         position: relative; z-index: 2;
     }
     .whisper-msg-sent { background: #3e2217; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }

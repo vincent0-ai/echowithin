@@ -616,6 +616,15 @@
            adjacent bubbles. Removed for correct hit-testing. */
     }
 
+    /* Prevent native browser text-selection / word-search on long-press (touch devices) */
+    @media (pointer: coarse) {
+        .message-bubble {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+    }
+
     @keyframes msgAppear {
         from { opacity: 0; transform: translateY(8px) scale(0.97); }
         to { opacity: 1; transform: translateY(0) scale(1); }
@@ -2750,6 +2759,12 @@
                     renderedMessageIds.add(data.id);
                     const inferredType = bubble.classList.contains('message-sent') ? 'sent' : 'received';
                     addMessageActions(bubble, data.id, inferredType);
+
+                    // Re-attach long-press handlers now that we have the real server ID
+                    bubble.setAttribute('oncontextmenu', `return handleLongPress(event, '${data.id}', '${inferredType}')`);
+                    bubble.addEventListener('touchstart', (e) => startPressTimer(e, data.id, inferredType), { passive: true });
+                    bubble.addEventListener('touchend', cancelPressTimer, { passive: true });
+                    bubble.addEventListener('touchmove', cancelPressTimer, { passive: true });
                 }
             });
 
@@ -3595,6 +3610,15 @@
             showMobileActions(msgId, type);
             return false;
         };
+
+        // Prevent native browser context menu (copy/search/select) on message bubbles for mobile
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+            chatHistory.addEventListener('contextmenu', function(e) {
+                if (e.target.closest('.message-bubble')) {
+                    e.preventDefault();
+                }
+            });
+        }
 
         function showMobileActions(msgId, type) {
             if (!msgId) return;

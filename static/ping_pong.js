@@ -929,24 +929,48 @@
       ctx.fillRect(V_WIDTH / 2 - 1, i + 4, 2, 14);
     }
 
+    const isMirrored = (state.mode === 'online' && state.playerIndex === 1);
+
     // Paddles
-    ctx.fillStyle = state.p1.color;
-    ctx.fillRect(state.p1.x, state.p1.y, state.p1.width, state.p1.height);
+    if (isMirrored) {
+      // Perspective Flip: Local Guest displayed on the LEFT, remote Host on the RIGHT
+      ctx.fillStyle = state.p2.color;
+      ctx.fillRect(state.p1.x, state.p2.y, state.p2.width, state.p2.height);
 
-    ctx.fillStyle = state.p2.color;
-    ctx.fillRect(state.p2.x, state.p2.y, state.p2.width, state.p2.height);
+      ctx.fillStyle = state.p1.color;
+      ctx.fillRect(state.p2.x, state.p1.y, state.p1.width, state.p1.height);
 
-    // Ball
-    ctx.fillStyle = state.ball.color;
-    ctx.beginPath();
-    ctx.arc(state.ball.x, state.ball.y, state.ball.radius, 0, Math.PI * 2);
-    ctx.fill();
+      // Ball mirrored horizontally
+      ctx.fillStyle = state.ball.color;
+      ctx.beginPath();
+      ctx.arc(V_WIDTH - state.ball.x, state.ball.y, state.ball.radius, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Scores
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '700 32px monospace';
-    ctx.fillText(state.p1.score.toString(), V_WIDTH / 4, 52);
-    ctx.fillText(state.p2.score.toString(), (V_WIDTH * 3) / 4 - 20, 52);
+      // Scores: Left is You (P2), Right is Opponent (P1)
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 32px monospace';
+      ctx.fillText(state.p2.score.toString(), V_WIDTH / 4, 52);
+      ctx.fillText(state.p1.score.toString(), (V_WIDTH * 3) / 4 - 20, 52);
+    } else {
+      // Standard Perspective (Solo vs AI, Local 2P, or Host Online)
+      ctx.fillStyle = state.p1.color;
+      ctx.fillRect(state.p1.x, state.p1.y, state.p1.width, state.p1.height);
+
+      ctx.fillStyle = state.p2.color;
+      ctx.fillRect(state.p2.x, state.p2.y, state.p2.width, state.p2.height);
+
+      // Ball
+      ctx.fillStyle = state.ball.color;
+      ctx.beginPath();
+      ctx.arc(state.ball.x, state.ball.y, state.ball.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Scores
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 32px monospace';
+      ctx.fillText(state.p1.score.toString(), V_WIDTH / 4, 52);
+      ctx.fillText(state.p2.score.toString(), (V_WIDTH * 3) / 4 - 20, 52);
+    }
 
     // Rally counter in center top
     if (state.consecutiveVolleys > 1) {
@@ -961,11 +985,11 @@
     if (state.mode === 'online') {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
       ctx.font = '12px sans-serif';
-      const p1Label = state.playerIndex === 0 ? 'You' : state.opponentName;
-      const p2Label = state.playerIndex === 1 ? 'You' : state.opponentName;
-      ctx.fillText(p1Label, 20, V_HEIGHT - 16);
+      const leftLabel = isMirrored ? 'You' : (state.playerIndex === 0 ? 'You' : (state.opponentName || 'Host'));
+      const rightLabel = isMirrored ? (state.opponentName || 'Host') : (state.playerIndex === 1 ? 'You' : (state.opponentName || 'Guest'));
+      ctx.fillText(leftLabel, 20, V_HEIGHT - 16);
       ctx.textAlign = 'right';
-      ctx.fillText(p2Label, V_WIDTH - 20, V_HEIGHT - 16);
+      ctx.fillText(rightLabel, V_WIDTH - 20, V_HEIGHT - 16);
       ctx.textAlign = 'start';
     }
 

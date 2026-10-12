@@ -518,7 +518,8 @@
     lastPingTime: 0,
     // Post-restart: skip position lerping for a few sync frames so stale
     // host data doesn't pull slimes away from their reset positions.
-    syncSnapFrames: 0
+    syncSnapFrames: 0,
+    p2LastHitTime: 0
   };
 
   function applyDifficulty(diff) {
@@ -581,6 +582,7 @@
     GameState.serving = winnerDir;
     GameState.serveState = 'SERVE_COUNTDOWN';
     GameState.delay = 60; // 1.0 second countdown at 60Hz
+    GameState.p2LastHitTime = 0;
 
     // Position slimes cleanly at baseline
     GameState.p1.reset();
@@ -613,9 +615,11 @@
 
     // Delay before serve begins (Serve State Machine)
     if (GameState.serveState === 'SERVE_COUNTDOWN') {
-      GameState.delay--;
-      if (GameState.delay <= 0) {
-        launchServe();
+      if (GameState.mode !== 'online' || GameState.isHost) {
+        GameState.delay--;
+        if (GameState.delay <= 0) {
+          launchServe();
+        }
       }
       return;
     }
@@ -783,7 +787,11 @@
         for (let s = 0; s < SUB_STEPS; s++) {
           GameState.ball.applyGravity(subDt);
           GameState.ball.move(subDt);
-          GameState.ball.bounceSlime(GameState.p2);
+          const p2Hit = GameState.ball.bounceSlime(GameState.p2);
+          if (p2Hit) {
+            GameState.p2LastHitTime = performance.now();
+          }
+          GameState.ball.checkEdges(subDt);
         }
       }
     }
@@ -1145,7 +1153,11 @@
           ball: { x: GameState.ball.x, y: GameState.ball.y, vx: GameState.ball.vx, vy: GameState.ball.vy },
           p1: { x: GameState.p1.x, y: GameState.p1.y, vx: GameState.p1.vx, vy: GameState.p1.vy },
           p2: { x: GameState.p2.x, y: GameState.p2.y, vx: GameState.p2.vx, vy: GameState.p2.vy },
-          scores: [GameState.p1.score, GameState.p2.score]
+          scores: [GameState.p1.score, GameState.p2.score],
+          serveState: GameState.serveState,
+          serving: GameState.serving,
+          delay: GameState.delay,
+          rallyCount: GameState.rallyCount
         });
       } else {
         // Guest sends inputs and coordinates to Host
@@ -1208,32 +1220,72 @@
       GameState.socket.on('slime_host_sync', (data) => {
         if (!GameState.isHost) {
           if (!data || data.room_id !== GameState.roomId || !data.ball || !data.p1 || !Array.isArray(data.scores)) return;
-          // Post-restart snap frames or serve countdown: snap positions cleanly
-          // rather than lerping from stale pre-restart coordinates.
-          if (GameState.syncSnapFrames > 0) {
-            GameState.syncSnapFrames--;
-            GameState.ball.x = Number(data.ball.x) || 0;
+
+          const hostServeState = data.serveState || (data.ball && data.ball.vx === 0 && data.ball.vy === 0 ? 'SERVE_COUNTDOWN' : 'PLAYING');
+
+          if (hostServeState === 'SERVE_COUNTDOWN') {
+            GameState.serveState = 'SERVE_COUNTDOWN';
+            if (data.serving !== undefined) GameState.serving = Number(data.serving) || -1;
+            GameState.delay = Number(data.delay) || 60;
+            // Snap positions cleanly during countdown so ball does not drop, circle, or loop
+            GameState.ball.x = Number(data.ball.x) || (GameState.serving * (REF_W / 4));
             GameState.ball.y = Number(data.ball.y) || 11;
+            GameState.ball.vx = 0;
+            GameState.ball.vy = 0;
             GameState.p1.x = Number(data.p1.x) || (-REF_W / 4);
             GameState.p1.y = Number(data.p1.y) || REF_U;
-          } else if (GameState.serveState === 'SERVE_COUNTDOWN') {
-            GameState.ball.x = Number(data.ball.x) || 0;
-            GameState.ball.y = Number(data.ball.y) || 11;
-            GameState.p1.x = Number(data.p1.x) || (-REF_W / 4);
-            GameState.p1.y = Number(data.p1.y) || REF_U;
+            GameState.p2LastHitTime = 0;
           } else {
-            // Linear interpolation for smooth ball movement
-            GameState.ball.x = GameState.ball.x * 0.2 + (Number(data.ball.x) || 0) * 0.8;
-            GameState.ball.y = GameState.ball.y * 0.2 + (Number(data.ball.y) || 11) * 0.8;
-            GameState.p1.x = GameState.p1.x * 0.3 + (Number(data.p1.x) || (-REF_W / 4)) * 0.7;
-            GameState.p1.y = GameState.p1.y * 0.3 + (Number(data.p1.y) || REF_U) * 0.7;
+            // Host is in 'PLAYING'
+            if (GameState.serveState === 'SERVE_COUNTDOWN') {
+              // Host just launched the serve! Transition and snap initial trajectory
+              GameState.serveState = 'PLAYING';
+              GameState.ball.x = Number(data.ball.x) || 0;
+              GameState.ball.y = Number(data.ball.y) || 11;
+              GameState.ball.vx = Number(data.ball.vx) || 0;
+              GameState.ball.vy = Number(data.ball.vy) || 0;
+              GameState.p1.x = Number(data.p1.x) || (-REF_W / 4);
+              GameState.p1.y = Number(data.p1.y) || REF_U;
+              GameState.p2LastHitTime = 0;
+            } else if (GameState.syncSnapFrames > 0) {
+              GameState.syncSnapFrames--;
+              GameState.ball.x = Number(data.ball.x) || 0;
+              GameState.ball.y = Number(data.ball.y) || 11;
+              GameState.p1.x = Number(data.p1.x) || (-REF_W / 4);
+              GameState.p1.y = Number(data.p1.y) || REF_U;
+              GameState.ball.vx = Number(data.ball.vx) || 0;
+              GameState.ball.vy = Number(data.ball.vy) || 0;
+            } else {
+              // Smooth lerp during active play, guarding against stale pre-hit packets
+              const now = performance.now();
+              const guestRecentlyHit = (now - (GameState.p2LastHitTime || 0) < 260);
+              const hostVx = Number(data.ball.vx) || 0;
+
+              // If Guest recently hit the ball (moving it toward host: vx < 0), but Host's packet
+              // still has the old pre-hit velocity (vx >= 0): do not overwrite Guest's bounce!
+              if (guestRecentlyHit && hostVx >= 0 && GameState.ball.vx < 0) {
+                // Keep guest prediction alive until host registers the hit
+              } else {
+                if (guestRecentlyHit && hostVx < 0) {
+                  GameState.p2LastHitTime = 0; // Host acknowledged the hit!
+                }
+                GameState.ball.x = GameState.ball.x * 0.25 + (Number(data.ball.x) || 0) * 0.75;
+                GameState.ball.y = GameState.ball.y * 0.25 + (Number(data.ball.y) || 11) * 0.75;
+                GameState.ball.vx = hostVx;
+                GameState.ball.vy = Number(data.ball.vy) || 0;
+              }
+              GameState.p1.x = GameState.p1.x * 0.3 + (Number(data.p1.x) || (-REF_W / 4)) * 0.7;
+              GameState.p1.y = GameState.p1.y * 0.3 + (Number(data.p1.y) || REF_U) * 0.7;
+            }
           }
-          GameState.ball.vx = Number(data.ball.vx) || 0;
-          GameState.ball.vy = Number(data.ball.vy) || 0;
+
           GameState.p1.vx = Number(data.p1.vx) || 0;
           GameState.p1.vy = Number(data.p1.vy) || 0;
           GameState.p1.score = Math.max(0, Math.floor(Number(data.scores[0]) || 0));
           GameState.p2.score = Math.max(0, Math.floor(Number(data.scores[1]) || 0));
+          if (data.rallyCount !== undefined) {
+            GameState.rallyCount = Number(data.rallyCount) || 0;
+          }
           // Guest-side match end: the host simulates scoring authoritatively
           // and emits no winner event, so without this the guest would play
           // on forever with a stale streak. Derive the result from the synced
@@ -1499,6 +1551,71 @@
       }
     });
 
+    // Horizontal Move Slider (Thumb drag / touch track)
+    const sliderTrack = document.getElementById('slime-slider-wrapper');
+    const sliderThumb = document.getElementById('slime-slider-thumb');
+    let sliderActivePointerId = null;
+
+    if (sliderTrack && sliderThumb) {
+      function updateSlider(clientX) {
+        const rect = sliderTrack.getBoundingClientRect();
+        const center = rect.left + rect.width / 2;
+        const maxOffset = Math.max(20, (rect.width - 56) / 2);
+        const diff = clientX - center;
+        const clampedDiff = Math.max(-maxOffset, Math.min(maxOffset, diff));
+        const ratio = clampedDiff / maxOffset; // -1.0 to 1.0
+
+        sliderThumb.style.transform = `translateX(${clampedDiff}px)`;
+
+        // Deadzone threshold around 0.16
+        if (ratio < -0.16) {
+          keys.left = true;
+          keys.right = false;
+        } else if (ratio > 0.16) {
+          keys.right = true;
+          keys.left = false;
+        } else {
+          keys.left = false;
+          keys.right = false;
+        }
+      }
+
+      function resetSlider() {
+        sliderActivePointerId = null;
+        sliderThumb.style.transform = 'translateX(0px)';
+        keys.left = false;
+        keys.right = false;
+      }
+
+      sliderTrack.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        sliderActivePointerId = e.pointerId;
+        try { sliderTrack.setPointerCapture(e.pointerId); } catch (_) {}
+        sliderThumb.style.transition = 'none';
+        updateSlider(e.clientX);
+      });
+
+      sliderTrack.addEventListener('pointermove', (e) => {
+        if (sliderActivePointerId === e.pointerId) {
+          e.preventDefault();
+          updateSlider(e.clientX);
+        }
+      });
+
+      const onPointerEnd = (e) => {
+        if (sliderActivePointerId === e.pointerId) {
+          e.preventDefault();
+          try { sliderTrack.releasePointerCapture(e.pointerId); } catch (_) {}
+          sliderThumb.style.transition = 'transform 0.15s ease-out';
+          resetSlider();
+        }
+      };
+
+      sliderTrack.addEventListener('pointerup', onPointerEnd);
+      sliderTrack.addEventListener('pointercancel', onPointerEnd);
+      sliderTrack.addEventListener('lostpointercapture', resetSlider);
+    }
+
     // Touch button handlers
     const btnLeft = document.getElementById('touch-left');
     const btnRight = document.getElementById('touch-right');
@@ -1517,6 +1634,7 @@
     if (btnJump) {
       btnJump.addEventListener('pointerdown', (e) => { e.preventDefault(); keys.up = true; });
       btnJump.addEventListener('pointerup', (e) => { e.preventDefault(); keys.up = false; });
+      btnJump.addEventListener('pointercancel', (e) => { keys.up = false; });
       btnJump.addEventListener('pointerleave', () => { keys.up = false; });
     }
 

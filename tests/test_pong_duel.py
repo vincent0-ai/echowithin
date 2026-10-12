@@ -205,3 +205,43 @@ class TestSlimeRestartEcho:
             h({'room_id': 's1'})
         assert mock_emit.call_count == 1
         assert mock_emit.call_args[1].get('include_self') is False
+
+
+class TestPingPongPerspectiveMirror:
+    def test_ping_pong_guest_perspective_mirror(self):
+        """Verify static/ping_pong.js displays online guest on the left side with mirrored ball coordinates."""
+        import os
+        js_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'ping_pong.js')
+        with open(js_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        assert 'isMirrored' in content
+        assert 'state.mode === \'online\' && state.playerIndex === 1' in content
+        assert 'V_WIDTH - state.ball.x' in content
+        assert 'state.p2.color' in content
+
+
+class TestSlimeVolleyballControlsAndServeSync:
+    def test_slime_volleyball_template_has_slider_and_jump(self):
+        """Verify templates/slime_volleyball.html has movement slider and single jump button."""
+        import os
+        html_path = os.path.join(os.path.dirname(__file__), '..', 'templates', 'slime_volleyball.html')
+        with open(html_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        assert 'id="slime-slider-wrapper"' in content
+        assert 'id="slime-slider-thumb"' in content
+        assert 'id="touch-jump"' in content
+
+    def test_slime_volleyball_js_serve_state_sync_and_slider(self):
+        """Verify static/slime_volleyball.js synchronizes serveState and includes anti-loop hit guard."""
+        import os
+        js_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'slime_volleyball.js')
+        with open(js_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        assert 'serveState: GameState.serveState' in content
+        assert 'p2LastHitTime' in content
+        assert 'slime-slider-wrapper' in content
+        assert 'updateSlider' in content
+

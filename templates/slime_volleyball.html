@@ -46,6 +46,43 @@
     max-width: 580px;
     margin-top: 1rem;
   }
+  .slime-slider-track {
+    position: relative;
+    width: 100%;
+    height: 54px;
+    background: var(--surface-bg, #ffffff);
+    border: 1px solid var(--border-color);
+    border-radius: 27px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    user-select: none;
+    touch-action: none;
+    cursor: ew-resize;
+  }
+  #slime-slider-thumb {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 46px;
+    height: 46px;
+    margin-left: -23px;
+    margin-top: -23px;
+    background: #e06a3b;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 3px 10px rgba(224, 106, 59, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-weight: 800;
+    font-size: 0.9rem;
+    pointer-events: none;
+    touch-action: none;
+    will-change: transform;
+  }
   @media (max-width: 768px) {
     .slime-touch-row {
       display: flex;
@@ -127,6 +164,22 @@
     display: flex !important;
     gap: 16px !important;
     pointer-events: auto !important;
+    align-items: center !important;
+  }
+  .slime-landscape-mode .slime-slider-track {
+    background: rgba(30, 25, 22, 0.75) !important;
+    border: 2px solid rgba(255, 255, 255, 0.45) !important;
+    backdrop-filter: blur(8px) !important;
+    height: 68px !important;
+    width: 220px !important;
+    border-radius: 34px !important;
+    padding: 0 20px !important;
+  }
+  .slime-landscape-mode #slime-slider-thumb {
+    width: 58px !important;
+    height: 58px !important;
+    margin-left: -29px !important;
+    margin-top: -29px !important;
   }
   .slime-landscape-mode .slime-touch-btn {
     background: rgba(30, 25, 22, 0.72) !important;
@@ -137,7 +190,7 @@
     font-weight: 800 !important;
     min-width: 68px !important;
     height: 68px !important;
-    border-radius: 50% !important;
+    border-radius: 34px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -277,18 +330,20 @@
       </div>
     </div>
 
-    <!-- On-Screen Mobile Touch Controls (Adapts to dual-thumb in landscape) -->
+    <!-- On-Screen Mobile Touch Controls (Slider for Left/Right + Single Jump Button) -->
     <div class="slime-touch-row">
-      <div class="slime-touch-left-group" style="display: flex; gap: 0.75rem; flex: 1.5;">
-        <button type="button" id="touch-left" class="ew-btn--outline ew-btn--sm slime-touch-btn" style="flex: 1; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
-          Left
-        </button>
-        <button type="button" id="touch-right" class="ew-btn--outline ew-btn--sm slime-touch-btn" style="flex: 1; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
-          Right
-        </button>
+      <div class="slime-touch-left-group" style="display: flex; flex: 2; align-items: center;">
+        <div id="slime-slider-wrapper" class="slime-slider-track" role="slider" aria-label="Move left or right" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0">
+          <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); pointer-events: none; letter-spacing: 0.3px;">&larr; Left</span>
+          <div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 2px; height: 18px; background: var(--border-color); pointer-events: none; border-radius: 1px;"></div>
+          <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); pointer-events: none; letter-spacing: 0.3px;">Right &rarr;</span>
+          <div id="slime-slider-thumb">
+            &harr;
+          </div>
+        </div>
       </div>
-      <div class="slime-touch-right-group" style="display: flex; flex: 1;">
-        <button type="button" id="touch-jump" class="ew-btn ew-btn--sm slime-touch-btn" style="flex: 1; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px; background: #e06a3b; border-color: #c95729;">
+      <div class="slime-touch-right-group" style="display: flex; flex: 1; align-items: center;">
+        <button type="button" id="touch-jump" class="ew-btn ew-btn--sm slime-touch-btn" style="width: 100%; height: 54px; padding: 0; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.1rem; border-radius: 27px; background: #e06a3b; border-color: #c95729; color: #ffffff; box-shadow: 0 3px 10px rgba(224, 106, 59, 0.3);">
           Jump
         </button>
       </div>
@@ -296,7 +351,7 @@
 
     <!-- Controls Guide -->
     <div style="width: 100%; max-width: 680px; margin-top: 0.8rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.65rem 0.9rem; font-size: 0.8rem; color: var(--text-secondary); text-align: center;">
-      A / D or arrows to move &bull; W, Space or Jump button &bull; Space or Pause button toggles pause
+      Slide to move left/right &bull; Jump button to leap &bull; A / D or arrows &bull; W, Space or Jump &bull; Space or Pause toggles pause
     </div>
 
     {% include "partials/game_reaction_bar.html" %}

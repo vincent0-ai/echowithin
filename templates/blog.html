@@ -302,8 +302,6 @@
             <a class="tab-button {% if feed_tab == 'for_you' %}active{% endif %}"
                 href="{{ url_for('blog.blog', tab='for_you') }}">For You</a>
             {% endif %}
-            <a class="tab-button {% if feed_tab == 'latest' %}active{% endif %}"
-                href="{{ url_for('blog.blog', tab='latest') }}">Latest</a>
             <button class="tab-button" data-tab="active-posts">Most Active</button>
             {% if current_user.is_authenticated %}
             <button class="tab-button" data-tab="my-commented-posts">

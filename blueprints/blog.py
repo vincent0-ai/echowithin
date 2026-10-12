@@ -342,7 +342,9 @@ def blog():
             description=page_description,
         )
     feed_tab = (request.args.get('tab') or 'trending').strip().lower()
-    if feed_tab not in ('trending', 'for_you', 'latest'):
+    if feed_tab == 'latest':
+        feed_tab = 'trending'
+    if feed_tab not in ('trending', 'for_you'):
         feed_tab = 'trending'
     user_for_feed = current_user if (current_user.is_authenticated and not getattr(current_user, 'is_guest', False)) else None
     latest_posts_prepared = get_latest_posts_feed(feed_type=feed_tab, user=user_for_feed)

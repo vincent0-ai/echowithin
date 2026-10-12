@@ -139,14 +139,17 @@ class TestBlogEndpointsAccess:
         assert res.status_code == 200
 
     def test_blog_feed_tabs(self, client):
-        """Verify blog feed tabs (trending, latest, for_you) render successfully."""
+        """Verify the unified blog feed tabs render successfully."""
         res_trend = client.get('/blog?tab=trending')
         assert res_trend.status_code == 200
         assert b'Trending' in res_trend.data
+        assert b'Latest</a>' not in res_trend.data
+        assert b'Most Active' in res_trend.data
 
         res_latest = client.get('/blog?tab=latest')
         assert res_latest.status_code == 200
-        assert b'Latest' in res_latest.data
+        assert b'Trending' in res_latest.data
+        assert b'Latest</a>' not in res_latest.data
 
 
 class TestBlogAlgorithmAndDiversity:

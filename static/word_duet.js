@@ -284,14 +284,14 @@
 
   // --- Core Game Logic ---
 
-  function startNewGame(seed = null) {
+  function startNewGame(seed = null, starter = null) {
     state.seed = (seed !== null) ? seed : Math.floor(Math.random() * 1000000);
     const board = generateBoard(state.seed);
     state.words = board.words;
     state.keycardA = board.keycardA;
     state.keycardB = board.keycardB;
     state.revealed = board.revealed;
-    state.activeGiver = 'A';
+    state.activeGiver = (starter === 'A' || starter === 'B') ? starter : (Math.random() < 0.5 ? 'A' : 'B');
     state.activePhase = 'clue';
     state.currentClue = null;
     state.guessesRemaining = 0;
@@ -472,7 +472,7 @@
       }
 
       if (data.seed !== undefined) {
-        startNewGame(data.seed);
+        startNewGame(data.seed, data.active_giver);
       }
     });
 
@@ -489,7 +489,7 @@
     });
 
     state.socket.on('duet_restarted', (data) => {
-      startNewGame(data.seed);
+      startNewGame(data.seed, data.active_giver);
     });
 
     state.socket.on('duet_partner_left', () => {

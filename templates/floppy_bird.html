@@ -144,9 +144,8 @@
       </div>
 
       <div style="display: flex; justify-content: flex-end; gap: 0.35rem; margin-bottom: 0.6rem;">
-        <button type="button" class="ew-btn ew-btn--sm floppy-lb-period" data-period="weekly" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">This Week</button>
-        <button type="button" class="ew-btn--outline ew-btn--sm floppy-lb-period" data-period="daily" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">Today</button>
-        <button type="button" class="ew-btn--outline ew-btn--sm floppy-lb-period" data-period="all_time" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">All-Time</button>
+        <button type="button" class="ew-btn ew-btn--sm floppy-lb-period" data-period="all_time" style="font-size: 0.7rem; padding: 0.15rem 0.55rem; cursor: pointer;">All-Time</button>
+        <button type="button" class="ew-btn--outline ew-btn--sm floppy-lb-period" data-period="weekly" style="font-size: 0.7rem; padding: 0.15rem 0.55rem; cursor: pointer;">This Week</button>
       </div>
       <div id="floppy-lb-body" style="font-size: 0.85rem; min-height: 70px;">
         <div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Loading standings...</div>
@@ -216,7 +215,7 @@
 
     // Leaderboard logic
     let currentCat = 'campaign_stars';
-    let currentPeriod = 'weekly';
+    let currentPeriod = 'all_time';
     const catButtons = document.querySelectorAll('.floppy-lb-cat');
     const periodButtons = document.querySelectorAll('.floppy-lb-period');
     const lbBody = document.getElementById('floppy-lb-body');

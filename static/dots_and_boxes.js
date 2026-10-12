@@ -865,6 +865,10 @@
 
       if (state.opponentJoined) {
         setMatchStatus(`Match Found! Playing vs ${state.opponentName} (You are ${state.myPlayer === 0 ? 'Amber' : 'Gold'})`, 'found');
+        resetGame();
+        if (data && data.turn !== undefined && data.turn !== null) {
+          state.turn = data.turn;
+        }
       } else {
         setMatchStatus(`Waiting for opponent in room ${state.roomId}...`, 'normal');
       }
@@ -913,7 +917,7 @@
 
     state.socket.on('dnb_restarted', data => {
       resetGame();
-      state.turn = data.turn || 0;
+      state.turn = (data && data.turn !== undefined) ? data.turn : 0;
       updateTurnDisplay();
     });
 
@@ -933,6 +937,10 @@
 
       setMatchStatus(`Match Found! Playing vs ${state.opponentName} (You are ${state.myPlayer === 0 ? 'Amber' : 'Gold'})`, 'found');
       resetGame();
+      if (data && data.turn !== undefined && data.turn !== null) {
+        state.turn = data.turn;
+      }
+      updateTurnDisplay();
     });
 
     state.socket.on('dnb_matchmaking_waiting', () => {

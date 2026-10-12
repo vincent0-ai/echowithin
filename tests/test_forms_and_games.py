@@ -484,7 +484,9 @@ class TestSlimeVolleyball:
                 # Restart event (must exclude the sender: a remote-triggered
                 # restart never re-emits, so an echo would ping-pong forever)
                 restart_handler({'room_id': room_id})
-                mock_emit.assert_called_with('slime_restart', {}, room=room_id, include_self=False)
+                assert mock_emit.call_args[0][0] == 'slime_restart'
+                assert 'serving' in mock_emit.call_args[0][1]
+                assert mock_emit.call_args[1] == {'room': room_id, 'include_self': False}
 
                 # Leave event
                 leave_handler({'room_id': room_id})
@@ -1085,14 +1087,14 @@ class TestArcadeMatchmakingAndLeaderboards:
                 assert m.active_ttt_rooms[room_id]['board'][0] == 'x'
                 assert m.active_ttt_rooms[room_id]['turn'] == 'o'
 
-                # Verify restart alternates starter from 'x' to 'o'
+                # Verify restart chooses starter randomly from 'x' or 'o'
                 restart_handler({'room_id': room_id})
-                assert m.active_ttt_rooms[room_id]['turn'] == 'o'
-                assert m.active_ttt_rooms[room_id]['starter'] == 'o'
-                # Next restart alternates back to 'x'
+                assert m.active_ttt_rooms[room_id]['turn'] in ('x', 'o')
+                assert m.active_ttt_rooms[room_id]['starter'] in ('x', 'o')
+                # Next restart also selects valid starter
                 restart_handler({'room_id': room_id})
-                assert m.active_ttt_rooms[room_id]['turn'] == 'x'
-                assert m.active_ttt_rooms[room_id]['starter'] == 'x'
+                assert m.active_ttt_rooms[room_id]['turn'] in ('x', 'o')
+                assert m.active_ttt_rooms[room_id]['starter'] in ('x', 'o')
 
                 # Host leaves
                 leave_handler({'room_id': room_id})
@@ -1134,11 +1136,13 @@ class TestArcadeMatchmakingAndLeaderboards:
                 assert m.active_c4_rooms[room_id]['board'][5][3] == 0
                 assert m.active_c4_rooms[room_id]['turn'] == 1
 
-                # Verify restart alternates starter from 0 to 1
+                # Verify restart chooses starter randomly from 0 or 1
                 restart_c4_handler({'room_id': room_id})
-                assert m.active_c4_rooms[room_id]['turn'] == 1
+                assert m.active_c4_rooms[room_id]['turn'] in (0, 1)
+                assert m.active_c4_rooms[room_id]['starter'] in (0, 1)
                 restart_c4_handler({'room_id': room_id})
-                assert m.active_c4_rooms[room_id]['turn'] == 0
+                assert m.active_c4_rooms[room_id]['turn'] in (0, 1)
+                assert m.active_c4_rooms[room_id]['starter'] in (0, 1)
 
                 # Host leaves
                 leave_handler({'room_id': room_id})

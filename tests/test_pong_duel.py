@@ -288,3 +288,121 @@ class TestLobbyCleanupAndNoComingBack:
             assert mock_conf.update_many.called
             assert mock_conf.delete_many.called
 
+
+class TestMultiplayerHostSettingsAndRandomFirstMover:
+    def test_pong_target_update_host_only(self, pong_state):
+        m = pong_state
+        handlers = _handlers()
+        h_target = handlers['handle_pong_target_update']
+        m.active_pong_rooms['room_target_test'] = {
+            'host_sid': 'sid_host',
+            'guest_sid': 'sid_guest',
+            'target': 3,
+            'scores': [0, 0]
+        }
+
+        # Guest attempts to change target -> rejected
+        _, mock_emit_guest, _, _ = _as_sid(
+            m, 'sid_guest', h_target, {'room_id': 'room_target_test', 'target': 7}
+        )
+        assert m.active_pong_rooms['room_target_test']['target'] == 3
+        err_calls = [c for c in mock_emit_guest.call_args_list if c[0][0] == 'pong_room_error']
+        assert len(err_calls) == 1
+        assert any(c[0][0] == 'pong_target_updated' for c in mock_emit_guest.call_args_list) is False
+
+        # Host changes target -> accepted and broadcast
+        _, mock_emit_host, _, _ = _as_sid(
+            m, 'sid_host', h_target, {'room_id': 'room_target_test', 'target': 7}
+        )
+        assert m.active_pong_rooms['room_target_test']['target'] == 7
+        assert mock_emit_host.call_count == 1
+        args, kwargs = mock_emit_host.call_args
+        assert args[0] == 'pong_target_updated'
+        assert args[1]['target'] == 7
+
+    def test_crossword_restart_host_only(self, pong_state):
+        m = pong_state
+        handlers = _handlers()
+        h_restart = handlers['handle_crossword_restart']
+        m.active_crossword_rooms['room_xword_test'] = {
+            'host_sid': 'sid_host',
+            'guest_sid': 'sid_guest',
+            'puzzle_idx': 0,
+            'grid': [''] * 25
+        }
+
+        # Guest attempts to change puzzle -> rejected
+        _, mock_emit_guest, _, _ = _as_sid(
+            m, 'sid_guest', h_restart, {'room_id': 'room_xword_test', 'puzzle_idx': 3}
+        )
+        assert m.active_crossword_rooms['room_xword_test']['puzzle_idx'] == 0
+        assert mock_emit_guest.call_count == 0
+
+        # Host changes puzzle -> accepted and broadcast
+        _, mock_emit_host, _, _ = _as_sid(
+            m, 'sid_host', h_restart, {'room_id': 'room_xword_test', 'puzzle_idx': 3}
+        )
+        assert m.active_crossword_rooms['room_xword_test']['puzzle_idx'] == 3
+        assert mock_emit_host.call_count == 1
+        args, kwargs = mock_emit_host.call_args
+        assert args[0] == 'crossword_restarted'
+        assert args[1]['puzzle_idx'] == 3
+        m.active_crossword_rooms.pop('room_xword_test', None)
+
+    def test_random_first_mover_across_games(self, pong_state):
+        m = pong_state
+        handlers = _handlers()
+
+        # 1. Ping Pong join & restart
+        h_pong_join = handlers['handle_join_pong_room']
+        h_pong_restart = handlers['handle_pong_restart']
+        _as_sid(m, 'sid_h', h_pong_join, {'room_id': 'r_pong_rnd'})
+        _, emit_join, _, _ = _as_sid(m, 'sid_g', h_pong_join, {'room_id': 'r_pong_rnd'})
+        join_payload = [c[0][1] for c in emit_join.call_args_list if c[0][0] == 'pong_room_joined'][0]
+        assert join_payload['serving_player'] in (0, 1)
+
+        _, emit_restart, _, _ = _as_sid(m, 'sid_h', h_pong_restart, {'room_id': 'r_pong_rnd'})
+        restart_payload = [c[0][1] for c in emit_restart.call_args_list if c[0][0] == 'pong_restart'][0]
+        assert restart_payload['serving_player'] in (0, 1)
+
+        # 2. Slime Volleyball join & restart
+        h_slime_join = handlers['handle_join_slime_room']
+        h_slime_restart = handlers['handle_slime_restart']
+        _as_sid(m, 'sid_sh', h_slime_join, {'room_id': 'r_slime_rnd'})
+        _, emit_slime_join, _, _ = _as_sid(m, 'sid_sg', h_slime_join, {'room_id': 'r_slime_rnd'})
+        s_join_payload = [c[0][1] for c in emit_slime_join.call_args_list if c[0][0] == 'slime_room_joined'][0]
+        assert s_join_payload['serving'] in (-1, 1)
+
+        _, emit_slime_restart, _, _ = _as_sid(m, 'sid_sh', h_slime_restart, {'room_id': 'r_slime_rnd'})
+        s_restart_payload = [c[0][1] for c in emit_slime_restart.call_args_list if c[0][0] == 'slime_restart'][0]
+        assert s_restart_payload['serving'] in (-1, 1)
+
+        # 3. Tic-Tac-Toe join
+        h_ttt_join = handlers['handle_join_ttt_room']
+        _as_sid(m, 'sid_th', h_ttt_join, {'room_id': 'r_ttt_rnd'})
+        _, emit_ttt_join, _, _ = _as_sid(m, 'sid_tg', h_ttt_join, {'room_id': 'r_ttt_rnd'})
+        ttt_payload = [c[0][1] for c in emit_ttt_join.call_args_list if c[0][0] == 'ttt_room_joined'][0]
+        assert ttt_payload['turn'] in ('x', 'o')
+
+        # 4. Connect Four join
+        h_c4_join = handlers['handle_join_c4_room']
+        _as_sid(m, 'sid_c4h', h_c4_join, {'room_id': 'r_c4_rnd'})
+        _, emit_c4_join, _, _ = _as_sid(m, 'sid_c4g', h_c4_join, {'room_id': 'r_c4_rnd'})
+        c4_payload = [c[0][1] for c in emit_c4_join.call_args_list if c[0][0] == 'c4_room_joined'][0]
+        assert c4_payload['turn'] in (0, 1)
+
+        # 5. Dots and Boxes join
+        h_dnb_join = handlers['handle_join_dnb_room']
+        _as_sid(m, 'sid_dnbh', h_dnb_join, {'room_id': 'r_dnb_rnd'})
+        _, emit_dnb_join, _, _ = _as_sid(m, 'sid_dnbg', h_dnb_join, {'room_id': 'r_dnb_rnd'})
+        dnb_payload = [c[0][1] for c in emit_dnb_join.call_args_list if c[0][0] == 'dnb_room_joined'][0]
+        assert dnb_payload['turn'] in (0, 1)
+
+        # 6. Word Duet join
+        h_duet_join = handlers['handle_join_duet_room']
+        _as_sid(m, 'sid_dh', h_duet_join, {'room_id': 'r_duet_rnd'})
+        _, emit_duet_join, _, _ = _as_sid(m, 'sid_dg', h_duet_join, {'room_id': 'r_duet_rnd'})
+        duet_payload = [c[0][1] for c in emit_duet_join.call_args_list if c[0][0] == 'duet_room_joined'][0]
+        assert duet_payload['active_giver'] in ('A', 'B')
+
+

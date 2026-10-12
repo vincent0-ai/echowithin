@@ -326,7 +326,45 @@
     state.ball.vy = BASE_SPEED * Math.sin(angle);
   }
 
-  function resetGame() {
+  function updateTargetScoreUI(target) {
+    const label = (target === null || target === undefined || target === 'endless' || target === Infinity)
+      ? 'Endless Rally'
+      : `${target}`;
+    const badge = document.getElementById('target-score-client-badge');
+    if (badge) {
+      badge.textContent = label;
+    }
+    const btns = document.querySelectorAll('.pong-target-btn');
+    btns.forEach(btn => {
+      const bTarget = btn.dataset.target;
+      const match = (target === null || target === 'endless' || target === Infinity)
+        ? (bTarget === 'endless')
+        : (String(bTarget) === String(target));
+      btn.className = match
+        ? 'ew-btn ew-btn--sm pong-target-btn'
+        : 'ew-btn--outline ew-btn--sm pong-target-btn';
+    });
+  }
+
+  function setOnlineTargetScoreVisibility(isHost, target) {
+    const panel = document.getElementById('target-score-panel');
+    const summary = document.getElementById('target-score-client-summary');
+    if (state.mode === 'online') {
+      if (isHost) {
+        if (panel) panel.style.display = 'flex';
+        if (summary) summary.style.display = 'none';
+      } else {
+        if (panel) panel.style.display = 'none';
+        if (summary) summary.style.display = 'flex';
+        updateTargetScoreUI(target);
+      }
+    } else {
+      if (panel) panel.style.display = 'flex';
+      if (summary) summary.style.display = 'none';
+    }
+  }
+
+  function resetGame(servingPlayer = null) {
     state.p1.score = 0;
     state.p2.score = 0;
     state.p1.y = V_HEIGHT / 2 - PADDLE_H / 2;
@@ -336,7 +374,11 @@
     state.consecutiveVolleys = 0;
     state.maxMatchVolleys = 0;
     state.isGameOver = false;
-    resetBall(Math.random() > 0.5);
+    if (servingPlayer !== null && servingPlayer !== undefined) {
+      resetBall(servingPlayer === 1);
+    } else {
+      resetBall(Math.random() > 0.5);
+    }
 
     const banner = document.getElementById('game-over-banner');
     if (banner) banner.style.display = 'none';
@@ -1085,6 +1127,7 @@
           statusEl.style.color = '#e06a3b';
         }
       }
+      setOnlineTargetScoreVisibility(data.is_host, state.roomTarget);
       if (data.rejoined && Array.isArray(data.scores)) {
         // Reclaiming our seat after a drop: adopt the live server scores,
         // never reset to a default — a default must never become a result.
@@ -1094,7 +1137,7 @@
         const banner = document.getElementById('game-over-banner');
         if (banner) banner.style.display = 'none';
       } else {
-        resetGame();
+        resetGame(data.serving_player);
       }
       if (hasOpponent) {
         state.isPaused = false;
@@ -1171,14 +1214,22 @@
       }
     });
 
-    state.socket.on('pong_restart', () => {
+    state.socket.on('pong_restart', (data) => {
       clearNoContestTimer();
       setRematchVisible(true);
       state.isPaused = false;
       if (typeof window.__updatePongPauseBtn === 'function') {
         window.__updatePongPauseBtn(false);
       }
-      resetGame();
+      const serving = (data && data.serving_player !== undefined) ? data.serving_player : null;
+      resetGame(serving);
+    });
+
+    state.socket.on('pong_target_updated', (data) => {
+      if (!data) return;
+      const t = (typeof data.target === 'number' && data.target > 0) ? data.target : null;
+      state.roomTarget = t;
+      updateTargetScoreUI(t);
     });
 
     state.socket.on('pong_match_found', (data) => {
@@ -1215,7 +1266,8 @@
       if (typeof window.__updatePongPauseBtn === 'function') {
         window.__updatePongPauseBtn(false);
       }
-      resetGame();
+      setOnlineTargetScoreVisibility(data.is_host, state.roomTarget);
+      resetGame(data.serving_player);
     });
 
     state.socket.on('pong_matchmaking_waiting', (data) => {
@@ -1410,6 +1462,7 @@
       if (mode === 'online') initSocket();
       clearNoContestTimer();
       setRematchVisible(true);
+      setOnlineTargetScoreVisibility(mode === 'online' ? state.isHost : true, state.roomTarget);
       if (mode === 'online' && state.roomId && (state.hasGuest || !state.isHost)) {
         updateStatsUI();
         return;
@@ -1430,6 +1483,12 @@
     getDifficulty: () => state.difficulty,
     setTargetScore: (target) => {
       state.targetScore = target === 'endless' ? Infinity : parseInt(target, 10);
+      if (state.mode === 'online' && state.isHost && state.roomId && state.socket) {
+        state.socket.emit('pong_target_update', {
+          room_id: state.roomId,
+          target: target === 'endless' ? null : parseInt(target, 10)
+        });
+      }
       resetGame();
     },
     togglePause: () => {

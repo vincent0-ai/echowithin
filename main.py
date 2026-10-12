@@ -2270,20 +2270,24 @@ def handle_join_slime_room(data=None, *args, **kwargs):
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
         room_info['guest_user_id'] = user_uid
+        serving = secrets.choice([-1, 1])
+        room_info['serving'] = serving
         active_slime_rooms[room_id] = room_info
         # Notify Guest
         emit('slime_room_joined', {
             'room_id': room_id,
             'is_host': False,
             'host_name': room_info['host_name'],
-            'guest_name': user_name
+            'guest_name': user_name,
+            'serving': serving
         }, room=sid)
         # Notify Host that opponent joined
         emit('slime_room_joined', {
             'room_id': room_id,
             'is_host': True,
             'host_name': room_info['host_name'],
-            'guest_name': user_name
+            'guest_name': user_name,
+            'serving': serving
         }, room=room_info['host_sid'])
 
 @socketio.on('leave_slime_room')
@@ -2327,7 +2331,11 @@ def handle_slime_restart(data=None, *args, **kwargs):
     room_id = data.get('room_id')
     if not room_id:
         return
-    emit('slime_restart', {}, room=room_id, include_self=False)
+    room_info = active_slime_rooms.get(room_id)
+    serving = secrets.choice([-1, 1])
+    if room_info:
+        room_info['serving'] = serving
+    emit('slime_restart', {'serving': serving}, room=room_id, include_self=False)
 
 @socketio.on('slime_match_end')
 def handle_slime_match_end(data=None, *args, **kwargs):
@@ -2379,13 +2387,15 @@ def handle_find_slime_match(data=None, *args, **kwargs):
         room_id = f"duel_{secrets.token_hex(4)}"
 
         user_id = str(current_user.id) if current_user.is_authenticated else None
+        serving = secrets.choice([-1, 1])
         active_slime_rooms[room_id] = {
             'host_sid': opponent['sid'],
             'host_name': opponent['user_name'],
             'host_user_id': opponent.get('user_id'),
             'guest_sid': sid,
             'guest_name': user_name,
-            'guest_user_id': user_id
+            'guest_user_id': user_id,
+            'serving': serving
         }
 
         # Automatically join both sockets into the room
@@ -2400,7 +2410,8 @@ def handle_find_slime_match(data=None, *args, **kwargs):
             'room_id': room_id,
             'is_host': True,
             'host_name': opponent['user_name'],
-            'guest_name': user_name
+            'guest_name': user_name,
+            'serving': serving
         }, room=opponent['sid'])
 
         # Notify joining guest
@@ -2408,7 +2419,8 @@ def handle_find_slime_match(data=None, *args, **kwargs):
             'room_id': room_id,
             'is_host': False,
             'host_name': opponent['user_name'],
-            'guest_name': user_name
+            'guest_name': user_name,
+            'serving': serving
         }, room=sid)
 
         broadcast_matchmaking_queue(slime_matchmaking_queue, 'slime_queue_updated')
@@ -2463,6 +2475,7 @@ def _pong_joined_payload(room_id, room_info, is_host):
         'player': 0 if is_host else 1,
         'scores': list(room_info.get('scores', [0, 0])),
         'target': room_info.get('target'),
+        'serving_player': room_info.get('serving_player', 0),
         'rejoined': False,
     }
 
@@ -2494,6 +2507,7 @@ def handle_join_pong_room(data=None, *args, **kwargs):
             'guest_user_id': None,
             'scores': [0, 0],
             'target': None,
+            'serving_player': 0,
             'created_at': datetime.datetime.now(datetime.timezone.utc),
             'bond_id': payload.get('bond_id'),
             'tournament_id': payload.get('tournament_id'),
@@ -2508,9 +2522,11 @@ def handle_join_pong_room(data=None, *args, **kwargs):
         # Room is full: once a player leaves or room is full, no rejoining allowed
         emit('pong_room_error', {'message': 'Room is already full.'}, room=sid)
     else:
+        serving_player = secrets.choice([0, 1])
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
         room_info['guest_user_id'] = user_uid
+        room_info['serving_player'] = serving_player
         active_pong_rooms[room_id] = room_info
 
         emit('pong_room_joined', _pong_joined_payload(room_id, room_info, False), room=sid)
@@ -2612,9 +2628,34 @@ def handle_pong_restart(data=None, *args, **kwargs):
     if not room_id:
         return
     room_info = active_pong_rooms.get(room_id)
+    serving_player = secrets.choice([0, 1])
     if room_info:
         room_info['scores'] = [0, 0]
-    emit('pong_restart', {}, room=room_id, include_self=False)
+        room_info['serving_player'] = serving_player
+    emit('pong_restart', {'serving_player': serving_player}, room=room_id)
+
+@socketio.on('pong_target_update')
+def handle_pong_target_update(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    room_info = active_pong_rooms.get(room_id)
+    if not room_info:
+        return
+    if request.sid != room_info.get('host_sid'):
+        emit('pong_room_error', {'message': 'Only the host can modify match settings.'}, room=request.sid)
+        return
+    raw_target = data.get('target')
+    try:
+        target = int(raw_target) if raw_target is not None and str(raw_target).isdigit() else None
+        if target is not None and (target <= 0 or target > 99):
+            target = None
+    except (TypeError, ValueError):
+        target = None
+    room_info['target'] = target
+    emit('pong_target_updated', {'target': target}, room=room_id)
 
 @socketio.on('find_pong_match')
 def handle_find_pong_match(data=None, *args, **kwargs):
@@ -2640,6 +2681,7 @@ def handle_find_pong_match(data=None, *args, **kwargs):
 
         # Shared first-to-N comes from the host (queued opponent) so both
         # clients validate the winner against the same actually-reached score.
+        serving_player = secrets.choice([0, 1])
         room_target = opponent.get('target')
         user_id = str(current_user.id) if current_user.is_authenticated else None
         active_pong_rooms[room_id] = {
@@ -2651,6 +2693,7 @@ def handle_find_pong_match(data=None, *args, **kwargs):
             'guest_user_id': user_id,
             'scores': [0, 0],
             'target': room_target,
+            'serving_player': serving_player,
             'disconnected_at': None,
             'disconnected_side': None,
             'just_rejoined': False,
@@ -2669,6 +2712,7 @@ def handle_find_pong_match(data=None, *args, **kwargs):
             'guest_name': user_name,
             'player': 0,
             'target': room_target,
+            'serving_player': serving_player,
         }, room=opponent['sid'])
 
         emit('pong_match_found', {
@@ -2678,6 +2722,7 @@ def handle_find_pong_match(data=None, *args, **kwargs):
             'guest_name': user_name,
             'player': 1,
             'target': room_target,
+            'serving_player': serving_player,
         }, room=sid)
 
         broadcast_matchmaking_queue(pong_matchmaking_queue, 'pong_queue_updated')
@@ -2759,9 +2804,12 @@ def handle_join_ttt_room(data=None, *args, **kwargs):
             'turn': 'x'
         }, room=sid)
     else:
+        starter = secrets.choice(['x', 'o'])
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
         room_info['guest_user_id'] = user_uid
+        room_info['starter'] = starter
+        room_info['turn'] = starter
         active_ttt_rooms[room_id] = room_info
 
         emit('ttt_room_joined', {
@@ -2770,7 +2818,7 @@ def handle_join_ttt_room(data=None, *args, **kwargs):
             'host_name': room_info['host_name'],
             'guest_name': user_name,
             'symbol': 'o',
-            'turn': room_info.get('turn', 'x')
+            'turn': starter
         }, room=sid)
         emit('ttt_room_joined', {
             'room_id': room_id,
@@ -2778,7 +2826,7 @@ def handle_join_ttt_room(data=None, *args, **kwargs):
             'host_name': room_info['host_name'],
             'guest_name': user_name,
             'symbol': 'x',
-            'turn': room_info.get('turn', 'x')
+            'turn': starter
         }, room=room_info['host_sid'])
 
 @socketio.on('leave_ttt_room')
@@ -2880,8 +2928,7 @@ def handle_ttt_restart(data=None, *args, **kwargs):
     if not room_info:
         return
     room_info['board'] = [''] * 9
-    last_starter = room_info.get('starter', 'x')
-    next_starter = 'o' if last_starter == 'x' else 'x'
+    next_starter = secrets.choice(['x', 'o'])
     room_info['starter'] = next_starter
     room_info['turn'] = next_starter
     emit('ttt_restarted', {'turn': next_starter}, room=room_id)
@@ -2905,6 +2952,7 @@ def handle_find_ttt_match(data=None, *args, **kwargs):
         user_id = str(current_user.id) if current_user.is_authenticated else None
         p1_uid = user_id if swap else opponent.get('user_id')
         p2_uid = opponent.get('user_id') if swap else user_id
+        starter = secrets.choice(['x', 'o'])
         active_ttt_rooms[room_id] = {
             'host_sid': p1_sid,
             'host_name': p1_name,
@@ -2913,8 +2961,8 @@ def handle_find_ttt_match(data=None, *args, **kwargs):
             'guest_name': p2_name,
             'guest_user_id': p2_uid,
             'board': [''] * 9,
-            'starter': 'x',
-            'turn': 'x',
+            'starter': starter,
+            'turn': starter,
             'scores': {'x': 0, 'o': 0, 'ties': 0}
         }
 
@@ -2930,7 +2978,7 @@ def handle_find_ttt_match(data=None, *args, **kwargs):
             'host_name': p1_name,
             'guest_name': p2_name,
             'symbol': 'x',
-            'turn': 'x'
+            'turn': starter
         }, room=p1_sid)
 
         emit('ttt_match_found', {
@@ -2939,7 +2987,7 @@ def handle_find_ttt_match(data=None, *args, **kwargs):
             'host_name': p1_name,
             'guest_name': p2_name,
             'symbol': 'o',
-            'turn': 'x'
+            'turn': starter
         }, room=p2_sid)
     else:
         ttt_matchmaking_queue.append({
@@ -3035,9 +3083,12 @@ def handle_join_c4_room(data=None, *args, **kwargs):
     elif room_info.get('guest_sid') is not None:
         emit('c4_room_error', {'message': 'Room is already full.'}, room=sid)
     else:
+        starter = secrets.choice([0, 1])
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
         room_info['guest_user_id'] = user_uid
+        room_info['starter'] = starter
+        room_info['turn'] = starter
         active_c4_rooms[room_id] = room_info
 
         emit('c4_room_joined', {
@@ -3045,14 +3096,16 @@ def handle_join_c4_room(data=None, *args, **kwargs):
             'is_host': False,
             'host_name': room_info['host_name'],
             'guest_name': user_name,
-            'player': 1
+            'player': 1,
+            'turn': starter
         }, room=sid)
         emit('c4_room_joined', {
             'room_id': room_id,
             'is_host': True,
             'host_name': room_info['host_name'],
             'guest_name': user_name,
-            'player': 0
+            'player': 0,
+            'turn': starter
         }, room=room_info['host_sid'])
 
 @socketio.on('leave_c4_room')
@@ -3160,8 +3213,7 @@ def handle_c4_restart(data=None, *args, **kwargs):
     if not room_info:
         return
     room_info['board'] = [[-1] * C4_COLS for _ in range(C4_ROWS)]
-    last_starter = room_info.get('starter', 0)
-    next_starter = 1 - last_starter
+    next_starter = secrets.choice([0, 1])
     room_info['starter'] = next_starter
     room_info['turn'] = next_starter
     emit('c4_restarted', {'turn': next_starter}, room=room_id)
@@ -3182,6 +3234,7 @@ def handle_find_c4_match(data=None, *args, **kwargs):
         opponent = c4_matchmaking_queue.pop(0)
         room_id = f"c4_{secrets.token_hex(4)}"
 
+        starter = secrets.choice([0, 1])
         user_id = str(current_user.id) if current_user.is_authenticated else None
         active_c4_rooms[room_id] = {
             'host_sid': opponent['sid'],
@@ -3191,7 +3244,8 @@ def handle_find_c4_match(data=None, *args, **kwargs):
             'guest_name': user_name,
             'guest_user_id': user_id,
             'board': [[-1] * C4_COLS for _ in range(C4_ROWS)],
-            'turn': 0,
+            'starter': starter,
+            'turn': starter,
             'scores': [0, 0, 0]
         }
 
@@ -3206,7 +3260,8 @@ def handle_find_c4_match(data=None, *args, **kwargs):
             'is_host': True,
             'host_name': opponent['user_name'],
             'guest_name': user_name,
-            'player': 0
+            'player': 0,
+            'turn': starter
         }, room=opponent['sid'])
 
         emit('c4_match_found', {
@@ -3214,7 +3269,8 @@ def handle_find_c4_match(data=None, *args, **kwargs):
             'is_host': False,
             'host_name': opponent['user_name'],
             'guest_name': user_name,
-            'player': 1
+            'player': 1,
+            'turn': starter
         }, room=sid)
 
         broadcast_matchmaking_queue(c4_matchmaking_queue, 'c4_queue_updated')
@@ -3312,9 +3368,12 @@ def handle_join_dnb_room(data=None, *args, **kwargs):
     elif room_info.get('guest_sid') is not None:
         emit('dnb_room_error', {'message': 'Room is already full.'}, room=sid)
     else:
+        starter = secrets.choice([0, 1])
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
         room_info['guest_user_id'] = user_uid
+        room_info['starter'] = starter
+        room_info['turn'] = starter
         active_dnb_rooms[room_id] = room_info
 
         emit('dnb_room_joined', {
@@ -3322,14 +3381,16 @@ def handle_join_dnb_room(data=None, *args, **kwargs):
             'is_host': False,
             'host_name': room_info['host_name'],
             'guest_name': user_name,
-            'player': 1
+            'player': 1,
+            'turn': starter
         }, room=sid)
         emit('dnb_room_joined', {
             'room_id': room_id,
             'is_host': True,
             'host_name': room_info['host_name'],
             'guest_name': user_name,
-            'player': 0
+            'player': 0,
+            'turn': starter
         }, room=room_info['host_sid'])
 
 @socketio.on('leave_dnb_room')
@@ -3479,9 +3540,11 @@ def handle_dnb_restart(data=None, *args, **kwargs):
     room_info['h_edges'] = [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS)]
     room_info['v_edges'] = [[None] * DNB_COLS for _ in range(DNB_ROWS - 1)]
     room_info['boxes'] = [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS - 1)]
-    room_info['turn'] = 0
+    next_starter = secrets.choice([0, 1])
+    room_info['starter'] = next_starter
+    room_info['turn'] = next_starter
     room_info['scores'] = [0, 0]
-    emit('dnb_restarted', {'turn': 0}, room=room_id)
+    emit('dnb_restarted', {'turn': next_starter}, room=room_id)
 
 @socketio.on('find_dnb_match')
 def handle_find_dnb_match(data=None, *args, **kwargs):
@@ -3499,6 +3562,7 @@ def handle_find_dnb_match(data=None, *args, **kwargs):
         opponent = dnb_matchmaking_queue.pop(0)
         room_id = f"dnb_{secrets.token_hex(4)}"
 
+        starter = secrets.choice([0, 1])
         user_id = str(current_user.id) if current_user.is_authenticated else None
         active_dnb_rooms[room_id] = {
             'host_sid': opponent['sid'],
@@ -3510,7 +3574,8 @@ def handle_find_dnb_match(data=None, *args, **kwargs):
             'h_edges': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS)],
             'v_edges': [[None] * DNB_COLS for _ in range(DNB_ROWS - 1)],
             'boxes': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS - 1)],
-            'turn': 0,
+            'starter': starter,
+            'turn': starter,
             'scores': [0, 0]
         }
 
@@ -3525,7 +3590,8 @@ def handle_find_dnb_match(data=None, *args, **kwargs):
             'is_host': True,
             'host_name': opponent['user_name'],
             'guest_name': user_name,
-            'player': 0
+            'player': 0,
+            'turn': starter
         }, room=opponent['sid'])
 
         emit('dnb_match_found', {
@@ -3533,7 +3599,8 @@ def handle_find_dnb_match(data=None, *args, **kwargs):
             'is_host': False,
             'host_name': opponent['user_name'],
             'guest_name': user_name,
-            'player': 1
+            'player': 1,
+            'turn': starter
         }, room=sid)
 
         broadcast_matchmaking_queue(dnb_matchmaking_queue, 'dnb_queue_updated')
@@ -3592,14 +3659,17 @@ def handle_join_duet_room(data=None, *args, **kwargs):
             'partner_name': None
         }, room=sid)
     else:
+        active_giver = secrets.choice(['A', 'B'])
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
+        room_info['active_giver'] = active_giver
         active_duet_rooms[room_id] = room_info
         emit('duet_room_joined', {
             'room_id': room_id,
             'is_host': False,
             'side': 'B',
             'seed': room_info['seed'],
+            'active_giver': active_giver,
             'partner_name': room_info['host_name']
         }, room=sid)
         if room_info.get('host_sid'):
@@ -3608,6 +3678,7 @@ def handle_join_duet_room(data=None, *args, **kwargs):
                 'is_host': True,
                 'side': 'A',
                 'seed': room_info['seed'],
+                'active_giver': active_giver,
                 'partner_name': user_name
             }, room=room_info['host_sid'])
 
@@ -3644,10 +3715,12 @@ def handle_duet_restart(data=None, *args, **kwargs):
         return
     room_id = data.get('room_id')
     seed = int(data.get('seed', secrets.randbelow(1000000)))
+    active_giver = secrets.choice(['A', 'B'])
     if room_id in active_duet_rooms:
         active_duet_rooms[room_id]['seed'] = seed
+        active_duet_rooms[room_id]['active_giver'] = active_giver
     if room_id:
-        emit('duet_restarted', {'seed': seed}, room=room_id)
+        emit('duet_restarted', {'seed': seed, 'active_giver': active_giver}, room=room_id)
 
 @socketio.on('leave_duet_room')
 def handle_leave_duet_room(data=None, *args, **kwargs):
@@ -3730,13 +3803,21 @@ def handle_emoji_start_round(data=None, *args, **kwargs):
         return
     room_id = data.get('room') or data.get('room_id')
     if room_id:
+        room_info = active_emoji_rooms.get(room_id)
+        current_round = int(data.get('round', 1))
+        if room_info:
+            if current_round == 1 or 'p1_starts' not in room_info:
+                room_info['p1_starts'] = secrets.choice([True, False])
+            giver_is_p1 = room_info['p1_starts'] if (current_round % 2 != 0) else (not room_info['p1_starts'])
+        else:
+            giver_is_p1 = data.get('giver_is_p1', True)
         emit('emoji_round_started', {
-            'round': data.get('round', 1),
+            'round': current_round,
             'word': data.get('word', ''),
             'category_label': data.get('category_label', ''),
             'hint': data.get('hint', ''),
             'suggested_emojis': data.get('suggested_emojis', []),
-            'giver_is_p1': data.get('giver_is_p1', True)
+            'giver_is_p1': giver_is_p1
         }, room=room_id)
 
 @socketio.on('emoji_submit_clue')
@@ -3875,11 +3956,14 @@ def handle_crossword_restart(data=None, *args, **kwargs):
         return
     room_id = data.get('room_id')
     p_idx = int(data.get('puzzle_idx', 0))
-    if room_id in active_crossword_rooms:
-        active_crossword_rooms[room_id]['puzzle_idx'] = p_idx
-        active_crossword_rooms[room_id]['grid'] = [''] * 25
-    if room_id:
-        emit('crossword_restarted', {'puzzle_idx': p_idx}, room=room_id)
+    room_info = active_crossword_rooms.get(room_id)
+    if not room_info:
+        return
+    if room_info.get('guest_sid') and room_info.get('host_sid') != request.sid:
+        return
+    room_info['puzzle_idx'] = p_idx
+    room_info['grid'] = [''] * 25
+    emit('crossword_restarted', {'puzzle_idx': p_idx}, room=room_id)
 
 @socketio.on('crossword_solved')
 def handle_crossword_solved(data=None, *args, **kwargs):
@@ -3949,21 +4033,23 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
         room_id = f"duel_{secrets.token_hex(4)}"
         c_uid = challenger.get('user_id') if challenger else None
         user_uid = str(current_user.id) if current_user.is_authenticated else None
+        serving = secrets.choice([-1, 1])
         active_slime_rooms[room_id] = {
             'host_sid': challenger_sid,
             'host_name': c_name,
             'host_user_id': c_uid,
             'guest_sid': sid,
             'guest_name': user_name,
-            'guest_user_id': user_uid
+            'guest_user_id': user_uid,
+            'serving': serving
         }
         try:
             join_room(room_id, sid=challenger_sid)
             join_room(room_id, sid=sid)
         except Exception:
             pass
-        emit('slime_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name}, room=challenger_sid)
-        emit('slime_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name}, room=sid)
+        emit('slime_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'serving': serving}, room=challenger_sid)
+        emit('slime_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'serving': serving}, room=sid)
         broadcast_matchmaking_queue(slime_matchmaking_queue, 'slime_queue_updated')
 
     elif game == 'pong':
@@ -3975,6 +4061,7 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
         challenge_target = (challenger or {}).get('target')
         c_uid = challenger.get('user_id') if challenger else None
         user_uid = str(current_user.id) if current_user.is_authenticated else None
+        serving_player = secrets.choice([0, 1])
         active_pong_rooms[room_id] = {
             'host_sid': challenger_sid,
             'host_name': c_name,
@@ -3984,6 +4071,7 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
             'guest_user_id': user_uid,
             'scores': [0, 0],
             'target': challenge_target,
+            'serving_player': serving_player,
             'disconnected_at': None,
             'disconnected_side': None,
             'just_rejoined': False,
@@ -3993,8 +4081,8 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
             join_room(room_id, sid=sid)
         except Exception:
             pass
-        emit('pong_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0, 'target': challenge_target}, room=challenger_sid)
-        emit('pong_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1, 'target': challenge_target}, room=sid)
+        emit('pong_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0, 'target': challenge_target, 'serving_player': serving_player}, room=challenger_sid)
+        emit('pong_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1, 'target': challenge_target, 'serving_player': serving_player}, room=sid)
         broadcast_matchmaking_queue(pong_matchmaking_queue, 'pong_queue_updated')
 
     elif game == 'c4':
@@ -4005,6 +4093,7 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
         room_id = f"c4_{secrets.token_hex(4)}"
         c_uid = challenger.get('user_id') if challenger else None
         user_uid = str(current_user.id) if current_user.is_authenticated else None
+        starter = secrets.choice([0, 1])
         active_c4_rooms[room_id] = {
             'host_sid': challenger_sid,
             'host_name': c_name,
@@ -4013,7 +4102,8 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
             'guest_name': user_name,
             'guest_user_id': user_uid,
             'board': [[-1] * C4_COLS for _ in range(C4_ROWS)],
-            'turn': 0,
+            'starter': starter,
+            'turn': starter,
             'scores': [0, 0, 0]
         }
         try:
@@ -4021,8 +4111,8 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
             join_room(room_id, sid=sid)
         except Exception:
             pass
-        emit('c4_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0}, room=challenger_sid)
-        emit('c4_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1}, room=sid)
+        emit('c4_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0, 'turn': starter}, room=challenger_sid)
+        emit('c4_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1, 'turn': starter}, room=sid)
         broadcast_matchmaking_queue(c4_matchmaking_queue, 'c4_queue_updated')
 
     elif game == 'dnb':
@@ -4033,6 +4123,7 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
         room_id = f"dnb_{secrets.token_hex(4)}"
         c_uid = challenger.get('user_id') if challenger else None
         user_uid = str(current_user.id) if current_user.is_authenticated else None
+        starter = secrets.choice([0, 1])
         active_dnb_rooms[room_id] = {
             'host_sid': challenger_sid,
             'host_name': c_name,
@@ -4043,7 +4134,8 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
             'h_edges': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS)],
             'v_edges': [[None] * DNB_COLS for _ in range(DNB_ROWS - 1)],
             'boxes': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS - 1)],
-            'turn': 0,
+            'starter': starter,
+            'turn': starter,
             'scores': [0, 0]
         }
         try:
@@ -4051,8 +4143,8 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
             join_room(room_id, sid=sid)
         except Exception:
             pass
-        emit('dnb_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0}, room=challenger_sid)
-        emit('dnb_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1}, room=sid)
+        emit('dnb_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0, 'turn': starter}, room=challenger_sid)
+        emit('dnb_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1, 'turn': starter}, room=sid)
         broadcast_matchmaking_queue(dnb_matchmaking_queue, 'dnb_queue_updated')
 
 @socketio.on('decline_game_challenge')

@@ -607,14 +607,35 @@
     state.isSolved = false;
 
     // Reset picker UI
-    const picker = document.getElementById('xword-puzzle-picker');
-    if (picker) picker.value = state.puzzleIdx;
+    updatePuzzleUI();
 
     const modal = document.getElementById('xword-victory-modal');
     if (modal) modal.style.display = 'none';
 
     renderGrid();
     startTimer();
+  }
+
+  function updatePuzzleUI() {
+    const picker = document.getElementById('xword-puzzle-picker');
+    const summary = document.getElementById('xword-puzzle-client-summary');
+    const badge = document.getElementById('xword-puzzle-client-badge');
+    const nextBtn = document.getElementById('xword-next-puzzle-btn');
+
+    if (picker) picker.value = state.puzzleIdx;
+    if (badge && PUZZLES[state.puzzleIdx]) {
+      badge.textContent = PUZZLES[state.puzzleIdx].title;
+    }
+
+    if (state.mode === 'online' && !state.isHost) {
+      if (picker) picker.style.display = 'none';
+      if (summary) summary.style.display = 'inline-flex';
+      if (nextBtn) nextBtn.style.display = 'none';
+    } else {
+      if (picker) picker.style.display = 'inline-block';
+      if (summary) summary.style.display = 'none';
+      if (nextBtn) nextBtn.style.display = 'inline-block';
+    }
   }
 
   // --- Socket.IO Synchronisation ---
@@ -634,6 +655,7 @@
       state.roomId = data.room_id;
       state.isHost = data.is_host;
       state.myPlayerIdx = data.is_host ? 0 : 1;
+      updatePuzzleUI();
 
       const statusEl = document.getElementById('xword-online-status');
       if (statusEl) {
@@ -788,6 +810,7 @@
         setActiveTab(tabOnline);
         state.mode = 'online';
         if (onlinePanel) onlinePanel.style.display = 'block';
+        updatePuzzleUI();
         connectSocket();
       });
     }
@@ -798,6 +821,7 @@
         state.mode = 'solo';
         if (onlinePanel) onlinePanel.style.display = 'none';
         state.partnerCursor = { r: null, c: null, dir: 'across' };
+        updatePuzzleUI();
         updateHighlight();
       });
     }
@@ -808,6 +832,7 @@
       picker.addEventListener('change', () => {
         const nextIdx = parseInt(picker.value, 10);
         if (state.mode === 'online' && state.socket && state.roomId) {
+          if (!state.isHost) return;
           state.socket.emit('crossword_restart', {
             room_id: state.roomId,
             puzzle_idx: nextIdx
@@ -850,6 +875,7 @@
       nextPuzzleBtn.addEventListener('click', () => {
         const nextIdx = (state.puzzleIdx + 1) % PUZZLES.length;
         if (state.mode === 'online' && state.socket && state.roomId) {
+          if (!state.isHost) return;
           state.socket.emit('crossword_restart', {
             room_id: state.roomId,
             puzzle_idx: nextIdx

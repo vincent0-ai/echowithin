@@ -724,6 +724,8 @@
 
       if (state.opponentJoined) {
         setMatchStatus(`Match Found! Playing vs ${state.opponentName} (You are ${state.mySymbol.toUpperCase()})`, 'found');
+        const initialTurn = (data && data.turn) ? data.turn : 'x';
+        resetGame(initialTurn);
       } else {
         setMatchStatus(`Waiting for opponent in room ${state.roomId}...`, 'normal');
       }

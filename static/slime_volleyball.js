@@ -978,7 +978,7 @@
   // NOTE: a restart triggered BY a remote event must never re-emit, or two
   // clients bounce restarts back and forth forever (same echo-loop class as
   // the pong score storm). Local restarts emit; remote ones only apply.
-  function restartMatch(fromRemote = false) {
+  function restartMatch(fromRemote = false, servingDir = null) {
     GameState.p1.score = 0;
     GameState.p2.score = 0;
     GameState.gameOver = false;
@@ -991,7 +991,8 @@
       window.__updateSlimePauseBtn(false);
     }
     GameState.ai.reset();
-    resetServe(-1);
+    const s = (servingDir === -1 || servingDir === 1) ? servingDir : (Math.random() < 0.5 ? -1 : 1);
+    resetServe(s);
     const modal = document.getElementById('game-over-banner');
     if (modal) modal.style.display = 'none';
 
@@ -1213,7 +1214,8 @@
           if (typeof window.__updateSlimePauseBtn === 'function') {
             window.__updateSlimePauseBtn(false);
           }
-          resetServe(-1);
+          const s = (data && (data.serving === -1 || data.serving === 1)) ? data.serving : -1;
+          resetServe(s);
         }
       });
 
@@ -1352,8 +1354,9 @@
         }
       });
 
-      GameState.socket.on('slime_restart', () => {
-        restartMatch(true);
+      GameState.socket.on('slime_restart', (data) => {
+        const s = (data && (data.serving === -1 || data.serving === 1)) ? data.serving : null;
+        restartMatch(true, s);
       });
 
       GameState.socket.on('slime_matchmaking_waiting', (data) => {
@@ -1416,7 +1419,8 @@
         if (typeof window.__updateSlimePauseBtn === 'function') {
           window.__updateSlimePauseBtn(false);
         }
-        resetServe(-1);
+        const s = (data && (data.serving === -1 || data.serving === 1)) ? data.serving : -1;
+        resetServe(s);
 
         const oppName = data.is_host ? (data.guest_name || 'Guest') : (data.host_name || 'Host');
         const statusEl = document.getElementById('online-status');

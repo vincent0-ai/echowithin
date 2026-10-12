@@ -112,7 +112,7 @@ class TestPongJoinRejoin:
         assert 'target' in payload
         assert payload['player'] == 0 and payload['is_host'] is True
 
-    def test_disconnect_holds_seat_and_rejoin_reclaims(self, pong_state):
+    def test_disconnect_drops_room_immediately_no_rejoin(self, pong_state):
         m = pong_state
         handlers = _handlers()
         join = handlers['handle_join_pong_room']
@@ -120,42 +120,30 @@ class TestPongJoinRejoin:
         _as_sid(m, 'A', join, {'room_id': 'duel1'})
         _as_sid(m, 'B', join, {'room_id': 'duel1'})
 
-        # Guest transport drops: room must be KEPT (no forced result).
+        # Guest transport drops: room is immediately voided and deleted (no coming back).
         _, mock_emit, _, _ = _as_sid(m, 'B', disc)
         left = [c for c in mock_emit.call_args_list if c[0][0] == 'pong_player_left']
         assert left, "expected pong_player_left on disconnect"
         assert left[0][0][1]['reason'] == 'disconnected'
-        assert 'duel1' in m.active_pong_rooms
-        assert m.active_pong_rooms['duel1']['disconnected_side'] == 'guest_sid'
+        assert 'duel1' not in m.active_pong_rooms
         # Queue must not retain the dropped sid.
         assert all(q['sid'] != 'B' for q in m.pong_matchmaking_queue)
 
-        # Same player returns on a fresh sid inside the window: seat reclaimed
-        # with live scores, opponent notified — never a full-room refusal.
-        m.active_pong_rooms['duel1']['scores'] = [2, 1]
-        _, mock_emit2, _, _ = _as_sid(
-            m, 'C', join, {'room_id': 'duel1', 'rejoin': True, 'player': 1})
-        names = [c[0][0] for c in mock_emit2.call_args_list]
-        assert 'pong_room_joined' in names
-        assert 'pong_opponent_rejoined' in names
+        # Rejoin attempt cannot reclaim old room because old room is gone; starts fresh afresh
+        _, mock_emit2, _, _ = _as_sid(m, 'C', join, {'room_id': 'duel1'})
         joined = [c for c in mock_emit2.call_args_list if c[0][0] == 'pong_room_joined'][0][0][1]
-        assert joined['rejoined'] is True
-        assert joined['scores'] == [2, 1]
-        assert m.active_pong_rooms['duel1']['guest_sid'] == 'C'
+        assert joined['is_host'] is True  # C is fresh host of a new room
+        assert joined['scores'] == [0, 0]
 
-    def test_stale_room_pruned_after_grace(self, pong_state):
+    def test_unattended_room_pruned_after_one_hour(self, pong_state):
         m = pong_state
         handlers = _handlers()
         join = handlers['handle_join_pong_room']
         _as_sid(m, 'A', join, {'room_id': 'duel1'})
-        _as_sid(m, 'B', join, {'room_id': 'duel1'})
-        _as_sid(m, 'B', handlers['handle_dm_disconnect'])
-        m.active_pong_rooms['duel1']['disconnected_at'] = (
-            datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=9999))
-        _, mock_emit, _, _ = _as_sid(m, 'D', join, {'room_id': 'duel1'})
-        payload = mock_emit.call_args[0][1]
-        assert mock_emit.call_args[0][0] == 'pong_room_joined'
-        assert payload['is_host'] is True  # fresh room, D is the new host
+        m.active_pong_rooms['duel1']['created_at'] = (
+            datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=2))
+        m._prune_unattended_game_rooms()
+        assert 'duel1' not in m.active_pong_rooms
 
     def test_explicit_leave_voids_match(self, pong_state):
         m = pong_state
@@ -244,4 +232,59 @@ class TestSlimeVolleyballControlsAndServeSync:
         assert 'p2LastHitTime' in content
         assert 'slime-slider-wrapper' in content
         assert 'updateSlider' in content
+
+
+class TestLobbyCleanupAndNoComingBack:
+    def test_lobby_closed_when_host_leaves(self, pong_state):
+        m = pong_state
+        handlers = _handlers()
+        leave_fn = handlers['handle_leave_game']
+        mock_sessions = MagicMock()
+        mock_sessions.find_one.return_value = {'lobby_id': 'lob1', 'host_id': 'user_host_1'}
+
+        with patch.object(m, 'game_sessions_conf', mock_sessions):
+            m.active_game_players['lob1'] = {
+                'user_host_1': {'name': 'Host'},
+                'user_guest_2': {'name': 'Guest'}
+            }
+            # Host leaves lobby
+            with patch.object(m, 'current_user', MagicMock(id='user_host_1', is_authenticated=True)):
+                with patch('main.emit') as mock_emit, patch('main.leave_room'):
+                    leave_fn({'lobby_id': 'lob1'})
+
+                    # Assert game_lobby_closed emitted and lobby marked closed/deactivated
+                    closed_calls = [c for c in mock_emit.call_args_list if c[0][0] == 'game_lobby_closed']
+                    assert len(closed_calls) == 1
+                    assert 'lob1' not in m.active_game_players
+                    mock_sessions.update_one.assert_called()
+                    update_arg = mock_sessions.update_one.call_args[0][1]['$set']
+                    assert update_arg['deactivated'] is True
+                    assert update_arg['status'] == 'closed'
+
+    def test_duet_leave_socket_voids_room(self, pong_state):
+        m = pong_state
+        handlers = _handlers()
+        leave_duet = handlers['handle_leave_duet_room']
+        m.active_duet_rooms['duet_1'] = {'host_sid': 'sid_A', 'guest_sid': 'sid_B'}
+
+        with patch('main.request', MagicMock(sid='sid_A')), \
+             patch('main.emit') as mock_emit, \
+             patch('main.leave_room'):
+            leave_duet({'room_id': 'duet_1'})
+            assert 'duet_1' not in m.active_duet_rooms
+            partner_left = [c for c in mock_emit.call_args_list if c[0][0] == 'duet_partner_left']
+            assert len(partner_left) == 1
+            assert partner_left[0][0][1]['reason'] == 'left'
+
+    def test_unattended_lobbies_pruned(self):
+        from blueprints.game import _prune_unattended_lobbies
+        import main as m
+        mock_conf = MagicMock()
+        mock_conf.find.return_value.limit.return_value = [{'lobby_id': 'old_stale_1'}]
+        with patch.object(m, 'game_sessions_conf', mock_conf), \
+             patch.object(m, 'game_votes_conf', MagicMock()), \
+             patch.object(m, 'game_submissions_conf', MagicMock()):
+            _prune_unattended_lobbies()
+            assert mock_conf.update_many.called
+            assert mock_conf.delete_many.called
 

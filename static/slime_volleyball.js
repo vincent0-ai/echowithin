@@ -1322,12 +1322,13 @@
 
       GameState.socket.on('slime_player_left', () => {
         GameState.isPaused = true;
+        GameState.roomId = null;
         if (typeof window.__updateSlimePauseBtn === 'function') {
           window.__updateSlimePauseBtn(true);
         }
         const statusEl = document.getElementById('online-status');
         if (statusEl) {
-          statusEl.textContent = 'Opponent disconnected.';
+          statusEl.textContent = 'Opponent left the match. Match void — start a fresh match.';
           statusEl.style.color = 'var(--text-secondary)';
           statusEl.style.background = 'transparent';
           statusEl.style.border = 'none';
@@ -1342,6 +1343,12 @@
           matchBtn.disabled = false;
           matchBtn.style.opacity = '1';
           matchBtn.classList.remove('ew-btn--active');
+        }
+      });
+
+      window.addEventListener('beforeunload', () => {
+        if (GameState.socket && GameState.roomId) {
+          try { GameState.socket.emit('leave_slime_room', { room_id: GameState.roomId }); } catch (e) {}
         }
       });
 

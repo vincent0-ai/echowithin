@@ -1328,8 +1328,14 @@ window.hostShowPodium = window.hostShowPodium || function(){};
       if(data.lobby_id!==lobbyId) return;
       location.reload();
     });
-    socket.on('game_ttal_submit', ()=>{ location.reload(); });
-    socket.on('game_caption_submit', ()=>{ location.reload(); });
+    socket.on('game_lobby_closed', (data) => {
+      alert((data && data.message) || 'Host has left or lobby closed. Please start a fresh match.');
+      window.location.href = "{{ url_for('game.games_list') }}";
+    });
+
+    window.addEventListener('beforeunload', () => {
+      try { socket.emit('leave_game', { lobby_id: lobbyId }); } catch (e) {}
+    });
   }
 
   // Real-time polling fallback: ensures no player is ever left behind or stuck needing to reload!

@@ -1268,40 +1268,23 @@
       data = data || {};
       state.hasGuest = false;
       state.isPaused = true;
+      state.roomId = null;
+      clearNoContestTimer();
       if (typeof window.__updatePongPauseBtn === 'function') {
         window.__updatePongPauseBtn(true);
       }
       const statusEl = document.getElementById('online-status');
-      if (!data.reason || data.reason === 'left') {
-        // Explicit leave voids the match immediately — no result recorded.
-        if (statusEl) {
-          statusEl.textContent = 'Opponent left the match.';
-          statusEl.style.color = 'var(--text-secondary)';
-          statusEl.style.background = 'transparent';
-          statusEl.style.border = 'none';
-          statusEl.style.padding = '0';
-          statusEl.style.fontWeight = 'normal';
-          statusEl.style.fontSize = '0.85rem';
-          statusEl.style.display = 'block';
-        }
-        showNoContest('Opponent left. Match void — no result recorded, streak unchanged.');
-        return;
-      }
-      // Dropped opponent: hold a no-contest wait for the grace window.
-      // This path must NEVER resolve as a win/loss for either side.
-      const grace = Math.max(5, Math.floor(Number(data.reconnect_grace_sec) || 30));
       if (statusEl) {
-        statusEl.textContent = `Opponent disconnected. Waiting ${grace}s for reconnect…`;
-        statusEl.style.color = '#b45309';
+        statusEl.textContent = 'Opponent left the match. Match void — start a fresh match.';
+        statusEl.style.color = 'var(--text-secondary)';
+        statusEl.style.background = 'transparent';
+        statusEl.style.border = 'none';
+        statusEl.style.padding = '0';
+        statusEl.style.fontWeight = 'normal';
+        statusEl.style.fontSize = '0.85rem';
         statusEl.style.display = 'block';
       }
-      clearNoContestTimer();
-      state.noContestTimer = setTimeout(() => {
-        state.noContestTimer = null;
-        state.roomId = null;
-        showNoContest('Opponent connection lost. Match void — no result recorded, streak unchanged.');
-        if (statusEl) statusEl.textContent = 'Match voided (opponent never returned). Find a new match to play.';
-      }, grace * 1000);
+      showNoContest('Opponent left. Match void — start a fresh match.');
       const findBtn = document.getElementById('find-match-btn');
       if (findBtn) {
         findBtn.textContent = 'Find Match';
@@ -1311,28 +1294,9 @@
       }
     });
 
-    state.socket.on('pong_opponent_rejoined', (data) => {
-      data = data || {};
-      if (!state.roomId || data.room_id !== state.roomId) return;
-      pongDebug('opponent rejoined', data);
-      clearNoContestTimer();
-      if (Array.isArray(data.scores)) {
-        state.p1.score = Math.max(0, Math.floor(Number(data.scores[0]) || 0));
-        state.p2.score = Math.max(0, Math.floor(Number(data.scores[1]) || 0));
-      }
-      if (typeof data.target === 'number' && data.target > 0) state.roomTarget = data.target;
-      state.isGameOver = false;
-      state.isPaused = false;
-      const banner = document.getElementById('game-over-banner');
-      if (banner) banner.style.display = 'none';
-      setRematchVisible(true);
-      if (typeof window.__updatePongPauseBtn === 'function') {
-        window.__updatePongPauseBtn(false);
-      }
-      const statusEl = document.getElementById('online-status');
-      if (statusEl) {
-        statusEl.textContent = `Reconnected • Playing vs ${state.opponentName}`;
-        statusEl.style.color = '#15803d';
+    window.addEventListener('beforeunload', () => {
+      if (state.socket && state.roomId) {
+        try { state.socket.emit('leave_pong_room', { room_id: state.roomId }); } catch (e) {}
       }
     });
 

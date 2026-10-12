@@ -83,6 +83,8 @@ def _is_lobby_active(lobby):
         return False
     if lobby.get('deactivated'):
         return False
+    if lobby.get('status') == 'closed':
+        return False
     if lobby.get('expires_at'):
         exp = lobby['expires_at']
         if exp.tzinfo is None:
@@ -90,6 +92,37 @@ def _is_lobby_active(lobby):
         if datetime.datetime.now(datetime.timezone.utc) > exp:
             return False
     return True
+
+def _prune_unattended_lobbies():
+    """Deactivates and cleans up lobbies left unattended or expired."""
+    import main as m
+    now = datetime.datetime.now(datetime.timezone.utc)
+    two_hours_ago = now - datetime.timedelta(hours=2)
+    twenty_four_hours_ago = now - datetime.timedelta(hours=24)
+    try:
+        active_ids = list(getattr(m, 'active_game_players', {}).keys())
+        m.game_sessions_conf.update_many(
+            {
+                'deactivated': {'$ne': True},
+                '$or': [
+                    {'expires_at': {'$lt': now}},
+                    {'created_at': {'$lt': two_hours_ago}, 'lobby_id': {'$nin': active_ids}}
+                ]
+            },
+            {'$set': {'deactivated': True, 'status': 'closed', 'closed_at': now}}
+        )
+        old_docs = list(m.game_sessions_conf.find(
+            {'deactivated': True, 'closed_at': {'$lt': twenty_four_hours_ago}},
+            {'lobby_id': 1}
+        ).limit(50))
+        if old_docs:
+            old_ids = [d['lobby_id'] for d in old_docs if d.get('lobby_id')]
+            if old_ids:
+                m.game_votes_conf.delete_many({'lobby_id': {'$in': old_ids}})
+                m.game_submissions_conf.delete_many({'lobby_id': {'$in': old_ids}})
+                m.game_sessions_conf.delete_many({'lobby_id': {'$in': old_ids}})
+    except Exception:
+        pass
 
 def _game_access(lobby_id):
     lobby = _get_lobby(lobby_id)
@@ -149,6 +182,7 @@ def _get_player_identity():
 @login_required
 def games_list():
     import main as m
+    _prune_unattended_lobbies()
     raw_lobbies = list(m.game_sessions_conf.find({'host_id': ObjectId(current_user.id)}).sort('created_at', -1).limit(50))
     lobbies = [_decrypt_lobby(l) for l in raw_lobbies]
     return render_template('games_list.html', lobbies=lobbies, active_page='games')
@@ -157,6 +191,7 @@ def games_list():
 @bp.route('/join', methods=['GET', 'POST'])
 def games_join():
     import main as m
+    _prune_unattended_lobbies()
     pin = (request.args.get('pin') or (request.form.get('pin') if request.method == 'POST' else '') or '').strip()
     nickname = (request.form.get('nickname') or '').strip()
 
@@ -229,7 +264,7 @@ def snake():
 
 @bp.route('/games/word-duet')
 def word_duet():
-    return redirect(url_for('game.emoji_decoder', **request.args))
+    return render_template('word_duet.html', active_page='games')
 
 @bp.route('/games/emoji-decoder')
 def emoji_decoder():
@@ -270,7 +305,7 @@ def games_create():
             return render_template('game_create.html', active_page='games')
 
         now = datetime.datetime.now(datetime.timezone.utc)
-        expires_at = None
+        expires_at = now + datetime.timedelta(hours=2)
         if expires_in == '1h': expires_at = now + datetime.timedelta(hours=1)
         elif expires_in == '1d': expires_at = now + datetime.timedelta(days=1)
         elif expires_in == '7d': expires_at = now + datetime.timedelta(days=7)
@@ -521,7 +556,7 @@ def api_create_poll():
     if game_type=='trivia' and correct and correct not in opts: return jsonify({'error':'Correct must be option'}),400
     now = datetime.datetime.now(datetime.timezone.utc)
     expires_in = (data.get('expires_in') or '')
-    expires_at = None
+    expires_at = now + datetime.timedelta(hours=2)
     if expires_in=='1h': expires_at=now+datetime.timedelta(hours=1)
     elif expires_in=='1d': expires_at=now+datetime.timedelta(days=1)
     elif expires_in=='7d': expires_at=now+datetime.timedelta(days=7)
@@ -552,6 +587,7 @@ def api_create_poll():
 @limits(calls=30, period=60)
 def view_lobby(lobby_id):
     import main as m
+    _prune_unattended_lobbies()
     lobby = _get_lobby(lobby_id)
     if not lobby:
         return render_template('game_lobby.html', lobby=None, expired=True, msg='Game lobby not found'), 404
@@ -1664,6 +1700,7 @@ def api_game_stats(lobby_id):
 def api_my_game_lobbies():
     """Retrieve active game lobbies hosted by current user for sharing / DM invites."""
     import main as m
+    _prune_unattended_lobbies()
     raw_lobbies = list(m.game_sessions_conf.find({
         'host_id': ObjectId(current_user.id),
         'deactivated': {'$ne': True}

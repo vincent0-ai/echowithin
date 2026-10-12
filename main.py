@@ -1088,6 +1088,7 @@ form_responses_conf.create_index([('share_id', 1), ('submitted_at', -1)])
 game_sessions_conf.create_index('lobby_id', unique=True, sparse=True)
 game_sessions_conf.create_index('pin', sparse=True)
 game_sessions_conf.create_index([('host_id', 1), ('created_at', -1)])
+game_sessions_conf.create_index('expires_at', expireAfterSeconds=0)
 # NOTE: Not unique — TTAL guesses create multiple docs per user per lobby.
 # Application-level duplicate checks handle poll/trivia/wyr one-vote-per-user.
 try:
@@ -2167,11 +2168,25 @@ def handle_leave_game(data=None, *args, **kwargs):
     players = active_game_players.get(lobby_id, {})
     if user_id in players:
         players.pop(user_id, None)
-        if players:
-            active_game_players[lobby_id] = players
-            emit('game_presence_update', {'players': list(players.values()), 'count': len(players)}, room=lobby_id)
-        else:
-            active_game_players.pop(lobby_id, None)
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    lobby = game_sessions_conf.find_one({'lobby_id': lobby_id})
+    is_host = lobby and (str(lobby.get('host_id')) == user_id)
+
+    if is_host or not players:
+        # Host left or lobby unattended: void immediately, no coming back
+        active_game_players.pop(lobby_id, None)
+        game_sessions_conf.update_one(
+            {'lobby_id': lobby_id},
+            {'$set': {'deactivated': True, 'status': 'closed', 'closed_at': now}}
+        )
+        emit('game_lobby_closed', {
+            'lobby_id': lobby_id,
+            'message': 'Host has left or lobby was closed. Please start a fresh game.'
+        }, room=lobby_id)
+    else:
+        active_game_players[lobby_id] = players
+        emit('game_presence_update', {'players': list(players.values()), 'count': len(players)}, room=lobby_id)
 
 # --- Multiplayer Matchmaking Helper ---
 def broadcast_matchmaking_queue(queue, event_name):
@@ -2422,25 +2437,20 @@ def handle_cancel_slime_matchmaking(data=None, *args, **kwargs):
 active_pong_rooms = {}
 pong_matchmaking_queue = []
 
-# How long a dropped seat is held for rejoin before the room is pruned.
-# A disconnect NEVER resolves a match: the survivor pauses on a no-contest
-# path and the leaver may reclaim their seat (with live scores) in this window.
-PONG_RECONNECT_GRACE_SEC = 90
-
-
-def _prune_stale_pong_rooms():
-    """Drop pong rooms whose disconnected seat aged past the rejoin window."""
+def _prune_unattended_game_rooms():
+    """Drop any in-memory game rooms that have been left unattended for > 1 hour."""
     now = datetime.datetime.now(datetime.timezone.utc)
-    for stale_id, rinfo in list(active_pong_rooms.items()):
-        stamp = rinfo.get('disconnected_at')
-        if stamp is None:
-            continue
-        try:
-            age = (now - stamp).total_seconds()
-        except Exception:
-            age = PONG_RECONNECT_GRACE_SEC + 1
-        if age > PONG_RECONNECT_GRACE_SEC:
-            active_pong_rooms.pop(stale_id, None)
+    one_hour_ago = now - datetime.timedelta(hours=1)
+    for store in (active_pong_rooms, active_slime_rooms, active_ttt_rooms,
+                  active_c4_rooms, active_dnb_rooms, active_duet_rooms,
+                  active_emoji_rooms, active_crossword_rooms):
+        for rid, rinfo in list(store.items()):
+            created = rinfo.get('created_at')
+            if created:
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=datetime.timezone.utc)
+                if created < one_hour_ago:
+                    store.pop(rid, None)
 
 
 def _pong_joined_payload(room_id, room_info, is_host):
@@ -2453,7 +2463,7 @@ def _pong_joined_payload(room_id, room_info, is_host):
         'player': 0 if is_host else 1,
         'scores': list(room_info.get('scores', [0, 0])),
         'target': room_info.get('target'),
-        'rejoined': bool(room_info.get('just_rejoined')),
+        'rejoined': False,
     }
 
 
@@ -2467,7 +2477,7 @@ def handle_join_pong_room(data=None, *args, **kwargs):
     if not room_id:
         return
 
-    _prune_stale_pong_rooms()
+    _prune_unattended_game_rooms()
     join_room(room_id)
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
     sid = request.sid
@@ -2484,60 +2494,23 @@ def handle_join_pong_room(data=None, *args, **kwargs):
             'guest_user_id': None,
             'scores': [0, 0],
             'target': None,
-            'disconnected_at': None,
-            'disconnected_side': None,
-            'just_rejoined': False,
+            'created_at': datetime.datetime.now(datetime.timezone.utc),
             'bond_id': payload.get('bond_id'),
             'tournament_id': payload.get('tournament_id'),
         }
         active_pong_rooms[room_id] = room_info
         emit('pong_room_joined', _pong_joined_payload(room_id, room_info, True), room=sid)
     elif room_info.get('host_sid') == sid:
-        room_info['just_rejoined'] = False
         emit('pong_room_joined', _pong_joined_payload(room_id, room_info, True), room=sid)
     elif room_info.get('guest_sid') == sid:
-        room_info['just_rejoined'] = False
         emit('pong_room_joined', _pong_joined_payload(room_id, room_info, False), room=sid)
     elif room_info.get('guest_sid') is not None:
-        # Room is full — unless this is the dropped player reclaiming their
-        # seat inside the grace window (fresh sid after a transport reconnect).
-        claimed = payload.get('player')
-        stamp = room_info.get('disconnected_at')
-        side = room_info.get('disconnected_side')
-        claimed_side = 'host_sid' if claimed == 0 else ('guest_sid' if claimed == 1 else None)
-        if (payload.get('rejoin') and claimed_side and side == claimed_side and stamp is not None):
-            try:
-                age = (datetime.datetime.now(datetime.timezone.utc) - stamp).total_seconds()
-            except Exception:
-                age = PONG_RECONNECT_GRACE_SEC + 1
-            if age <= PONG_RECONNECT_GRACE_SEC:
-                room_info[claimed_side] = sid
-                if claimed_side == 'host_sid':
-                    room_info['host_name'] = user_name
-                    room_info['host_user_id'] = user_uid
-                else:
-                    room_info['guest_name'] = user_name
-                    room_info['guest_user_id'] = user_uid
-                room_info['disconnected_at'] = None
-                room_info['disconnected_side'] = None
-                room_info['just_rejoined'] = True
-                active_pong_rooms[room_id] = room_info
-                emit('pong_room_joined', _pong_joined_payload(room_id, room_info, claimed == 0), room=sid)
-                other_sid = room_info.get('guest_sid' if claimed == 0 else 'host_sid')
-                if other_sid:
-                    emit('pong_opponent_rejoined', {
-                        'room_id': room_id,
-                        'scores': list(room_info.get('scores', [0, 0])),
-                        'target': room_info.get('target'),
-                    }, room=other_sid)
-                room_info['just_rejoined'] = False
-                return
+        # Room is full: once a player leaves or room is full, no rejoining allowed
         emit('pong_room_error', {'message': 'Room is already full.'}, room=sid)
     else:
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
         room_info['guest_user_id'] = user_uid
-        room_info['just_rejoined'] = False
         active_pong_rooms[room_id] = room_info
 
         emit('pong_room_joined', _pong_joined_payload(room_id, room_info, False), room=sid)
@@ -3676,6 +3649,21 @@ def handle_duet_restart(data=None, *args, **kwargs):
     if room_id:
         emit('duet_restarted', {'seed': seed}, room=room_id)
 
+@socketio.on('leave_duet_room')
+def handle_leave_duet_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id:
+        return
+    sid = request.sid
+    try:
+        leave_room(room_id)
+    except Exception:
+        pass
+    room_info = active_duet_rooms.get(room_id)
+    if room_info and (room_info.get('host_sid') == sid or room_info.get('guest_sid') == sid):
+        emit('duet_partner_left', {'room_id': room_id, 'reason': 'left'}, room=room_id)
+        active_duet_rooms.pop(room_id, None)
+
 
 # --- Emoji Decoder (Co-op Deduction) Handlers ---
 active_emoji_rooms = {}
@@ -3784,6 +3772,21 @@ def handle_emoji_submit_guess(data=None, *args, **kwargs):
             except Exception:
                 pass
 
+@socketio.on('leave_emoji_room')
+def handle_leave_emoji_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room') or (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id:
+        return
+    sid = request.sid
+    try:
+        leave_room(room_id)
+    except Exception:
+        pass
+    room_info = active_emoji_rooms.get(room_id)
+    if room_info and (room_info.get('host_sid') == sid or room_info.get('guest_sid') == sid):
+        emit('emoji_partner_left', {'room_id': room_id, 'reason': 'left'}, room=room_id)
+        active_emoji_rooms.pop(room_id, None)
+
 
 # --- Team Crossword (Collaborative Mini Crossword) Handlers ---
 
@@ -3885,6 +3888,21 @@ def handle_crossword_solved(data=None, *args, **kwargs):
     room_id = data.get('room_id')
     if room_id:
         emit('crossword_solved', {}, room=room_id, include_self=False)
+
+@socketio.on('leave_crossword_room')
+def handle_leave_crossword_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id:
+        return
+    sid = request.sid
+    try:
+        leave_room(room_id)
+    except Exception:
+        pass
+    room_info = active_crossword_rooms.get(room_id)
+    if room_info and (room_info.get('host_sid') == sid or room_info.get('guest_sid') == sid):
+        emit('crossword_partner_left', {'room_id': room_id, 'reason': 'left'}, room=room_id)
+        active_crossword_rooms.pop(room_id, None)
 
 
 # --- Unified 1v1 Direct Game Challenge Handlers ---
@@ -4206,20 +4224,31 @@ def handle_dm_disconnect(*args, **kwargs):
                 note_locks.pop(share_id)
                 emit('lock_released', {'share_id': share_id}, room=share_id)
 
-    # Cleanup game lobby presence (2+ players, anytime)
+    # Cleanup game lobby presence and close unattended/host-less lobbies
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
     for lobby_id, players in list(active_game_players.items()):
         if user_id in players:
             players.pop(user_id, None)
-            if players:
+            lobby = game_sessions_conf.find_one({'lobby_id': lobby_id})
+            is_host = lobby and (str(lobby.get('host_id')) == user_id)
+            if is_host or not players:
+                active_game_players.pop(lobby_id, None)
+                game_sessions_conf.update_one(
+                    {'lobby_id': lobby_id},
+                    {'$set': {'deactivated': True, 'status': 'closed', 'closed_at': now_utc}}
+                )
+                emit('game_lobby_closed', {
+                    'lobby_id': lobby_id,
+                    'message': 'Host disconnected or lobby closed. Please start a fresh game.'
+                }, room=lobby_id)
+            else:
                 active_game_players[lobby_id] = players
                 emit('game_presence_update', {'players': list(players.values()), 'count': len(players)}, room=lobby_id)
-            else:
-                active_game_players.pop(lobby_id, None)
 
     # Cleanup Slime Volleyball rooms on disconnect
     for room_id, rinfo in list(active_slime_rooms.items()):
         if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
-            emit('slime_player_left', {'room_id': room_id}, room=room_id)
+            emit('slime_player_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
             active_slime_rooms.pop(room_id, None)
 
     # Cleanup Slime Matchmaking queue on disconnect
@@ -4229,7 +4258,7 @@ def handle_dm_disconnect(*args, **kwargs):
     # Cleanup Tic-Tac-Toe rooms on disconnect
     for room_id, rinfo in list(active_ttt_rooms.items()):
         if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
-            emit('ttt_player_left', {'room_id': room_id}, room=room_id)
+            emit('ttt_player_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
             active_ttt_rooms.pop(room_id, None)
 
     # Cleanup Tic-Tac-Toe Matchmaking queue on disconnect
@@ -4239,7 +4268,7 @@ def handle_dm_disconnect(*args, **kwargs):
     # Cleanup Connect Four rooms on disconnect
     for room_id, rinfo in list(active_c4_rooms.items()):
         if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
-            emit('c4_player_left', {'room_id': room_id}, room=room_id)
+            emit('c4_player_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
             active_c4_rooms.pop(room_id, None)
 
     # Cleanup Connect Four Matchmaking queue on disconnect
@@ -4249,28 +4278,19 @@ def handle_dm_disconnect(*args, **kwargs):
     # Cleanup Dots and Boxes rooms on disconnect
     for room_id, rinfo in list(active_dnb_rooms.items()):
         if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
-            emit('dnb_player_left', {'room_id': room_id}, room=room_id)
+            emit('dnb_player_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
             active_dnb_rooms.pop(room_id, None)
 
     # Cleanup Dots and Boxes Matchmaking queue on disconnect
     global dnb_matchmaking_queue
     dnb_matchmaking_queue = [q for q in dnb_matchmaking_queue if q['sid'] != request.sid]
 
-    # Cleanup Ping Pong rooms on disconnect. The seat is HELD (not scored):
-    # the survivor is told the opponent disconnected (no-contest, never a
-    # forced loss) and the leaver may reclaim the seat inside the grace window.
+    # Cleanup Ping Pong rooms on disconnect: immediately void and drop room (no coming back).
     global pong_matchmaking_queue
     for room_id, rinfo in list(active_pong_rooms.items()):
-        side = None
-        if rinfo.get('host_sid') == request.sid:
-            side = 'host_sid'
-        elif rinfo.get('guest_sid') == request.sid:
-            side = 'guest_sid'
-        if side is not None and rinfo.get('disconnected_at') is None:
-            rinfo['disconnected_at'] = datetime.datetime.now(datetime.timezone.utc)
-            rinfo['disconnected_side'] = side
-            emit('pong_player_left', {'room_id': room_id, 'reason': 'disconnected',
-                                      'reconnect_grace_sec': PONG_RECONNECT_GRACE_SEC}, room=room_id)
+        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+            emit('pong_player_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
+            active_pong_rooms.pop(room_id, None)
 
     # Cleanup Ping Pong Matchmaking queue on disconnect
     pong_matchmaking_queue = [q for q in pong_matchmaking_queue if q['sid'] != request.sid]
@@ -4278,13 +4298,19 @@ def handle_dm_disconnect(*args, **kwargs):
     # Cleanup Word Bond: Duet rooms on disconnect
     for room_id, rinfo in list(active_duet_rooms.items()):
         if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
-            emit('duet_partner_left', {'room_id': room_id}, room=room_id)
+            emit('duet_partner_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
             active_duet_rooms.pop(room_id, None)
+
+    # Cleanup Emoji Decoder rooms on disconnect
+    for room_id, rinfo in list(active_emoji_rooms.items()):
+        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+            emit('emoji_partner_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
+            active_emoji_rooms.pop(room_id, None)
 
     # Cleanup Team Crossword rooms on disconnect
     for room_id, rinfo in list(active_crossword_rooms.items()):
         if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
-            emit('crossword_partner_left', {'room_id': room_id}, room=room_id)
+            emit('crossword_partner_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
             active_crossword_rooms.pop(room_id, None)
 
 

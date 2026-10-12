@@ -679,13 +679,20 @@
     });
 
     state.socket.on('crossword_partner_left', () => {
+      state.roomId = null;
       const statusEl = document.getElementById('xword-online-status');
       if (statusEl) {
-        statusEl.textContent = 'Partner left the room.';
-        statusEl.style.color = '#b8423f';
+        statusEl.textContent = 'Partner left the game. Match void — please start a fresh game.';
+        statusEl.style.color = 'var(--text-secondary)';
       }
       state.partnerCursor = { r: null, c: null, dir: 'across' };
       updateHighlight();
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (state.socket && state.roomId) {
+        try { state.socket.emit('leave_crossword_room', { room_id: state.roomId }); } catch (e) {}
+      }
     });
   }
 

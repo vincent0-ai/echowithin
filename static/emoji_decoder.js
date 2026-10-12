@@ -347,6 +347,18 @@ if (socket) {
             }
         }
     });
+
+    socket.on('emoji_partner_left', () => {
+        room = null;
+        alert('Partner left the game. Match void — please start a fresh game.');
+        window.location.reload();
+    });
+
+    window.addEventListener('beforeunload', () => {
+        if (socket && room) {
+            try { socket.emit('leave_emoji_room', { room: room }); } catch (e) {}
+        }
+    });
 }
 
 async function startOnlineRound() {

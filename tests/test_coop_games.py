@@ -56,18 +56,20 @@ def _as_sid(m, sid, fn, data=None, user=None):
 
 class TestCoopGameRoutes:
     def test_word_duet_guest_access(self, client):
-        """Guest users are redirected from word-duet to emoji-decoder."""
-        res = client.get('/games/word-duet', follow_redirects=True)
+        """Guest users can access Word Bond: Duet directly."""
+        res = client.get('/games/word-duet')
         assert res.status_code == 200
         html = res.get_data(as_text=True)
-        assert 'Emoji Decoder' in html
+        assert 'Word Bond: Duet' in html
+        assert 'word_duet.js' in html
 
     def test_word_duet_authenticated_access(self, auth_client):
-        """Authenticated users are redirected from word-duet to emoji-decoder."""
-        res = auth_client.get('/games/word-duet', follow_redirects=True)
+        """Authenticated users can access Word Bond: Duet directly."""
+        res = auth_client.get('/games/word-duet')
         assert res.status_code == 200
         html = res.get_data(as_text=True)
-        assert 'Emoji Decoder' in html
+        assert 'Word Bond: Duet' in html
+        assert 'word_duet.js' in html
 
     def test_team_crossword_guest_access(self, client):
         """Guest users can access Team Crossword directly."""

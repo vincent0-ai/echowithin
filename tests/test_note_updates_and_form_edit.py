@@ -598,6 +598,9 @@ class TestFormVersionHistory:
             assert 'View Answers' in html
             # Under version=1, maryel is listed
             assert '@maryel' in html
+            # Verify timezone-aware local-time element
+            assert 'class="local-time"' in html
+            assert 'datetime="' in html
 
 
 

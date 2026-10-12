@@ -959,7 +959,8 @@ def _resolve_form_versions(form, responses):
                         'id': str(other['_id']),
                         'version': other.get('form_version'),
                         'version_label': other.get('version_label'),
-                        'submitted_at_formatted': other.get('submitted_at_formatted')
+                        'submitted_at_formatted': other.get('submitted_at_formatted'),
+                        'submitted_at_iso': other.get('submitted_at_iso')
                     }
                     for other in u_resps if str(other['_id']) != str(r['_id'])
                 ]

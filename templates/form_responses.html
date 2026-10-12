@@ -148,7 +148,13 @@ if (typeof QRCode === 'undefined') {
         {% for r in responses %}
         <tr>
           <td class="muted" style="text-align: center;">{{ (page-1)*per_page + loop.index }}</td>
-          <td class="secondary" style="white-space: nowrap;">{{ r.submitted_at_formatted or r.submitted_at_iso }}</td>
+          <td class="secondary" style="white-space: nowrap;">
+            {% if r.submitted_at_iso %}
+              <time class="local-time" datetime="{{ r.submitted_at_iso }}">{{ r.submitted_at_formatted }} UTC</time>
+            {% else %}
+              {{ r.submitted_at_formatted or '—' }}
+            {% endif %}
+          </td>
           <td style="white-space: nowrap;">
             {% if r.submitter_username %}
               <span style="font-weight: 600; font-size: 0.85rem; color: var(--primary-color);">@{{ r.submitter_username }}</span>
@@ -213,6 +219,24 @@ try {
   rawResponses = [];
 }
 
+function formatSubDate(isoStr, fallbackStr) {
+  if (!isoStr) return fallbackStr || '—';
+  try {
+    const d = window.parseServerTime ? window.parseServerTime(isoStr) : new Date(isoStr);
+    if (d && !isNaN(d.getTime())) {
+      return d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    }
+  } catch(e) {}
+  return fallbackStr || isoStr;
+}
+
 window.openResponseModal = function(idx) {
   const r = rawResponses[idx];
   if (!r) return;
@@ -221,7 +245,7 @@ window.openResponseModal = function(idx) {
   const body = document.getElementById('response-modal-body');
 
   let metaHtml = '<strong>Respondent:</strong> ' + (r.submitter_username ? ('@' + escHtml(r.submitter_username)) : 'Anonymous') +
-                  ' &bull; <strong>Submitted:</strong> ' + escHtml(r.submitted_at_formatted || r.submitted_at_iso || '—');
+                  ' &bull; <strong>Submitted:</strong> ' + escHtml(formatSubDate(r.submitted_at_iso, r.submitted_at_formatted));
   if (r.version_label) {
     metaHtml += ' &bull; <strong>Version:</strong> <span class="ew-badge" style="font-size: 0.72rem;">' + escHtml(r.version_label) + '</span>';
   }
@@ -236,7 +260,7 @@ window.openResponseModal = function(idx) {
       const vUrl = '?version=' + encodeURIComponent(other.version || 'all');
       otherHtml += '<li style="margin-bottom: 0.2rem;">' +
         (other.version_label ? escHtml(other.version_label) : ('v' + escHtml(other.version))) +
-        ' on ' + escHtml(other.submitted_at_formatted || 'earlier date') +
+        ' on ' + escHtml(formatSubDate(other.submitted_at_iso, other.submitted_at_formatted || 'earlier date')) +
         ' &mdash; <a href="' + vUrl + '" style="color: var(--primary-color); text-decoration: underline;">Switch to this version</a>' +
         '</li>';
     });

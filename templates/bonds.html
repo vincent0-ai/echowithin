@@ -7835,7 +7835,7 @@
                 var partner = data.partner_name || 'Partner';
                 if (summaryEl) {
                     if (t.total > 0) {
-                        summaryEl.textContent = 'You ' + t.my_wins + ' — ' + t.partner_wins + ' ' + partner + (t.draws > 0 ? ' (' + t.draws + ' draws)' : '');
+                        summaryEl.innerHTML = 'You <span style="color:#10b981;font-weight:700;">' + t.my_wins + '</span> — <span style="color:#ef4444;font-weight:700;">' + t.partner_wins + '</span> ' + partner + (t.draws > 0 ? ' <span style="color:#c68a35;font-weight:600;">(' + t.draws + ' draws)</span>' : '');
                     } else {
                         summaryEl.textContent = 'No matches yet';
                     }
@@ -7845,8 +7845,8 @@
                     data.games.forEach(function (g) {
                         var pill = document.getElementById('h2h-pill-' + g.game + '-' + bondId);
                         if (pill) {
-                            pill.textContent = g.my_wins + 'W - ' + g.partner_wins + 'L' + (g.draws ? ' (' + g.draws + 'D)' : '');
-                            pill.style.color = g.my_wins > g.partner_wins ? 'var(--success-color, #22c55e)' : 'var(--text-secondary)';
+                            var scoreHtml = '<span style="color:#10b981;font-weight:700;">' + g.my_wins + 'W</span> <span style="color:var(--text-secondary);opacity:0.6;">-</span> <span style="color:#ef4444;font-weight:700;">' + g.partner_wins + 'L</span>' + (g.draws ? ' <span style="color:#c68a35;font-weight:700;">(' + g.draws + 'D)</span>' : '');
+                            pill.innerHTML = scoreHtml;
                         }
                     });
 
@@ -7857,7 +7857,7 @@
                             var rows = data.games.map(function (g) {
                                 return '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0;border-bottom:1px solid var(--border-color);">' +
                                     '<span style="font-weight:600;">' + (g.game_label || g.game) + '</span>' +
-                                    '<span style="font-weight:700;">' + g.my_wins + 'W · ' + g.partner_wins + 'L' + (g.draws ? ' · ' + g.draws + 'D' : '') + '</span>' +
+                                    '<span style="font-weight:700;"><span style="color:#10b981;">' + g.my_wins + 'W</span> <span style="color:var(--text-secondary);opacity:0.6;">·</span> <span style="color:#ef4444;">' + g.partner_wins + 'L</span>' + (g.draws ? ' <span style="color:#c68a35;">· ' + g.draws + 'D</span>' : '') + '</span>' +
                                     '</div>';
                             }).join('');
                             tableEl.innerHTML = rows;

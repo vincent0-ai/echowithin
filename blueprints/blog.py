@@ -18,9 +18,76 @@ def _safe_count(coll, flt):
         return 0
 
 
-def get_latest_posts_feed():
+def calculate_post_gravity_score(post, now_utc, partner_ids=None, user_tag_scores=None):
+    """Computes Hacker News gravity score with partner & interest affinity: Score = EngScore / (AgeInHours + 2)^1.35."""
+    likes = post.get('likes_count', 0) or 0
+    comments = post.get('comment_count', 0) or 0
+    shares = post.get('share_count', 0) or 0
+    views = post.get('view_count', 0) or 0
+
+    eng_points = (likes * 1.5) + (comments * 2.5) + (shares * 3.0) + min(views * 0.05, 5.0) + 1.0
+
+    p_time = post.get('timestamp')
+    if p_time:
+        if p_time.tzinfo is None:
+            p_time = p_time.replace(tzinfo=datetime.timezone.utc)
+        age_hours = max((now_utc - p_time).total_seconds() / 3600.0, 0.0)
+    else:
+        age_hours = 24.0
+
+    gravity_score = eng_points / ((age_hours + 2.0) ** 1.35)
+
+    # 1. Partner boost (+60%)
+    author_id_str = str(post.get('author_id', ''))
+    if partner_ids and author_id_str in partner_ids:
+        gravity_score *= 1.60
+
+    # 2. Tag interest affinity boost (up to +75%)
+    if user_tag_scores:
+        matching_tags = sum(1 for tag in (post.get('tags') or []) if tag in user_tag_scores)
+        if matching_tags > 0:
+            gravity_score *= (1.0 + min(matching_tags * 0.25, 0.75))
+
+    return gravity_score
+
+
+def apply_author_diversity(posts, max_per_author=2, target_count=10):
+    """Limits any single author to max_per_author in the top feed to ensure variety."""
+    selected = []
+    author_counts = {}
+    deferred = []
+
+    for p in posts:
+        aid = str(p.get('author_id') or p.get('author') or '')
+        cnt = author_counts.get(aid, 0)
+        if cnt < max_per_author:
+            selected.append(p)
+            author_counts[aid] = cnt + 1
+            if len(selected) >= target_count:
+                break
+        else:
+            deferred.append(p)
+
+    if len(selected) < target_count and deferred:
+        for p in deferred:
+            selected.append(p)
+            if len(selected) >= target_count:
+                break
+
+    return selected
+
+
+def get_latest_posts_feed(feed_type='trending', user=None):
     import main as m
-    cached_feed = m.blog_feed_cache.get('main')
+    if not feed_type:
+        feed_type = 'trending'
+    feed_type = feed_type.lower()
+    if feed_type not in ('trending', 'for_you', 'latest'):
+        feed_type = 'trending'
+
+    u_id_str = str(user.id) if (user and getattr(user, 'is_authenticated', False) and hasattr(user, 'id')) else 'anon'
+    cache_key = f"feed_{feed_type}_{u_id_str}"
+    cached_feed = m.blog_feed_cache.get(cache_key)
     if cached_feed:
         return cached_feed
 
@@ -28,54 +95,75 @@ def get_latest_posts_feed():
     total_posts_count = _safe_count(m.posts_conf, public_filter)
     pinned_posts = list(m.posts_conf.find({'is_pinned': True, **public_filter}).sort('pinned_at', -1))
     pinned_ids = [p['_id'] for p in pinned_posts]
+    target_count = max(10 - len(pinned_posts), 1)
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+
     if total_posts_count <= 10:
         other_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}, **public_filter}).sort('timestamp', -1))
-        random.shuffle(other_posts)
         all_posts_list = pinned_posts + other_posts
         with current_app.app_context():
             latest_posts_prepared = m.prepare_posts(all_posts_list)
-    else:
-        now = datetime.datetime.now(datetime.timezone.utc)
-        one_month_ago = now - datetime.timedelta(days=30)
-        recent_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}, **public_filter}).sort('timestamp', -1).limit(2))
-        recent_ids = [p['_id'] for p in recent_posts]
-        month_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids + recent_ids}, 'timestamp': {'$gte': one_month_ago}, **public_filter}).sort('timestamp', -1).limit(20))
-        if len(month_posts) > 4:
-            month_weights = []
-            for mp in month_posts:
-                eng = (mp.get('likes_count', 0) or 0) + (mp.get('comment_count', 0) or 0) * 2 + (mp.get('share_count', 0) or 0)
-                month_weights.append(max(eng, 1))
-            month_selection = random.choices(month_posts, weights=month_weights, k=4)
-            seen_ids = set()
-            deduped = []
-            for mp in month_selection:
-                if mp['_id'] not in seen_ids:
-                    seen_ids.add(mp['_id'])
-                    deduped.append(mp)
-            month_selection = deduped
-        else:
-            month_selection = month_posts
-        month_ids = [p['_id'] for p in month_selection]
-        excluded_ids = pinned_ids + recent_ids + month_ids
-        posts_needed = 10 - len(recent_posts) - len(month_selection)
-        match_query = {'_id': {'$nin': excluded_ids}, **public_filter}
-        older_posts = list(m.posts_conf.aggregate([
-            {'$match': match_query},
-            {'$addFields': {'_eng_weight': {'$add': [{'$ifNull': ['$likes_count', 0]}, {'$multiply': [{'$ifNull': ['$share_count', 0]}, 2]}, 1]}}},
-            {'$sample': {'size': max(posts_needed * 3, 3)}}
-        ]))
-        older_posts.sort(key=lambda p: p.get('_eng_weight', 1), reverse=True)
-        if len(older_posts) > posts_needed:
-            top_half = older_posts[:max(len(older_posts) // 2, posts_needed)]
-            older_posts = random.sample(top_half, min(posts_needed, len(top_half)))
-        for p in older_posts:
-            p.pop('_eng_weight', None)
-        mixed_posts = recent_posts + month_selection + older_posts
-        random.shuffle(mixed_posts)
-        combined_posts = pinned_posts + mixed_posts
+        m.blog_feed_cache[cache_key] = latest_posts_prepared
+        return latest_posts_prepared
+
+    if feed_type == 'latest':
+        latest_pool = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}, **public_filter}).sort('timestamp', -1).limit(target_count * 3))
+        diverse_posts = apply_author_diversity(latest_pool, max_per_author=2, target_count=target_count)
+        combined_posts = pinned_posts + diverse_posts
         with current_app.app_context():
             latest_posts_prepared = m.prepare_posts(combined_posts)
-    m.blog_feed_cache['main'] = latest_posts_prepared
+        m.blog_feed_cache[cache_key] = latest_posts_prepared
+        return latest_posts_prepared
+
+    # For 'trending' and 'for_you':
+    partner_ids = set()
+    user_tag_scores = {}
+    if user and getattr(user, 'is_authenticated', False) and hasattr(user, 'id'):
+        try:
+            u_oid = ObjectId(user.id)
+            for b in m.bonds_conf.find({'$or': [{'user1_id': u_oid}, {'user2_id': u_oid}], 'status': 'active'}):
+                p_id = b.get('user2_id') if str(b.get('user1_id')) == str(u_oid) else b.get('user1_id')
+                if p_id:
+                    partner_ids.add(str(p_id))
+        except Exception:
+            pass
+
+        cached_interests = _user_interests_memory_cache.get(f"user_interests:{user.id}")
+        if cached_interests:
+            user_tag_scores = cached_interests.get('tags', {})
+
+    # Candidate pool: recent 40 posts plus active posts from last 60 days
+    recent_candidates = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}, **public_filter}).sort('timestamp', -1).limit(40))
+    candidate_ids = {p['_id'] for p in recent_candidates}
+    sixty_days_ago = now_utc - datetime.timedelta(days=60)
+    top_engaged_older = list(m.posts_conf.find({
+        '_id': {'$nin': list(candidate_ids | set(pinned_ids))},
+        'timestamp': {'$gte': sixty_days_ago},
+        '$or': [{'likes_count': {'$gt': 0}}, {'comment_count': {'$gt': 0}}, {'share_count': {'$gt': 0}}],
+        **public_filter
+    }).sort('likes_count', -1).limit(20))
+
+    full_candidates = recent_candidates + top_engaged_older
+
+    for p in full_candidates:
+        p['_feed_score'] = calculate_post_gravity_score(
+            p, now_utc,
+            partner_ids=partner_ids if (feed_type == 'for_you' or partner_ids) else None,
+            user_tag_scores=user_tag_scores if feed_type == 'for_you' else None
+        )
+
+    full_candidates.sort(key=lambda x: x.get('_feed_score', 0), reverse=True)
+
+    diverse_candidates = apply_author_diversity(full_candidates, max_per_author=2, target_count=target_count)
+    for p in diverse_candidates:
+        p.pop('_feed_score', None)
+
+    combined_posts = pinned_posts + diverse_candidates
+    with current_app.app_context():
+        latest_posts_prepared = m.prepare_posts(combined_posts)
+
+    m.blog_feed_cache[cache_key] = latest_posts_prepared
     return latest_posts_prepared
 
 
@@ -158,10 +246,21 @@ def blog():
             title=page_title,
             description=page_description,
         )
-    latest_posts_prepared = get_latest_posts_feed()
+    feed_tab = (request.args.get('tab') or 'trending').strip().lower()
+    if feed_tab not in ('trending', 'for_you', 'latest'):
+        feed_tab = 'trending'
+    user_for_feed = current_user if (current_user.is_authenticated and not getattr(current_user, 'is_guest', False)) else None
+    latest_posts_prepared = get_latest_posts_feed(feed_type=feed_tab, user=user_for_feed)
     page_title = "EchoWithin Blog - Community & Collaboration"
     page_description = "Explore the latest posts, collaborative discussions, and ideas from the EchoWithin community."
-    return render_template("blog.html", latest_posts=latest_posts_prepared, active_page='blog', title=page_title, description=page_description)
+    return render_template(
+        "blog.html",
+        latest_posts=latest_posts_prepared,
+        active_page='blog',
+        feed_tab=feed_tab,
+        title=page_title,
+        description=page_description
+    )
 
 
 @bp.route("/blog/all")

@@ -103,9 +103,11 @@
     <!-- Game Screen: Clue Giver -->
     <div id="screen-giver" class="screen">
         <h2>You are the Clue Giver!</h2>
-        <p>Secret Word:</p>
-        <h3 id="secret-word" style="font-size: 28px; color: var(--primary-color);"></h3>
-        <p>Select 1-5 emojis to describe this word:</p>
+        <div id="giver-category" style="display: inline-block; font-size: 0.85rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: rgba(198, 138, 53, 0.12); color: #c68a35; border: 1px solid rgba(198, 138, 53, 0.3); margin-bottom: 0.5rem;"></div>
+        <p style="margin-bottom: 0.2rem;">Secret Word / Phrase:</p>
+        <h3 id="secret-word" style="font-size: 28px; color: var(--primary-color); margin-top: 0.2rem; margin-bottom: 0.4rem;"></h3>
+        <div id="giver-hint" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem;"></div>
+        <p>Select 1-5 emojis to describe this:</p>
         
         <div class="clue-display" id="current-clue-builder"></div>
         <button class="btn" id="btn-clear-clue">Clear</button>
@@ -117,12 +119,17 @@
     <!-- Game Screen: Guesser -->
     <div id="screen-guesser" class="screen">
         <h2>You are the Guesser!</h2>
-        <p>What word do these emojis represent?</p>
+        <div id="guesser-category" style="display: inline-block; font-size: 0.85rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: rgba(46, 134, 171, 0.12); color: #2e86ab; border: 1px solid rgba(46, 134, 171, 0.3); margin-bottom: 0.5rem;"></div>
+        <p style="margin-bottom: 0.2rem;">What word or phrase do these emojis represent?</p>
         <div class="clue-display" id="received-clue"></div>
         
         <div id="guess-form">
             <input type="text" id="guess-input" placeholder="Type your guess here..." autocomplete="off">
             <button class="btn" id="btn-submit-guess">Guess</button>
+        </div>
+        <div style="margin: 0.5rem 0;">
+            <button class="btn" id="btn-show-hint" style="font-size: 0.82rem; padding: 4px 12px; background: transparent; border: 1px solid var(--border-color); color: var(--text-dark-color);">💡 Need a Hint?</button>
+            <p id="guesser-hint" style="display: none; font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.3rem;"></p>
         </div>
         <p id="guess-feedback" class="status-msg"></p>
         <p>Attempts left: <span id="attempts-left">3</span></p>

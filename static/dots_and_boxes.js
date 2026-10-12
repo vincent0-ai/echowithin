@@ -779,9 +779,12 @@
   function setMatchStatus(msg, type = 'normal') {
     const roomStatus = document.getElementById('room-status');
     const findBtn = document.getElementById('find-match-btn');
+    const opponentsSection = document.getElementById('online-opponents-section');
+    const roomControls = document.querySelector('#online-panel > div:first-child');
     if (!roomStatus) return;
-    roomStatus.textContent = msg;
+
     if (type === 'found') {
+      roomStatus.innerHTML = msg + ' <a href="javascript:void(0)" id="dnb-leave-match-link" style="margin-left:0.75rem;font-size:0.78rem;color:#b91c1c;text-decoration:underline;cursor:pointer;font-weight:600;">Leave</a>';
       roomStatus.style.color = '#15803d';
       roomStatus.style.background = 'rgba(34, 197, 94, 0.12)';
       roomStatus.style.border = '1px solid rgba(34, 197, 94, 0.35)';
@@ -795,7 +798,22 @@
         findBtn.disabled = true;
         findBtn.style.opacity = '0.7';
       }
+      if (opponentsSection) opponentsSection.style.display = 'none';
+      if (roomControls) roomControls.style.display = 'none';
+
+      const leaveLink = document.getElementById('dnb-leave-match-link');
+      if (leaveLink) {
+        leaveLink.onclick = () => {
+          if (state.socket && state.roomId) {
+            state.socket.emit('leave_dnb_room', { room_id: state.roomId });
+          }
+          state.roomId = null;
+          state.opponentJoined = false;
+          setMatchStatus('Left match. Click "Find Match" to search again.', 'normal');
+        };
+      }
     } else if (type === 'searching') {
+      roomStatus.textContent = msg;
       roomStatus.style.color = '#2563eb';
       roomStatus.style.background = 'transparent';
       roomStatus.style.border = 'none';
@@ -808,7 +826,10 @@
         findBtn.disabled = false;
         findBtn.style.opacity = '1';
       }
+      if (opponentsSection) opponentsSection.style.display = 'block';
+      if (roomControls) roomControls.style.display = 'flex';
     } else {
+      roomStatus.textContent = msg;
       roomStatus.style.color = 'var(--text-secondary)';
       roomStatus.style.background = 'transparent';
       roomStatus.style.border = 'none';
@@ -821,6 +842,8 @@
         findBtn.disabled = false;
         findBtn.style.opacity = '1';
       }
+      if (opponentsSection) opponentsSection.style.display = 'block';
+      if (roomControls) roomControls.style.display = 'flex';
     }
   }
 

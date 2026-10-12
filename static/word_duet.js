@@ -40,6 +40,20 @@
     'Sanctuary', 'Refuge', 'Shelter', 'Retreat', 'Hideaway', 'Haven', 'Harbor', 'Port', 'Anchor', 'Dock'
   ];
 
+  // Dynamically enrich word bank asynchronously from coop API if available
+  try {
+    fetch('/api/games/coop/words?count=50')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.words && Array.isArray(data.words)) {
+          data.words.forEach(w => {
+            if (!WORD_BANK.includes(w)) WORD_BANK.push(w);
+          });
+        }
+      })
+      .catch(() => {});
+  } catch (e) {}
+
   // --- Seedable Pseudo-Random Number Generator (Mulberry32) ---
   function createRng(seed) {
     let s = Math.abs(Number(seed) || 123456789);

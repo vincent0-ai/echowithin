@@ -4,6 +4,7 @@ from bson.objectid import ObjectId
 import datetime, secrets, hashlib
 from security import limits
 import database
+from cachetools import TTLCache
 
 bp = Blueprint('game', __name__)
 
@@ -1927,4 +1928,211 @@ def api_leaderboard_get():
         'leaders': leaders,
         'user_record': user_record
     })
+
+
+# ---------------------------------------------------------------------------
+# Cooperative Games Dynamic Prompt & Word Generation (Datamuse + Rich Themes)
+# ---------------------------------------------------------------------------
+
+_COOP_THEMED_PROMPTS = {
+    'romance': {
+        'label': '❤️ Romance & Couples',
+        'items': [
+            {'word': 'Breakfast in bed', 'hint': 'A cozy morning surprise for your partner', 'emojis': ['🍳', '🥐', '🛏️']},
+            {'word': 'Road trip', 'hint': 'Packing snacks and driving into the horizon together', 'emojis': ['🚗', '🗺️', '🎶']},
+            {'word': 'Stargazing', 'hint': 'Lying on a blanket watching the midnight sky', 'emojis': ['🌌', '✨', '⛺']},
+            {'word': 'First date', 'hint': 'Butterflies, awkward laughter, and nervous excitement', 'emojis': ['💐', '☕', '🥰']},
+            {'word': 'Slow dance', 'hint': 'Swaying together to a quiet romantic melody', 'emojis': ['💃', '🕺', '🎵']},
+            {'word': 'Sunset walk', 'hint': 'Walking hand-in-hand along the golden shore', 'emojis': ['🌅', '🏖️', '🚶']},
+            {'word': 'Candlelight dinner', 'hint': 'Soft glowing light, fine wine, and delicious food', 'emojis': ['🕯️', '🍷', '🍝']},
+            {'word': 'Love letter', 'hint': 'Handwritten feelings folded inside an envelope', 'emojis': ['💌', '✍️', '❤️']},
+            {'word': 'Ferris wheel', 'hint': 'Sharing a scenic kiss at the very top of the ride', 'emojis': ['🎡', '🌆', '🎡']},
+            {'word': 'Picnic date', 'hint': 'A checkered blanket, fruit basket, and sunny afternoon', 'emojis': ['🧺', '🥪', '🍇']},
+            {'word': 'Midnight kiss', 'hint': 'A celebration countdown or a late-night embrace', 'emojis': ['🌙', '⏰', '💋']},
+            {'word': 'Cozy cabin', 'hint': 'Fireplace crackling while snow falls outside', 'emojis': ['🪵', '🔥', '❄️']},
+            {'word': 'Wedding ring', 'hint': 'A shining circle symbolizing lifelong commitment', 'emojis': ['💍', '✨', '💒']},
+            {'word': 'Secret admirer', 'hint': 'Mystery gifts and anonymous sweet notes', 'emojis': ['🕵️', '🌹', '💌']},
+            {'word': 'Heartbeat', 'hint': 'A rapid flutter against your chest', 'emojis': ['💓', '🩺', '🫀']},
+        ]
+    },
+    'movies': {
+        'label': '🎬 Movies & Pop Culture',
+        'items': [
+            {'word': 'Movie night', 'hint': 'Dimming the lights with a giant bowl of buttery popcorn', 'emojis': ['🍿', '📺', '🛋️']},
+            {'word': 'Time machine', 'hint': 'A gadget that lets you travel back to the past or future', 'emojis': ['⏳', '🚗', '⚡']},
+            {'word': 'Superhero', 'hint': 'Flying through the city wearing a cape and saving lives', 'emojis': ['🦸', '🏙️', '💥']},
+            {'word': 'Haunted house', 'hint': 'Creaky floorboards, cobwebs, and unexpected shadows', 'emojis': ['🏚️', '👻', '🕸️']},
+            {'word': 'Treasure island', 'hint': 'An X marking the spot with buried gold and pirates', 'emojis': ['🏝️', '🏴‍☠️', '💎']},
+            {'word': 'Alien invasion', 'hint': 'Flying saucers arriving from another galaxy', 'emojis': ['🛸', '👽', '🌌']},
+            {'word': 'Red carpet', 'hint': 'Flashing cameras, formal gowns, and celebrity arrivals', 'emojis': ['📸', '👗', '✨']},
+            {'word': 'Laser sword', 'hint': 'Glowing plasma weapon used by sci-fi space knights', 'emojis': ['⚔️', '✨', '🚀']},
+            {'word': 'Detective story', 'hint': 'A magnifying glass, trench coat, and solved mystery', 'emojis': ['🕵️', '🔍', '📁']},
+            {'word': 'Wild west', 'hint': 'Cowboy hats, tumbling tumbleweeds, and a saloon standoff', 'emojis': ['🤠', '🐎', '🌵']},
+            {'word': 'Rock concert', 'hint': 'Electric guitars, roaring stadium crowds, and flashing lights', 'emojis': ['🎸', '🎤', '🤘']},
+            {'word': 'Jurassic dinosaur', 'hint': 'Giant prehistoric lizards roaming a theme park', 'emojis': ['🦖', '🌴', '🦴']},
+        ]
+    },
+    'food': {
+        'label': '🍕 Food & Delicious Life',
+        'items': [
+            {'word': 'Midnight snack', 'hint': 'Sneaking to the refrigerator when everyone else is asleep', 'emojis': ['🌙', '🥪', '😋']},
+            {'word': 'Pizza party', 'hint': 'Melted cheesy slices shared with close friends', 'emojis': ['🍕', '🥤', '🎉']},
+            {'word': 'Ice cream cone', 'hint': 'Licking sweet scoops on a hot sunny day before it melts', 'emojis': ['🍦', '☀️', '🍧']},
+            {'word': 'Coffee break', 'hint': 'A steamy roasted cup to recharge your energy', 'emojis': ['☕', '🌅', '🥐']},
+            {'word': 'Birthday cake', 'hint': 'Blowing out candles and making a secret wish', 'emojis': ['🎂', '🕯️', '🎁']},
+            {'word': 'Hot chocolate', 'hint': 'Warm comforting cocoa topped with fluffy marshmallows', 'emojis': ['☕', '🍫', '❄️']},
+            {'word': 'Taco tuesday', 'hint': 'Crunchy shells packed with salsa and lime', 'emojis': ['🌮', '🥑', '🌶️']},
+            {'word': 'Sushi roll', 'hint': 'Fresh fish, seaweed, and pickled ginger with chopsticks', 'emojis': ['🍣', '🥢', '🍱']},
+            {'word': 'Sunday brunch', 'hint': 'Mimosas, fluffy waffles, and eggs in a sunny cafe', 'emojis': ['🥞', '🍳', '🥂']},
+            {'word': 'Cookie dough', 'hint': 'Sweet chocolate chips eaten straight out of the mixing bowl', 'emojis': ['🍪', '🥛', '🥄']},
+            {'word': 'Barbecue ribs', 'hint': 'Smoky grill cooking outdoors in the backyard', 'emojis': ['🍖', '🔥', '🍺']},
+        ]
+    },
+    'activities': {
+        'label': '🎉 Fun & Adventures',
+        'items': [
+            {'word': 'Roller coaster', 'hint': 'Hands up high screaming down a steep metallic drop', 'emojis': ['🎢', '😱', '🎡']},
+            {'word': 'Karaoke night', 'hint': 'Belting out popular 90s songs into a microphone', 'emojis': ['🎤', '🎶', '🍻']},
+            {'word': 'Campfire', 'hint': 'Roasting marshmallows around crackling wood in the woods', 'emojis': ['🔥', '🏕️', '🪵']},
+            {'word': 'Pillow fight', 'hint': 'Playful feathers flying everywhere across the bedroom', 'emojis': ['🛏️', '🪶', '😂']},
+            {'word': 'Escape room', 'hint': 'Solving cipher locks before a 60-minute timer expires', 'emojis': ['🔐', '🧩', '⏳']},
+            {'word': 'Snowball fight', 'hint': 'Packing powder into spheres and ducking behind snowbanks', 'emojis': ['❄️', '☃️', '🧤']},
+            {'word': 'Board game', 'hint': 'Rolling dice, moving tokens, and friendly family rivalries', 'emojis': ['🎲', '♟️', '🃏']},
+            {'word': 'Scavenger hunt', 'hint': 'Following clues step-by-step to track down hidden items', 'emojis': ['🗺️', '🔍', '🏆']},
+            {'word': 'Water balloon', 'hint': 'Splashing each other on the front lawn on a hot summer day', 'emojis': ['🎈', '💦', '☀️']},
+            {'word': 'Bowling alley', 'hint': 'Renting funny shoes and aiming for a perfect strike', 'emojis': ['🎳', '👟', '🎳']},
+        ]
+    },
+    'travel': {
+        'label': '✈️ Travel & Places',
+        'items': [
+            {'word': 'Airport terminal', 'hint': 'Pulling rolling luggage and watching jets take off', 'emojis': ['✈️', '🧳', '🛂']},
+            {'word': 'Tropical island', 'hint': 'Turquoise water, tall coconut palms, and white sand', 'emojis': ['🏝️', '🌴', '🍹']},
+            {'word': 'Eiffel tower', 'hint': 'Iconic Parisian landmark that sparkles brightly every hour', 'emojis': ['🗼', '🥐', '✨']},
+            {'word': 'Lighthouse', 'hint': 'Guiding ships safely through foggy rocky coastlines', 'emojis': ['🗼', '🌊', '🚢']},
+            {'word': 'Desert oasis', 'hint': 'A surprising pool of fresh water amidst scorching dunes', 'emojis': ['🏜️', '🐪', '💧']},
+            {'word': 'Mountain summit', 'hint': 'Standing at the highest snowy peak looking at the clouds', 'emojis': ['🏔️', '🧗', '🚩']},
+            {'word': 'Ski resort', 'hint': 'Riding a chairlift before cruising down powdery slopes', 'emojis': ['🎿', '❄️', '🚠']},
+            {'word': 'Amusement park', 'hint': 'Cotton candy, bumper cars, and dizzying carnival rides', 'emojis': ['🎪', '🎡', '🍿']},
+        ]
+    },
+    'nature': {
+        'label': '🌿 Nature & Wildlife',
+        'items': [
+            {'word': 'Polar bear', 'hint': 'Huge furry white predator navigating Arctic ice', 'emojis': ['🐻‍❄️', '❄️', '🧊']},
+            {'word': 'Shooting star', 'hint': 'A brief brilliant streak across the night sky', 'emojis': ['🌠', '✨', '🌌']},
+            {'word': 'Thunderstorm', 'hint': 'Flashes of lightning followed by booming rumbles', 'emojis': ['⛈️', '⚡', '🌧️']},
+            {'word': 'Rainbow', 'hint': 'A colorful arch appearing right as the rain stops', 'emojis': ['🌈', '🌦️', '☀️']},
+            {'word': 'Golden retriever', 'hint': 'A friendly, loyal pup happily chasing a tennis ball', 'emojis': ['🐕', '🎾', '💛']},
+            {'word': 'Hummingbird', 'hint': 'A tiny avian marvel flapping wings at blinding speed', 'emojis': ['🐦', '🌸', '💨']},
+            {'word': 'Solar eclipse', 'hint': 'The moon moving directly between the earth and sun', 'emojis': ['🌑', '☀️', '🕶️']},
+            {'word': 'Coral reef', 'hint': 'Vibrant undersea ecosystem teeming with colorful fish', 'emojis': ['🐠', '🪸', '🌊']},
+        ]
+    }
+}
+
+_DATAMUSE_WORD_CACHE = TTLCache(maxsize=128, ttl=1800)
+
+
+@bp.route('/api/games/coop/prompt', methods=['GET'])
+def coop_prompt_api():
+    """Returns dynamic, high-engagement prompts and clues for cooperative games (Emoji Decoder / Word Duet)."""
+    import random
+    import requests
+
+    req_category = (request.args.get('category') or 'random').strip().lower()
+    difficulty = (request.args.get('difficulty') or 'normal').strip().lower()
+
+    # Determine topic key
+    available_cats = list(_COOP_THEMED_PROMPTS.keys())
+    if req_category in _COOP_THEMED_PROMPTS:
+        chosen_cat_key = req_category
+    else:
+        chosen_cat_key = random.choice(available_cats)
+
+    theme_data = _COOP_THEMED_PROMPTS[chosen_cat_key]
+    candidate = random.choice(theme_data['items'])
+    
+    # Try Datamuse dynamic enrichment on 20% of calls or if explicitly requested
+    dynamic_word = None
+    use_external = (req_category in ['datamuse', 'dynamic'] or random.random() < 0.25)
+    if use_external:
+        cache_key = f"dm_{chosen_cat_key}"
+        cached_list = _DATAMUSE_WORD_CACHE.get(cache_key)
+        if cached_list is None:
+            try:
+                dm_res = requests.get(
+                    f"https://api.datamuse.com/words?topics={chosen_cat_key}&max=35",
+                    timeout=1.8
+                )
+                if dm_res.status_code == 200:
+                    raw_words = [
+                        w.get('word', '').title()
+                        for w in dm_res.json()
+                        if 3 <= len(w.get('word', '')) <= 14 and w.get('word', '').isalpha()
+                    ]
+                    if len(raw_words) >= 5:
+                        _DATAMUSE_WORD_CACHE[cache_key] = raw_words
+                        cached_list = raw_words
+            except Exception:
+                cached_list = None
+
+        if cached_list:
+            chosen_external = random.choice(cached_list)
+            dynamic_word = chosen_external
+
+    word = dynamic_word if dynamic_word else candidate['word']
+    hint = candidate.get('hint', 'Think about common experiences and clues')
+    if dynamic_word and dynamic_word != candidate['word']:
+        hint = f"A word related to {theme_data['label'].split(' ')[-1].lower()}"
+
+    return jsonify({
+        'status': 'success',
+        'word': word,
+        'category_id': chosen_cat_key,
+        'category_label': theme_data['label'],
+        'hint': hint,
+        'difficulty': difficulty,
+        'suggested_emojis': candidate.get('emojis', ['💡', '🧩']),
+        'is_phrase': ' ' in word
+    })
+
+
+@bp.route('/api/games/coop/words', methods=['GET'])
+def coop_words_api():
+    """Returns a dynamic pool of 25+ rich words for grid games like Word Duet / Codenames."""
+    import random
+    count = min(max(request.args.get('count', 25, type=int), 10), 50)
+    category = request.args.get('category', 'mixed').strip().lower()
+
+    pool = []
+    if category in _COOP_THEMED_PROMPTS:
+        for it in _COOP_THEMED_PROMPTS[category]['items']:
+            pool.append(it['word'].split(' ')[0].capitalize())
+    else:
+        for cat, val in _COOP_THEMED_PROMPTS.items():
+            for it in val['items']:
+                # Pull distinct single words or whole short items
+                w = it['word'].split(' ')[0].capitalize()
+                if w not in pool:
+                    pool.append(w)
+
+    # Supplement with wholesome words
+    extra_words = [
+        'Coffee', 'Starlight', 'Blanket', 'Forest', 'Journey', 'Passport', 'Symphony', 'Horizon',
+        'Moon', 'Garden', 'Canvas', 'Bridge', 'Treasure', 'Lighthouse', 'Sunset', 'Mountain',
+        'Melody', 'Compass', 'Feather', 'Castle', 'Island', 'Shadow', 'Flame', 'Harbor',
+        'Breeze', 'Meadow', 'Crown', 'Ocean', 'Galaxy', 'Puzzle', 'Letter', 'Guitar',
+        'Piano', 'Sunrise', 'Cloud', 'Library', 'Candle', 'Planet', 'Cabin', 'Haven'
+    ]
+    for ew in extra_words:
+        if ew not in pool:
+            pool.append(ew)
+
+    random.shuffle(pool)
+    return jsonify({
+        'status': 'success',
+        'words': pool[:count]
+    })
+
 

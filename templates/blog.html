@@ -307,6 +307,25 @@
         </div>
 
         <div id="latest-posts" class="tab-content active">
+            <div class="feed-filter-bar" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.5rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border-color);">
+                <div style="display: flex; gap: 0.4rem; align-items: center;">
+                    <a href="{{ url_for('blog.blog', tab='trending') }}" style="text-decoration: none; font-size: 0.82rem; font-weight: 600; padding: 0.35rem 0.85rem; border-radius: 999px; border: 1px solid {% if feed_tab == 'trending' or not feed_tab %}var(--primary-color){% else %}var(--border-color){% endif %}; background: {% if feed_tab == 'trending' or not feed_tab %}var(--primary-color){% else %}transparent{% endif %}; color: {% if feed_tab == 'trending' or not feed_tab %}var(--text-light-color){% else %}var(--text-dark-color){% endif %};">
+                        Trending
+                    </a>
+                    {% if current_user.is_authenticated and not current_user.is_guest %}
+                    <a href="{{ url_for('blog.blog', tab='for_you') }}" style="text-decoration: none; font-size: 0.82rem; font-weight: 600; padding: 0.35rem 0.85rem; border-radius: 999px; border: 1px solid {% if feed_tab == 'for_you' %}var(--primary-color){% else %}var(--border-color){% endif %}; background: {% if feed_tab == 'for_you' %}var(--primary-color){% else %}transparent{% endif %}; color: {% if feed_tab == 'for_you' %}var(--text-light-color){% else %}var(--text-dark-color){% endif %};">
+                        For You
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('blog.blog', tab='latest') }}" style="text-decoration: none; font-size: 0.82rem; font-weight: 600; padding: 0.35rem 0.85rem; border-radius: 999px; border: 1px solid {% if feed_tab == 'latest' %}var(--primary-color){% else %}var(--border-color){% endif %}; background: {% if feed_tab == 'latest' %}var(--primary-color){% else %}transparent{% endif %}; color: {% if feed_tab == 'latest' %}var(--text-light-color){% else %}var(--text-dark-color){% endif %};">
+                        Latest
+                    </a>
+                </div>
+                <a href="{{ url_for('blog.all_posts') }}" style="font-size: 0.82rem; color: var(--primary-color); text-decoration: none; font-weight: 600;">
+                    All posts & tags →
+                </a>
+            </div>
+
             {% if latest_posts %}
             {% for post in latest_posts %}
             {{ render_post_item(post, current_user, now) }}

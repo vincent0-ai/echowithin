@@ -77,8 +77,8 @@
     targetScore: 3, // 3, 5, 11, or Infinity
     isGameOver: false,
     isPaused: true, // Paused by default on page load so player is in control
-    p1: { x: 20, y: V_HEIGHT / 2 - PADDLE_H / 2, width: PADDLE_W, height: PADDLE_H, dy: 0, score: 0, color: '#e06a3b' },
-    p2: { x: V_WIDTH - 20 - PADDLE_W, y: V_HEIGHT / 2 - PADDLE_H / 2, width: PADDLE_W, height: PADDLE_H, dy: 0, score: 0, color: '#2e86ab' },
+    p1: { x: 20, y: V_HEIGHT / 2 - PADDLE_H / 2, targetY: V_HEIGHT / 2 - PADDLE_H / 2, width: PADDLE_W, height: PADDLE_H, dy: 0, score: 0, color: '#e06a3b' },
+    p2: { x: V_WIDTH - 20 - PADDLE_W, y: V_HEIGHT / 2 - PADDLE_H / 2, targetY: V_HEIGHT / 2 - PADDLE_H / 2, width: PADDLE_W, height: PADDLE_H, dy: 0, score: 0, color: '#2e86ab' },
     ball: { x: V_WIDTH / 2, y: V_HEIGHT / 2, radius: 8, vx: BASE_SPEED, vy: 3, speed: BASE_SPEED, color: '#ffffff' },
     consecutiveVolleys: 0,
     maxMatchVolleys: 0,
@@ -579,11 +579,40 @@
         state.p2.y = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, state.p2.y));
         sendPaddleSync();
       }
-      // Dead-reckoning: extrapolate ball position between host sync packets
-      // so the ball moves smoothly at 60fps instead of teleporting at ~33Hz.
-      // Wall bounces are approximated locally; the next host sync corrects drift.
-      state.ball.x += state.ball.vx;
-      state.ball.y += state.ball.vy;
+      // LERP remote host paddle (P1)
+      if (typeof state.p1.targetY === 'number') {
+        state.p1.y += (state.p1.targetY - state.p1.y) * 0.45;
+      }
+
+      // Extrapolate ball movement smoothly
+      const prevX = state.ball.x;
+      const prevY = state.ball.y;
+      const nextX = prevX + state.ball.vx;
+      const nextY = prevY + state.ball.vy;
+      const r = state.ball.radius;
+
+      // Guest client-side prediction: detect collision on guest's own paddle (P2)
+      // to eliminate any perceived delay or tunneling on the player's screen!
+      let guestHit = false;
+      if (state.ball.vx > 0) {
+        const planeX = state.p2.x;
+        if (prevX + r <= planeX && nextX + r >= planeX) {
+          const t = Math.max(0, Math.min(1, (planeX - (prevX + r)) / (nextX - prevX || 0.001)));
+          const hitY = prevY + t * state.ball.vy;
+          if (hitY + r >= state.p2.y - 10 && hitY - r <= state.p2.y + state.p2.height + 10) {
+            state.ball.x = planeX - r;
+            state.ball.y = hitY;
+            calculateBounce(state.p2, -1);
+            guestHit = true;
+          }
+        }
+      }
+
+      if (!guestHit) {
+        state.ball.x = nextX;
+        state.ball.y = nextY;
+      }
+
       if (state.ball.y - state.ball.radius < 0) {
         state.ball.y = state.ball.radius;
         state.ball.vy = -state.ball.vy;
@@ -594,14 +623,19 @@
       return;
     }
 
-    // Update paddle positions
+    // Update paddle positions (Host, AI, Local)
     if (state.p1.dy !== 0) {
       state.p1.y += state.p1.dy;
       state.p1.y = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, state.p1.y));
       if (state.mode === 'online' && state.isHost) sendPaddleSync();
     }
 
-    if (state.mode === 'ai') {
+    if (state.mode === 'online' && state.isHost) {
+      // Smoothly interpolate remote guest paddle (P2)
+      if (typeof state.p2.targetY === 'number') {
+        state.p2.y += (state.p2.targetY - state.p2.y) * 0.45;
+      }
+    } else if (state.mode === 'ai') {
       updateAI(now);
       state.p2.y += state.p2.dy;
       state.p2.y = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, state.p2.y));
@@ -610,9 +644,82 @@
       state.p2.y = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, state.p2.y));
     }
 
-    // Ball physics
-    state.ball.x += state.ball.vx;
-    state.ball.y += state.ball.vy;
+    // Ball physics with Continuous Collision Detection (CCD) to prevent tunneling
+    const prevX = state.ball.x;
+    const prevY = state.ball.y;
+    const nextX = prevX + state.ball.vx;
+    const nextY = prevY + state.ball.vy;
+    const r = state.ball.radius;
+    let hitDetected = false;
+
+    // 1. Swept Ray CCD: Check Left Paddle (P1)
+    if (state.ball.vx < 0) {
+      const planeX = state.p1.x + state.p1.width;
+      if (prevX - r >= planeX - 2 && nextX - r <= planeX) {
+        const t = Math.max(0, Math.min(1, (prevX - r - planeX) / (prevX - nextX || 0.001)));
+        const hitY = prevY + t * state.ball.vy;
+        let padY = state.p1.y;
+        let padH = state.p1.height;
+        if (state.mode === 'online' && state.isHost && state.playerIndex === 1) {
+          padY = Math.max(0, padY - 14);
+          padH = Math.min(V_HEIGHT - padY, padH + 28);
+        }
+        if (hitY + r >= padY && hitY - r <= padY + padH) {
+          state.ball.x = planeX + r;
+          state.ball.y = hitY;
+          calculateBounce(state.p1, 1);
+          hitDetected = true;
+        }
+      }
+    }
+    // 2. Swept Ray CCD: Check Right Paddle (P2)
+    else if (state.ball.vx > 0) {
+      const planeX = state.p2.x;
+      if (prevX + r <= planeX + 2 && nextX + r >= planeX) {
+        const t = Math.max(0, Math.min(1, (planeX - (prevX + r)) / (nextX - prevX || 0.001)));
+        const hitY = prevY + t * state.ball.vy;
+        let padY = state.p2.y;
+        let padH = state.p2.height;
+        if (state.mode === 'online' && state.isHost && state.playerIndex === 0) {
+          padY = Math.max(0, padY - 14);
+          padH = Math.min(V_HEIGHT - padY, padH + 28);
+        }
+        if (hitY + r >= padY && hitY - r <= padY + padH) {
+          state.ball.x = planeX - r;
+          state.ball.y = hitY;
+          calculateBounce(state.p2, -1);
+          hitDetected = true;
+        }
+      }
+    }
+
+    if (!hitDetected) {
+      state.ball.x = nextX;
+      state.ball.y = nextY;
+
+      // Fallback discrete AABB collision check
+      let paddle = (state.ball.x < V_WIDTH / 2) ? state.p1 : state.p2;
+      let padY = paddle.y;
+      let padH = paddle.height;
+      if (state.mode === 'online' && state.isHost && paddle === state.p2) {
+        padY = Math.max(0, padY - 14);
+        padH = Math.min(V_HEIGHT - padY, padH + 28);
+      }
+      if (
+        state.ball.x + state.ball.radius >= paddle.x &&
+        state.ball.x - state.ball.radius <= paddle.x + paddle.width &&
+        state.ball.y + state.ball.radius >= padY &&
+        state.ball.y - state.ball.radius <= padY + padH
+      ) {
+        if (paddle === state.p1 && state.ball.vx < 0) {
+          state.ball.x = state.p1.x + state.p1.width + state.ball.radius;
+          calculateBounce(paddle, 1);
+        } else if (paddle === state.p2 && state.ball.vx > 0) {
+          state.ball.x = state.p2.x - state.ball.radius;
+          calculateBounce(paddle, -1);
+        }
+      }
+    }
 
     // Wall bounce (top and bottom)
     if (state.ball.y - state.ball.radius < 0) {
@@ -623,41 +730,6 @@
       state.ball.y = V_HEIGHT - state.ball.radius;
       state.ball.vy = -state.ball.vy;
       soundWall();
-    }
-
-    // Paddle collision
-    let paddle = (state.ball.x < V_WIDTH / 2) ? state.p1 : state.p2;
-
-    // Latency compensation: in online mode the host's copy of the remote
-    // paddle lags ~50-120ms behind its real position.  Add a small vertical
-    // margin so collisions the guest genuinely made aren't missed due to
-    // stale position data.  The bonus is symmetric (top and bottom) and only
-    // applies to the opponent's paddle, never the local one.
-    let padY = paddle.y;
-    let padH = paddle.height;
-    if (state.mode === 'online' && state.isHost) {
-      const isRemotePaddle = (paddle === state.p2);
-      if (isRemotePaddle) {
-        const LAG_MARGIN = 12; // px, ~2 frames of fast paddle movement
-        padY = Math.max(0, padY - LAG_MARGIN);
-        padH = Math.min(V_HEIGHT - padY, padH + LAG_MARGIN * 2);
-      }
-    }
-
-    if (
-      state.ball.x + state.ball.radius >= paddle.x &&
-      state.ball.x - state.ball.radius <= paddle.x + paddle.width &&
-      state.ball.y + state.ball.radius >= padY &&
-      state.ball.y - state.ball.radius <= padY + padH
-    ) {
-      // Prevent ball sticking inside paddle
-      if (paddle === state.p1 && state.ball.vx < 0) {
-        state.ball.x = state.p1.x + state.p1.width + state.ball.radius;
-        calculateBounce(paddle, 1);
-      } else if (paddle === state.p2 && state.ball.vx > 0) {
-        state.ball.x = state.p2.x - state.ball.radius;
-        calculateBounce(paddle, -1);
-      }
     }
 
     // Goal scoring
@@ -1014,16 +1086,16 @@
     });
 
     state.socket.on('pong_paddle_sync', (data) => {
-      // Opponent paddle renders from live, validated sync state only.
+      // Opponent paddle renders from live, validated sync state with smooth LERP interpolation.
       if (!data || data.room_id !== state.roomId) return;
       if (data.player === state.playerIndex) return; // ignore our own echo
       const y = Number(data.y);
       if (!Number.isFinite(y)) return;
       const clamped = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, y));
       if (state.playerIndex === 0) {
-        state.p2.y = clamped;
+        state.p2.targetY = clamped;
       } else {
-        state.p1.y = clamped;
+        state.p1.targetY = clamped;
       }
     });
 

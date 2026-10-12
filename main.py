@@ -685,7 +685,7 @@ post_comment_stats_cache = TTLCache(maxsize=256, ttl=30)
 # Community stats cache for home page (60 second TTL)
 community_stats_cache = TTLCache(maxsize=1, ttl=60)
 # Blog feed cache (60 second TTL - balanced freshness/performance)
-blog_feed_cache = TTLCache(maxsize=1, ttl=60)
+blog_feed_cache = TTLCache(maxsize=32, ttl=60)
 # User loader cache - CRITICAL for performance (30 second TTL)
 # This caches user objects to avoid DB query on every single request
 user_loader_cache = TTLCache(maxsize=512, ttl=30)
@@ -3675,6 +3675,114 @@ def handle_duet_restart(data=None, *args, **kwargs):
         active_duet_rooms[room_id]['seed'] = seed
     if room_id:
         emit('duet_restarted', {'seed': seed}, room=room_id)
+
+
+# --- Emoji Decoder (Co-op Deduction) Handlers ---
+active_emoji_rooms = {}
+
+@socketio.on('emoji_join_room')
+def handle_emoji_join_room(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room') or data.get('room_id')
+    if not room_id:
+        return
+    room_id = str(room_id).strip()[:32]
+    sid = request.sid
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Partner'
+    join_room(room_id)
+
+    room_info = active_emoji_rooms.get(room_id)
+    if not room_info:
+        room_info = {
+            'host_sid': sid,
+            'host_name': user_name,
+            'guest_sid': None,
+            'guest_name': None,
+            'round': 1,
+            'score': 0,
+            'bond_id': data.get('bond_id'),
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        }
+        active_emoji_rooms[room_id] = room_info
+        emit('emoji_room_joined', {
+            'room_id': room_id,
+            'is_creator': True,
+            'player_count': 1,
+            'partner_name': None
+        }, room=sid)
+    elif room_info.get('host_sid') == sid:
+        emit('emoji_room_joined', {
+            'room_id': room_id,
+            'is_creator': True,
+            'player_count': 2 if room_info.get('guest_sid') else 1,
+            'partner_name': room_info.get('guest_name')
+        }, room=sid)
+    else:
+        room_info['guest_sid'] = sid
+        room_info['guest_name'] = user_name
+        active_emoji_rooms[room_id] = room_info
+        emit('emoji_room_joined', {
+            'room_id': room_id,
+            'is_creator': False,
+            'player_count': 2,
+            'partner_name': room_info['host_name']
+        }, room=sid)
+        if room_info.get('host_sid'):
+            emit('emoji_room_joined', {
+                'room_id': room_id,
+                'is_creator': True,
+                'player_count': 2,
+                'partner_name': user_name
+            }, room=room_info['host_sid'])
+
+@socketio.on('emoji_start_round')
+def handle_emoji_start_round(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room') or data.get('room_id')
+    if room_id:
+        emit('emoji_round_started', {
+            'round': data.get('round', 1),
+            'word': data.get('word', ''),
+            'category_label': data.get('category_label', ''),
+            'hint': data.get('hint', ''),
+            'suggested_emojis': data.get('suggested_emojis', []),
+            'giver_is_p1': data.get('giver_is_p1', True)
+        }, room=room_id)
+
+@socketio.on('emoji_submit_clue')
+def handle_emoji_submit_clue(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room') or data.get('room_id')
+    clue = data.get('clue', [])
+    if room_id and clue:
+        emit('emoji_clue_submitted', {'clue': clue}, room=room_id)
+
+@socketio.on('emoji_submit_guess')
+def handle_emoji_submit_guess(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room') or data.get('room_id')
+    correct = bool(data.get('correct', False))
+    points = int(data.get('points', 0))
+    attempts_left = int(data.get('attempts_left', 0))
+    if room_id:
+        emit('emoji_guess_result', {
+            'correct': correct,
+            'points': points,
+            'attempts_left': attempts_left
+        }, room=room_id)
+        bond_id = data.get('bond_id')
+        if correct and bond_id and current_user.is_authenticated:
+            try:
+                bonds_conf.update_one(
+                    {'_id': ObjectId(bond_id)},
+                    {'$inc': {'stats.games_played': 1, 'stats.coop_score': points}}
+                )
+            except Exception:
+                pass
 
 
 # --- Team Crossword (Collaborative Mini Crossword) Handlers ---

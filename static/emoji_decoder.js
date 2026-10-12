@@ -127,6 +127,57 @@ document.getElementById('btn-solo').onclick = () => startSolo();
 document.getElementById('btn-local').onclick = () => startLocal();
 document.getElementById('btn-online').onclick = () => startOnline();
 
+let currentCategoryLabel = "";
+let currentHint = "";
+let currentSuggestedEmojis = [];
+
+function normalizeGuess(str) {
+    return (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+async function fetchPrompt() {
+    try {
+        const res = await fetch('/api/games/coop/prompt?category=random');
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.word) {
+                return data;
+            }
+        }
+    } catch (e) {
+        console.warn('Dynamic prompt fetch error, falling back:', e);
+    }
+    const fallbackWord = allWords[Math.floor(Math.random() * allWords.length)];
+    return {
+        word: fallbackWord,
+        category_label: '💡 General Word',
+        hint: 'Use creative emoji combinations to hint this concept',
+        suggested_emojis: wordBank[fallbackWord.toLowerCase()] || ['❓']
+    };
+}
+
+// Hint button listener
+const btnShowHint = document.getElementById('btn-show-hint');
+if (btnShowHint) {
+    btnShowHint.onclick = () => {
+        const hintEl = document.getElementById('guesser-hint');
+        if (hintEl) {
+            hintEl.innerText = currentHint ? `Hint: ${currentHint}` : 'Hint: Think about common experiences and situations!';
+            hintEl.style.display = 'block';
+            btnShowHint.style.display = 'none';
+        }
+    };
+}
+
+function resetGuesserHint() {
+    if (btnShowHint) btnShowHint.style.display = 'inline-block';
+    const hintEl = document.getElementById('guesser-hint');
+    if (hintEl) {
+        hintEl.style.display = 'none';
+        hintEl.innerText = '';
+    }
+}
+
 // --- SOLO MODE ---
 function startSolo() {
     mode = 'solo';
@@ -135,17 +186,23 @@ function startSolo() {
     playSoloRound();
 }
 
-function playSoloRound() {
+async function playSoloRound() {
     if (currentRound > maxRounds) return endGame();
     
-    currentWord = allWords[Math.floor(Math.random() * allWords.length)];
-    currentClue = wordBank[currentWord] || ["❓"];
+    const prompt = await fetchPrompt();
+    currentWord = prompt.word;
+    currentCategoryLabel = prompt.category_label || '💡 General Word';
+    currentHint = prompt.hint || '';
+    currentClue = prompt.suggested_emojis && prompt.suggested_emojis.length ? prompt.suggested_emojis : (wordBank[currentWord.toLowerCase()] || ["❓"]);
     
     attemptsLeft = 3;
     role = 'guesser';
     
     updateStats();
+    resetGuesserHint();
     showScreen('guesser');
+    const guessCat = document.getElementById('guesser-category');
+    if (guessCat) guessCat.innerText = currentCategoryLabel;
     document.getElementById('received-clue').innerText = currentClue.join("");
     document.getElementById('guess-input').value = "";
     document.getElementById('guess-feedback').innerText = "";
@@ -161,21 +218,28 @@ function startLocal() {
     playLocalRound();
 }
 
-function playLocalRound() {
+async function playLocalRound() {
     if (currentRound > maxRounds) return endGame();
     
-    currentWord = allWords[Math.floor(Math.random() * allWords.length)];
+    const prompt = await fetchPrompt();
+    currentWord = prompt.word;
+    currentCategoryLabel = prompt.category_label || '💡 General Word';
+    currentHint = prompt.hint || '';
     currentClue = [];
     attemptsLeft = 3;
     
     // Switch roles every round
-    role = (currentRound % 2 !== 0) ? 'giver' : 'guesser'; 
-    // Wait, in Pass & Play, someone has to be Giver, then they pass device to Guesser.
+    role = (currentRound % 2 !== 0) ? 'giver' : 'guesser';
     
     updateStats();
+    resetGuesserHint();
     
     // Giver screen setup
     showScreen('giver');
+    const givCat = document.getElementById('giver-category');
+    if (givCat) givCat.innerText = currentCategoryLabel;
+    const givHint = document.getElementById('giver-hint');
+    if (givHint) givHint.innerText = currentHint ? `Tip: ${currentHint}` : '';
     document.getElementById('secret-word').innerText = currentWord;
     document.getElementById('current-clue-builder').innerText = "";
     document.getElementById('btn-submit-clue').disabled = true;
@@ -186,8 +250,8 @@ function playLocalRound() {
 // --- ONLINE MODE ---
 function startOnline() {
     mode = 'online';
-    if (!room || !bondId) {
-        alert("Missing room or bond ID in URL.");
+    if (!room) {
+        alert("Missing room code in URL.");
         return;
     }
     
@@ -197,31 +261,48 @@ function startOnline() {
     document.getElementById('btn-local').disabled = true;
     document.getElementById('btn-online').disabled = true;
     
-    socket.emit('emoji_join_room', { room, bond_id: bondId });
+    showScreen('wait');
+    document.getElementById('wait-msg').innerText = "Waiting for partner to join...\nRoom: " + room;
+
+    if (socket) {
+        socket.emit('emoji_join_room', { room, bond_id: bondId });
+    }
 }
 
 if (socket) {
     socket.on('emoji_room_joined', (data) => {
         isPlayer1 = data.is_creator;
-        if (data.player_count === 2) {
+        if (data.player_count >= 2) {
+            document.getElementById('wait-msg').innerText = "Partner connected! Starting round...";
             if (isPlayer1) {
-                // Creator starts the first round
-                startOnlineRound();
+                setTimeout(() => {
+                    startOnlineRound();
+                }, 400);
             }
+        } else {
+            showScreen('wait');
+            document.getElementById('wait-msg').innerText = "Waiting for partner to join...\nRoom: " + room;
         }
     });
     
     socket.on('emoji_round_started', (data) => {
         currentRound = data.round;
         currentWord = data.word;
+        currentCategoryLabel = data.category_label || '💡 General Word';
+        currentHint = data.hint || '';
         role = (isPlayer1 === data.giver_is_p1) ? 'giver' : 'guesser';
         attemptsLeft = 3;
         currentClue = [];
         
         updateStats();
+        resetGuesserHint();
         
         if (role === 'giver') {
             showScreen('giver');
+            const givCat = document.getElementById('giver-category');
+            if (givCat) givCat.innerText = currentCategoryLabel;
+            const givHint = document.getElementById('giver-hint');
+            if (givHint) givHint.innerText = currentHint ? `Tip: ${currentHint}` : '';
             document.getElementById('secret-word').innerText = currentWord;
             document.getElementById('current-clue-builder').innerText = "";
             document.getElementById('btn-submit-clue').disabled = true;
@@ -235,6 +316,9 @@ if (socket) {
         if (role === 'guesser') {
             currentClue = data.clue;
             showScreen('guesser');
+            const guessCat = document.getElementById('guesser-category');
+            if (guessCat) guessCat.innerText = currentCategoryLabel;
+            resetGuesserHint();
             document.getElementById('received-clue').innerText = currentClue.join("");
             document.getElementById('guess-input').value = "";
             document.getElementById('guess-feedback').innerText = "";
@@ -265,11 +349,15 @@ if (socket) {
     });
 }
 
-function startOnlineRound() {
+async function startOnlineRound() {
+    const prompt = await fetchPrompt();
     socket.emit('emoji_start_round', {
         room, bond_id: bondId,
         round: currentRound,
-        word: allWords[Math.floor(Math.random() * allWords.length)],
+        word: prompt.word,
+        category_label: prompt.category_label,
+        hint: prompt.hint,
+        suggested_emojis: prompt.suggested_emojis,
         giver_is_p1: (currentRound % 2 !== 0)
     });
 }
@@ -314,11 +402,13 @@ document.getElementById('btn-submit-clue').onclick = () => {
 
 // --- GUESSER LOGIC ---
 document.getElementById('btn-submit-guess').onclick = () => {
-    const guess = document.getElementById('guess-input').value.trim().toLowerCase();
+    const guess = document.getElementById('guess-input').value.trim();
     if (!guess) return;
     
+    const isCorrect = (normalizeGuess(guess) === normalizeGuess(currentWord));
+    
     if (mode === 'solo' || mode === 'local') {
-        if (guess === currentWord.toLowerCase()) {
+        if (isCorrect) {
             // Correct
             const points = calculatePoints();
             score += points;
@@ -336,7 +426,7 @@ document.getElementById('btn-submit-guess').onclick = () => {
             }
         }
     } else if (mode === 'online') {
-        if (guess === currentWord.toLowerCase()) {
+        if (isCorrect) {
             socket.emit('emoji_submit_guess', { room, bond_id: bondId, correct: true, points: calculatePoints() });
         } else {
             socket.emit('emoji_submit_guess', { room, bond_id: bondId, correct: false, attempts_left: attemptsLeft - 1 });
@@ -390,4 +480,9 @@ function endGame() {
     showScreen('end');
     document.getElementById('final-score-display').innerText = `Final Score: ${score}`;
     document.getElementById('stats-bar').style.display = 'none';
+}
+
+// Auto-launch online mode if room parameter exists in URL
+if (room) {
+    startOnline();
 }

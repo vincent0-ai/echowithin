@@ -138,4 +138,104 @@ class TestBlogEndpointsAccess:
         res = client.get('/search?q=hello&sort=newest')
         assert res.status_code == 200
 
+    def test_blog_feed_tabs(self, client):
+        """Verify blog feed tabs (trending, latest, for_you) render successfully."""
+        res_trend = client.get('/blog?tab=trending')
+        assert res_trend.status_code == 200
+        assert b'Trending' in res_trend.data
+
+        res_latest = client.get('/blog?tab=latest')
+        assert res_latest.status_code == 200
+        assert b'Latest' in res_latest.data
+
+
+class TestBlogAlgorithmAndDiversity:
+    """Tests for Hacker News gravity decay scoring, author diversity, and partner boosts."""
+
+    def test_calculate_post_gravity_score(self):
+        from blueprints.blog import calculate_post_gravity_score
+        now = datetime.datetime.now(datetime.timezone.utc)
+        
+        # New post with moderate engagement
+        new_post = {
+            'timestamp': now - datetime.timedelta(hours=1),
+            'likes_count': 5,
+            'comment_count': 2,
+            'share_count': 1,
+            'view_count': 50
+        }
+        # Older post (7 days ago) with high engagement
+        old_post = {
+            'timestamp': now - datetime.timedelta(days=7),
+            'likes_count': 20,
+            'comment_count': 10,
+            'share_count': 5,
+            'view_count': 500
+        }
+
+        score_new = calculate_post_gravity_score(new_post, now)
+        score_old = calculate_post_gravity_score(old_post, now)
+
+        # Fresh active post should rank well relative to 7-day old post due to gravity decay
+        assert score_new > 0
+        assert score_old > 0
+        assert score_new > score_old
+
+    def test_partner_and_tag_boosts(self):
+        from blueprints.blog import calculate_post_gravity_score
+        now = datetime.datetime.now(datetime.timezone.utc)
+        post = {
+            'author_id': 'partner_123',
+            'timestamp': now - datetime.timedelta(hours=2),
+            'likes_count': 2,
+            'tags': ['travel', 'love']
+        }
+        base_score = calculate_post_gravity_score(post, now)
+        partner_score = calculate_post_gravity_score(post, now, partner_ids={'partner_123'})
+        tag_score = calculate_post_gravity_score(post, now, user_tag_scores={'travel': 5})
+
+        assert partner_score > base_score
+        assert tag_score > base_score
+
+    def test_apply_author_diversity(self):
+        from blueprints.blog import apply_author_diversity
+        # Author A has 5 posts, Author B has 2 posts, Author C has 1 post
+        posts = [
+            {'_id': '1', 'author_id': 'A'},
+            {'_id': '2', 'author_id': 'A'},
+            {'_id': '3', 'author_id': 'A'},
+            {'_id': '4', 'author_id': 'A'},
+            {'_id': '5', 'author_id': 'B'},
+            {'_id': '6', 'author_id': 'B'},
+            {'_id': '7', 'author_id': 'C'}
+        ]
+        diverse = apply_author_diversity(posts, max_per_author=2, target_count=5)
+        # Should pick A (2), B (2), C (1)
+        a_count = sum(1 for p in diverse if p['author_id'] == 'A')
+        b_count = sum(1 for p in diverse if p['author_id'] == 'B')
+        assert a_count <= 2
+        assert b_count <= 2
+        assert len(diverse) == 5
+
+
+class TestCoopGamesApi:
+    """Tests for cooperative games dynamic prompt and word generation endpoints."""
+
+    def test_coop_prompt_api(self, client):
+        res = client.get('/api/games/coop/prompt?category=romance')
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data['status'] == 'success'
+        assert 'word' in data
+        assert 'hint' in data
+        assert 'category_label' in data
+
+    def test_coop_words_api(self, client):
+        res = client.get('/api/games/coop/words?count=25')
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data['status'] == 'success'
+        assert len(data['words']) == 25
+
+
 

@@ -18,7 +18,114 @@ def _safe_count(coll, flt):
         return 0
 
 
-def calculate_post_gravity_score(post, now_utc, partner_ids=None, user_tag_scores=None):
+def _get_user_interest_profile(m, user):
+    """Build a lightweight interest profile from saved and reacted posts."""
+    if not user or not getattr(user, 'is_authenticated', False) or not hasattr(user, 'id'):
+        return {}, {}
+
+    user_id_str = str(user.id)
+    cache_key = f"user_interests:{user_id_str}"
+    cached_interests = _user_interests_memory_cache.get(cache_key)
+    if not cached_interests and getattr(m, 'redis_cache', None):
+        try:
+            cached_data = m.redis_cache.get(cache_key)
+            if cached_data:
+                cached_interests = json.loads(cached_data)
+                _user_interests_memory_cache[cache_key] = cached_interests
+        except Exception:
+            pass
+
+    if cached_interests:
+        return cached_interests.get('tags', {}), cached_interests.get('authors', {})
+
+    tag_scores = {}
+    author_scores = {}
+    try:
+        user_oid = ObjectId(user.id)
+    except Exception:
+        return tag_scores, author_scores
+
+    try:
+        user_doc = m.users_conf.find_one({'_id': user_oid}, {'saved_posts': 1}) or {}
+        saved_ids = user_doc.get('saved_posts', []) or []
+        saved_id_set = {str(sid) for sid in saved_ids}
+        user_reaction_filters = [
+            {f'reactions.{reaction}': user_id_str}
+            for reaction in ('heart', 'wow', 'insightful', 'laugh', 'sad')
+        ]
+        interest_query = {'$or': user_reaction_filters + [{'_id': {'$in': saved_ids[:50]}}]}
+        interest_posts = list(m.posts_conf.find(
+            interest_query,
+            {'tags': 1, 'author_id': 1, 'reactions': 1}
+        ).limit(100))
+
+        for p in interest_posts:
+            reactions_dict = p.get('reactions', {})
+            has_reacted = False
+            if isinstance(reactions_dict, dict):
+                for uids in reactions_dict.values():
+                    if user_id_str in (uids or []):
+                        has_reacted = True
+                        break
+
+            weight = (3.0 if has_reacted else 0.0) + (4.0 if str(p.get('_id')) in saved_id_set else 0.0)
+            if weight <= 0:
+                continue
+
+            for tag in p.get('tags') or []:
+                tag_scores[tag] = tag_scores.get(tag, 0.0) + weight
+            author_id = p.get('author_id')
+            if author_id and str(author_id) != user_id_str:
+                author_scores[str(author_id)] = author_scores.get(str(author_id), 0.0) + weight
+    except Exception:
+        return {}, {}
+
+    if tag_scores or author_scores:
+        profile_payload = {'tags': tag_scores, 'authors': author_scores}
+        _user_interests_memory_cache[cache_key] = profile_payload
+        if getattr(m, 'redis_cache', None):
+            try:
+                m.redis_cache.setex(cache_key, 300, json.dumps(profile_payload))
+            except Exception:
+                pass
+
+    return tag_scores, author_scores
+
+
+def _get_bond_partner_ids(m, user):
+    """Return active bond partner IDs for feed personalization."""
+    if not user or not getattr(user, 'is_authenticated', False) or not hasattr(user, 'id'):
+        return set()
+
+    try:
+        user_oid = ObjectId(user.id)
+    except Exception:
+        return set()
+
+    partner_ids = set()
+    try:
+        query = {
+            '$or': [
+                {'user_a_id': user_oid},
+                {'user_b_id': user_oid},
+                {'user1_id': user_oid},
+                {'user2_id': user_oid},
+            ],
+            'status': 'active'
+        }
+        for bond in m.bonds_conf.find(query, {'user_a_id': 1, 'user_b_id': 1, 'user1_id': 1, 'user2_id': 1}):
+            a_id = bond.get('user_a_id') or bond.get('user1_id')
+            b_id = bond.get('user_b_id') or bond.get('user2_id')
+            partner_id = b_id if str(a_id) == str(user_oid) else a_id
+            if partner_id:
+                partner_ids.add(str(partner_id))
+    except Exception:
+        pass
+
+    return partner_ids
+
+
+def calculate_post_gravity_score(post, now_utc, partner_ids=None, user_tag_scores=None, user_author_scores=None):
     """Computes Hacker News gravity score with partner & interest affinity: Score = EngScore / (AgeInHours + 2)^1.35."""
     likes = post.get('likes_count', 0) or 0
     comments = post.get('comment_count', 0) or 0
@@ -47,6 +154,10 @@ def calculate_post_gravity_score(post, now_utc, partner_ids=None, user_tag_score
         matching_tags = sum(1 for tag in (post.get('tags') or []) if tag in user_tag_scores)
         if matching_tags > 0:
             gravity_score *= (1.0 + min(matching_tags * 0.25, 0.75))
+
+    # 3. Preferred author boost (up to +60%)
+    if user_author_scores and author_id_str in user_author_scores:
+        gravity_score *= 1.0 + min(float(user_author_scores.get(author_id_str, 0)) * 0.08, 0.60)
 
     return gravity_score
 
@@ -92,20 +203,11 @@ def get_latest_posts_feed(feed_type='trending', user=None):
         return cached_feed
 
     public_filter = m.get_public_posts_filter()
-    total_posts_count = _safe_count(m.posts_conf, public_filter)
     pinned_posts = list(m.posts_conf.find({'is_pinned': True, **public_filter}).sort('pinned_at', -1))
     pinned_ids = [p['_id'] for p in pinned_posts]
     target_count = max(10 - len(pinned_posts), 1)
 
     now_utc = datetime.datetime.now(datetime.timezone.utc)
-
-    if total_posts_count <= 10:
-        other_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}, **public_filter}).sort('timestamp', -1))
-        all_posts_list = pinned_posts + other_posts
-        with current_app.app_context():
-            latest_posts_prepared = m.prepare_posts(all_posts_list)
-        m.blog_feed_cache[cache_key] = latest_posts_prepared
-        return latest_posts_prepared
 
     if feed_type == 'latest':
         latest_pool = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}, **public_filter}).sort('timestamp', -1).limit(target_count * 3))
@@ -119,19 +221,11 @@ def get_latest_posts_feed(feed_type='trending', user=None):
     # For 'trending' and 'for_you':
     partner_ids = set()
     user_tag_scores = {}
+    user_author_scores = {}
     if user and getattr(user, 'is_authenticated', False) and hasattr(user, 'id'):
-        try:
-            u_oid = ObjectId(user.id)
-            for b in m.bonds_conf.find({'$or': [{'user1_id': u_oid}, {'user2_id': u_oid}], 'status': 'active'}):
-                p_id = b.get('user2_id') if str(b.get('user1_id')) == str(u_oid) else b.get('user1_id')
-                if p_id:
-                    partner_ids.add(str(p_id))
-        except Exception:
-            pass
-
-        cached_interests = _user_interests_memory_cache.get(f"user_interests:{user.id}")
-        if cached_interests:
-            user_tag_scores = cached_interests.get('tags', {})
+        if feed_type == 'for_you':
+            partner_ids = _get_bond_partner_ids(m, user)
+            user_tag_scores, user_author_scores = _get_user_interest_profile(m, user)
 
     # Candidate pool: recent 40 posts plus active posts from last 60 days
     recent_candidates = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}, **public_filter}).sort('timestamp', -1).limit(40))
@@ -149,8 +243,9 @@ def get_latest_posts_feed(feed_type='trending', user=None):
     for p in full_candidates:
         p['_feed_score'] = calculate_post_gravity_score(
             p, now_utc,
-            partner_ids=partner_ids if (feed_type == 'for_you' or partner_ids) else None,
-            user_tag_scores=user_tag_scores if feed_type == 'for_you' else None
+            partner_ids=partner_ids if feed_type == 'for_you' else None,
+            user_tag_scores=user_tag_scores if feed_type == 'for_you' else None,
+            user_author_scores=user_author_scores if feed_type == 'for_you' else None
         )
 
     full_candidates.sort(key=lambda x: x.get('_feed_score', 0), reverse=True)

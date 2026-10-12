@@ -197,6 +197,37 @@ class TestBlogAlgorithmAndDiversity:
         assert partner_score > base_score
         assert tag_score > base_score
 
+    def test_author_interest_boost(self):
+        from blueprints.blog import calculate_post_gravity_score
+        now = datetime.datetime.now(datetime.timezone.utc)
+        post = {
+            'author_id': 'author_123',
+            'timestamp': now - datetime.timedelta(hours=2),
+            'likes_count': 2,
+            'tags': ['general']
+        }
+
+        base_score = calculate_post_gravity_score(post, now)
+        author_score = calculate_post_gravity_score(post, now, user_author_scores={'author_123': 5})
+
+        assert author_score > base_score
+
+    def test_bond_partner_lookup_supports_current_schema(self):
+        from blueprints.blog import _get_bond_partner_ids
+        user_id = ObjectId('507f1f77bcf86cd799439011')
+        partner_id = ObjectId('507f1f77bcf86cd799439022')
+        user = MagicMock(is_authenticated=True, id=str(user_id))
+        db = MagicMock()
+        db.bonds_conf.find.return_value = [{
+            'user_a_id': user_id,
+            'user_b_id': partner_id,
+            'status': 'active'
+        }]
+
+        partner_ids = _get_bond_partner_ids(db, user)
+
+        assert str(partner_id) in partner_ids
+
     def test_apply_author_diversity(self):
         from blueprints.blog import apply_author_diversity
         # Author A has 5 posts, Author B has 2 posts, Author C has 1 post

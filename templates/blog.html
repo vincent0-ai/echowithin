@@ -296,7 +296,14 @@
     <!-- Default Blog Page View with Tabs -->
     <div class="tab-container">
         <div class="tab-buttons">
-            <button class="tab-button active" data-tab="latest-posts">Home</button>
+            <a class="tab-button {% if feed_tab == 'trending' or not feed_tab %}active{% endif %}"
+                href="{{ url_for('blog.blog', tab='trending') }}">Trending</a>
+            {% if current_user.is_authenticated and not current_user.is_guest %}
+            <a class="tab-button {% if feed_tab == 'for_you' %}active{% endif %}"
+                href="{{ url_for('blog.blog', tab='for_you') }}">For You</a>
+            {% endif %}
+            <a class="tab-button {% if feed_tab == 'latest' %}active{% endif %}"
+                href="{{ url_for('blog.blog', tab='latest') }}">Latest</a>
             <button class="tab-button" data-tab="active-posts">Most Active</button>
             {% if current_user.is_authenticated %}
             <button class="tab-button" data-tab="my-commented-posts">
@@ -307,20 +314,7 @@
         </div>
 
         <div id="latest-posts" class="tab-content active">
-            <div class="feed-filter-bar" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.5rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border-color);">
-                <div style="display: flex; gap: 0.4rem; align-items: center;">
-                    <a href="{{ url_for('blog.blog', tab='trending') }}" style="text-decoration: none; font-size: 0.82rem; font-weight: 600; padding: 0.35rem 0.85rem; border-radius: 999px; border: 1px solid {% if feed_tab == 'trending' or not feed_tab %}var(--primary-color){% else %}var(--border-color){% endif %}; background: {% if feed_tab == 'trending' or not feed_tab %}var(--primary-color){% else %}transparent{% endif %}; color: {% if feed_tab == 'trending' or not feed_tab %}var(--text-light-color){% else %}var(--text-dark-color){% endif %};">
-                        Trending
-                    </a>
-                    {% if current_user.is_authenticated and not current_user.is_guest %}
-                    <a href="{{ url_for('blog.blog', tab='for_you') }}" style="text-decoration: none; font-size: 0.82rem; font-weight: 600; padding: 0.35rem 0.85rem; border-radius: 999px; border: 1px solid {% if feed_tab == 'for_you' %}var(--primary-color){% else %}var(--border-color){% endif %}; background: {% if feed_tab == 'for_you' %}var(--primary-color){% else %}transparent{% endif %}; color: {% if feed_tab == 'for_you' %}var(--text-light-color){% else %}var(--text-dark-color){% endif %};">
-                        For You
-                    </a>
-                    {% endif %}
-                    <a href="{{ url_for('blog.blog', tab='latest') }}" style="text-decoration: none; font-size: 0.82rem; font-weight: 600; padding: 0.35rem 0.85rem; border-radius: 999px; border: 1px solid {% if feed_tab == 'latest' %}var(--primary-color){% else %}var(--border-color){% endif %}; background: {% if feed_tab == 'latest' %}var(--primary-color){% else %}transparent{% endif %}; color: {% if feed_tab == 'latest' %}var(--text-light-color){% else %}var(--text-dark-color){% endif %};">
-                        Latest
-                    </a>
-                </div>
+            <div class="feed-filter-bar" style="display: flex; justify-content: flex-end; margin-bottom: 1.25rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border-color);">
                 <a href="{{ url_for('blog.all_posts') }}" style="font-size: 0.82rem; color: var(--primary-color); text-decoration: none; font-weight: 600;">
                     All posts & tags →
                 </a>
@@ -448,14 +442,15 @@
             });
         }
 
-        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabButtons = document.querySelectorAll('.tab-button[data-tab]');
+        const allTabControls = document.querySelectorAll('.tab-button');
         const tabContents = document.querySelectorAll('.tab-content');
 
         tabButtons.forEach(button => {
             button.addEventListener('click', () => {
                 const tab = button.dataset.tab;
 
-                tabButtons.forEach(b => b.classList.remove('active'));
+                allTabControls.forEach(b => b.classList.remove('active'));
                 tabContents.forEach(c => c.classList.remove('active'));
 
                 button.classList.add('active');

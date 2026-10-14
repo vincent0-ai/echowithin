@@ -7,7 +7,7 @@ import os
 import random
 import secrets
 from security import limits
-from blueprints.game_registry import BOND_GAME_LABELS, all_games, game_route
+from blueprints.game_registry import BOND_GAME_LABELS, bond_games, game_route
 
 def csrf_exempt(view):
     """Mark view as exempt from CSRF protection."""
@@ -1500,7 +1500,7 @@ def bonds_page():
                            bond_types=BOND_TYPES,
                            bond_moods=BOND_MOODS,
                            question_bank=QUESTION_BANK,
-                           bond_games=all_games(),
+                           bond_games=bond_games(),
                            user_tier=user_tier,
                            has_app_lock=has_app_lock,
                            is_unlocked=is_unlocked)

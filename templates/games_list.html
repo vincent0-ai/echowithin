@@ -16,40 +16,46 @@
   }
   .games-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 0.8rem;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
   }
   .game-card {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    min-height: 190px;
-    padding: 1rem;
+    justify-content: space-between;
+    overflow: hidden;
+    padding: 0;
     border: 1px solid var(--border-color);
     border-radius: 8px;
     background: var(--card-bg);
   }
-  .game-card__top {
+  .game-card__thumb {
+    height: 120px;
+    width: 100%;
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 0.75rem;
-  }
-  .game-card__icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-    background: var(--surface-bg);
-    color: var(--primary-color);
-    display: inline-flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0;
+    position: relative;
+    border-bottom: 1px solid var(--border-color);
+    overflow: hidden;
+  }
+  .game-card__thumb svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .game-card__body {
+    padding: 1rem 1.15rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    justify-content: space-between;
+    gap: 0.75rem;
   }
   .game-card__name {
     margin: 0;
-    font-size: 1rem;
+    font-size: 1.1rem;
+    font-weight: 700;
     line-height: 1.25;
     color: var(--text-dark-color);
   }
@@ -142,29 +148,29 @@
       </div>
       <div class="games-grid">
         {% for game in games if game.category == cat %}
-          <article class="game-card">
-            <div class="game-card__top">
-              <div>
-                <h4 class="game-card__name">{{ game.name }}</h4>
-                <div class="game-card__meta" style="margin-top:0.45rem;">
-                  <span class="ew-badge">{{ game.type }}</span>
-                  <span class="ew-badge">{{ game.players }} players</span>
-                </div>
-              </div>
-              <span class="game-card__icon" aria-hidden="true">
-                <svg viewBox="0 0 32 32" width="22" height="22" focusable="false">
-                  <rect x="5" y="7" width="22" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"></rect>
-                  <circle cx="12" cy="16" r="2" fill="currentColor"></circle>
-                  <circle cx="20" cy="13" r="1.8" fill="currentColor"></circle>
-                  <circle cx="23" cy="18" r="1.8" fill="currentColor"></circle>
-                </svg>
-              </span>
+          <article class="game-card ew-card">
+            {% if game.art_svg %}
+            <div class="game-card__thumb" style="background: {{ game.art_bg | default('#f6f1ea', true) }};">
+              {{ game.art_svg | safe }}
             </div>
-            <p class="game-card__desc">{{ game.description }}</p>
-            <div style="display:flex; justify-content:flex-end;">
-              <a href="{{ game.route }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">
-                {% if game.category == 'party' %}Host{% else %}Play{% endif %}
-              </a>
+            {% endif %}
+            <div class="game-card__body">
+              <div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom:0.3rem;">
+                  <h4 class="game-card__name">{{ game.name }}</h4>
+                  <span class="ew-badge">{{ game.badge | default(game.type, true) }}</span>
+                </div>
+                <div class="game-card__meta" style="margin-bottom:0.35rem;">
+                  <span class="ew-badge">{{ game.type }}</span>
+                  <span class="ew-badge">{{ game.players }} player{% if game.players != '1' %}s{% endif %}</span>
+                </div>
+                <p class="game-card__desc">{{ game.description }}</p>
+              </div>
+              <div style="display:flex; justify-content:flex-end;">
+                <a href="{{ game.route }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">
+                  {{ game.cta | default(('Host' if game.category == 'party' else 'Play'), true) }}
+                </a>
+              </div>
             </div>
           </article>
         {% endfor %}

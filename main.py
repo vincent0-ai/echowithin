@@ -115,6 +115,7 @@ from blueprints.whisper import bp as whisper_bp
 from blueprints.bonds import bp as bonds_bp
 from blueprints.forms import bp as forms_bp
 from blueprints.game import bp as game_bp
+from blueprints.game_content import build_session_content
 from blueprints.vault import bp as vault_bp
 from api import api_bp
 
@@ -2188,6 +2189,262 @@ def handle_leave_game(data=None, *args, **kwargs):
         active_game_players[lobby_id] = players
         emit('game_presence_update', {'players': list(players.values()), 'count': len(players)}, room=lobby_id)
 
+
+# --- Lightweight Partner Game Sessions (This or That, Memory Match) ---
+active_tot_rooms = {}
+active_memory_rooms = {}
+
+
+def _clean_room_id(value, max_len=64):
+    if not value or not isinstance(value, str):
+        return None
+    cleaned = value.strip()[:max_len]
+    return cleaned or None
+
+
+def _socket_user_name():
+    return getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+
+
+def _socket_user_id():
+    return str(current_user.id) if current_user.is_authenticated else request.sid
+
+
+@socketio.on('tot_join_room')
+def handle_tot_join_room(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = _clean_room_id(data.get('room') or data.get('room_id'))
+    if not room_id:
+        emit('tot_error', {'message': 'Missing room id.'}, room=request.sid)
+        return
+
+    bond_id = str(data.get('bond_id') or '')
+    pair_key = bond_id or room_id
+    join_room(room_id)
+
+    room_info = active_tot_rooms.get(room_id)
+    if not room_info:
+        content = build_session_content('this_or_that', pair_key=pair_key)
+        room_info = {
+            'host_sid': request.sid,
+            'guest_sid': None,
+            'bond_id': bond_id,
+            'content': content,
+            'choices': {},
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        }
+        active_tot_rooms[room_id] = room_info
+        player_num = 1
+    elif room_info.get('host_sid') == request.sid:
+        player_num = 1
+    else:
+        room_info['guest_sid'] = request.sid
+        active_tot_rooms[room_id] = room_info
+        player_num = 2
+
+    emit('tot_room_joined', {
+        'room': room_id,
+        'player_num': player_num,
+        'pairs': room_info['content'].get('pairs', []),
+        'seed': room_info['content'].get('seed'),
+        'partner_connected': bool(room_info.get('host_sid') and room_info.get('guest_sid'))
+    }, room=request.sid)
+    emit('tot_partner_update', {
+        'partner_connected': bool(room_info.get('host_sid') and room_info.get('guest_sid'))
+    }, room=room_id)
+
+
+@socketio.on('tot_choice')
+def handle_tot_choice(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = _clean_room_id(data.get('room') or data.get('room_id'))
+    room_info = active_tot_rooms.get(room_id)
+    if not room_id or not room_info:
+        emit('tot_error', {'message': 'Session not found. Start a fresh challenge.'}, room=request.sid)
+        return
+    try:
+        round_idx = max(0, min(9, int(data.get('round', 0))))
+    except (TypeError, ValueError):
+        round_idx = 0
+    choice = data.get('choice')
+    if choice not in ('A', 'B', None):
+        choice = None
+    sid = request.sid
+    choices = room_info.setdefault('choices', {}).setdefault(str(round_idx), {})
+    choices[sid] = choice
+    payload = {
+        'round': round_idx,
+        'choice_count': len(choices),
+        'ready': len(choices) >= 2,
+    }
+    if len(choices) >= 2:
+        host_sid = room_info.get('host_sid')
+        guest_sid = room_info.get('guest_sid')
+        payload.update({
+            'p1_choice': choices.get(host_sid),
+            'p2_choice': choices.get(guest_sid),
+        })
+    emit('tot_choice_update', payload, room=room_id)
+
+
+@socketio.on('broadcast_to_room')
+def handle_broadcast_to_room(data=None, *args, **kwargs):
+    """Compatibility relay for older lightweight game clients."""
+    if not isinstance(data, dict):
+        return
+    room_id = _clean_room_id(data.get('room') or data.get('room_id'))
+    if not room_id:
+        return
+    emit('broadcast_to_room', {
+        'event': data.get('event'),
+        'data': data.get('data') or {}
+    }, room=room_id, include_self=False)
+
+
+def _memory_payload(room_id, room_info, player_num):
+    content = room_info.get('content') or {}
+    return {
+        'room_id': room_id,
+        'player_num': player_num,
+        'host': player_num == 1,
+        'size': content.get('size', 16),
+        'cards': content.get('cards', []),
+        'labels': content.get('labels', {}),
+        'scores': room_info.get('scores', {'1': 0, '2': 0}),
+        'turn': room_info.get('turn', 1),
+        'matched': list(room_info.get('matched', set())),
+        'partner_connected': bool(room_info.get('host_sid') and room_info.get('guest_sid')),
+    }
+
+
+@socketio.on('memory_join_room')
+def handle_memory_join_room(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = _clean_room_id(data.get('room') or data.get('room_id'))
+    if not room_id:
+        emit('memory_error', {'message': 'Missing room id.'}, room=request.sid)
+        return
+    bond_id = str(data.get('bond_id') or '')
+    pair_key = bond_id or room_id
+    join_room(room_id)
+
+    room_info = active_memory_rooms.get(room_id)
+    if not room_info:
+        room_info = {
+            'host_sid': request.sid,
+            'guest_sid': None,
+            'host_name': _socket_user_name(),
+            'guest_name': None,
+            'content': build_session_content('memory_match', pair_key=pair_key, size=16),
+            'scores': {'1': 0, '2': 0},
+            'turn': 1,
+            'flipped': [],
+            'matched': set(),
+            'bond_id': bond_id,
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        }
+        active_memory_rooms[room_id] = room_info
+        player_num = 1
+    elif room_info.get('host_sid') == request.sid:
+        player_num = 1
+    else:
+        room_info['guest_sid'] = request.sid
+        room_info['guest_name'] = _socket_user_name()
+        active_memory_rooms[room_id] = room_info
+        player_num = 2
+
+    emit('memory_room_joined', _memory_payload(room_id, room_info, player_num), room=request.sid)
+    emit('memory_partner_update', {
+        'partner_connected': bool(room_info.get('host_sid') and room_info.get('guest_sid'))
+    }, room=room_id)
+
+
+@socketio.on('memory_start_game')
+def handle_memory_start_game(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = _clean_room_id(data.get('room') or data.get('room_id'))
+    room_info = active_memory_rooms.get(room_id)
+    if not room_info:
+        emit('memory_error', {'message': 'Session not found.'}, room=request.sid)
+        return
+    if room_info.get('host_sid') != request.sid:
+        emit('memory_error', {'message': 'Only the host can restart the board.'}, room=request.sid)
+        return
+    try:
+        size = int(data.get('size', 16))
+    except (TypeError, ValueError):
+        size = 16
+    size = 36 if size >= 36 else 16
+    pair_key = room_info.get('bond_id') or room_id
+    room_info['content'] = build_session_content('memory_match', pair_key=pair_key, size=size)
+    room_info['scores'] = {'1': 0, '2': 0}
+    room_info['turn'] = 1
+    room_info['flipped'] = []
+    room_info['matched'] = set()
+    emit('memory_start_game', {
+        'size': room_info['content']['size'],
+        'cards': room_info['content']['cards'],
+        'labels': room_info['content']['labels'],
+        'turn': room_info['turn'],
+        'scores': room_info['scores'],
+    }, room=room_id)
+
+
+@socketio.on('memory_flip_card')
+def handle_memory_flip_card(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = _clean_room_id(data.get('room') or data.get('room_id'))
+    room_info = active_memory_rooms.get(room_id)
+    if not room_info:
+        emit('memory_error', {'message': 'Session not found.'}, room=request.sid)
+        return
+    player_num = 1 if room_info.get('host_sid') == request.sid else 2 if room_info.get('guest_sid') == request.sid else None
+    if player_num is None:
+        emit('memory_error', {'message': 'You are not in this room.'}, room=request.sid)
+        return
+    if player_num != room_info.get('turn'):
+        emit('memory_error', {'message': 'Waiting for your turn.'}, room=request.sid)
+        return
+    try:
+        index = int(data.get('index'))
+    except (TypeError, ValueError):
+        return
+    cards = room_info.get('content', {}).get('cards', [])
+    if index < 0 or index >= len(cards) or index in room_info.get('matched', set()):
+        return
+    flipped = room_info.setdefault('flipped', [])
+    if index in flipped or len(flipped) >= 2:
+        return
+    flipped.append(index)
+    emit('memory_flip_card', {'index': index, 'player_num': player_num}, room=room_id)
+    if len(flipped) < 2:
+        return
+
+    c1, c2 = flipped
+    is_match = cards[c1] == cards[c2]
+    if is_match:
+        room_info.setdefault('matched', set()).update([c1, c2])
+        room_info['scores'][str(player_num)] = room_info['scores'].get(str(player_num), 0) + 1
+    else:
+        room_info['turn'] = 2 if player_num == 1 else 1
+    room_info['flipped'] = []
+    complete = len(room_info.get('matched', set())) >= len(cards)
+    emit('memory_card_result', {
+        'match': is_match,
+        'c1': c1,
+        'c2': c2,
+        'scores': room_info['scores'],
+        'turn': room_info['turn'],
+        'complete': complete,
+    }, room=room_id)
+    if not is_match:
+        emit('memory_turn_change', {'turn': room_info['turn']}, room=room_id)
+
 # --- Multiplayer Matchmaking Helper ---
 def broadcast_matchmaking_queue(queue, event_name):
     """Broadcasts available waiting opponents and their live stats to all players waiting in a game queue."""
@@ -2455,7 +2712,8 @@ def _prune_unattended_game_rooms():
     one_hour_ago = now - datetime.timedelta(hours=1)
     for store in (active_pong_rooms, active_slime_rooms, active_ttt_rooms,
                   active_c4_rooms, active_dnb_rooms, active_duet_rooms,
-                  active_emoji_rooms, active_crossword_rooms):
+                  active_emoji_rooms, active_crossword_rooms, active_tot_rooms,
+                  active_memory_rooms, active_chain_rooms):
         for rid, rinfo in list(store.items()):
             created = rinfo.get('created_at')
             if created:
@@ -3628,6 +3886,110 @@ def handle_cancel_dnb_matchmaking(data=None, *args, **kwargs):
 # --- Word Bond: Duet (Cooperative Word Deduction) Handlers ---
 
 active_duet_rooms = {}
+active_chain_rooms = {}
+
+
+@socketio.on('chain_join_room')
+def handle_chain_join_room(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = _clean_room_id(data.get('room') or data.get('room_id'))
+    if not room_id:
+        emit('chain_error', {'message': 'Missing room id.'}, room=request.sid)
+        return
+    bond_id = str(data.get('bond_id') or '')
+    pair_key = bond_id or room_id
+    join_room(room_id)
+
+    room_info = active_chain_rooms.get(room_id)
+    if not room_info:
+        content = build_session_content('word_duet', pair_key=pair_key)
+        starter = content.get('starter', 'coffee').lower()
+        room_info = {
+            'host_sid': request.sid,
+            'guest_sid': None,
+            'bond_id': bond_id,
+            'chain': [starter],
+            'used': {starter},
+            'turn': 1,
+            'target': int(content.get('target', 12)),
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        }
+        active_chain_rooms[room_id] = room_info
+        player_num = 1
+    elif room_info.get('host_sid') == request.sid:
+        player_num = 1
+    else:
+        room_info['guest_sid'] = request.sid
+        active_chain_rooms[room_id] = room_info
+        player_num = 2
+
+    emit('chain_room_joined', {
+        'room_id': room_id,
+        'player_num': player_num,
+        'chain': room_info['chain'],
+        'turn': room_info['turn'],
+        'target': room_info['target'],
+        'partner_connected': bool(room_info.get('host_sid') and room_info.get('guest_sid'))
+    }, room=request.sid)
+    emit('chain_partner_update', {
+        'partner_connected': bool(room_info.get('host_sid') and room_info.get('guest_sid'))
+    }, room=room_id)
+
+
+@socketio.on('chain_submit_word')
+def handle_chain_submit_word(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = _clean_room_id(data.get('room') or data.get('room_id'))
+    room_info = active_chain_rooms.get(room_id)
+    if not room_info:
+        emit('chain_error', {'message': 'Session not found. Start a fresh challenge.'}, room=request.sid)
+        return
+    player_num = 1 if room_info.get('host_sid') == request.sid else 2 if room_info.get('guest_sid') == request.sid else None
+    if player_num is None:
+        emit('chain_error', {'message': 'You are not in this room.'}, room=request.sid)
+        return
+    if player_num != room_info.get('turn'):
+        emit('chain_error', {'message': 'It is your partner turn.'}, room=request.sid)
+        return
+    word = ''.join(ch for ch in str(data.get('word', '')).lower().strip() if ch.isalpha())[:24]
+    if len(word) < 3:
+        emit('chain_error', {'message': 'Use a word with at least 3 letters.'}, room=request.sid)
+        return
+    previous = room_info['chain'][-1]
+    expected = previous[-1]
+    if not word.startswith(expected):
+        emit('chain_error', {'message': f'Your word must start with "{expected.upper()}".'}, room=request.sid)
+        return
+    if word in room_info['used']:
+        emit('chain_error', {'message': 'That word was already used.'}, room=request.sid)
+        return
+    room_info['chain'].append(word)
+    room_info['used'].add(word)
+    room_info['turn'] = 2 if player_num == 1 else 1
+    complete = len(room_info['chain']) >= room_info['target']
+    emit('chain_updated', {
+        'chain': room_info['chain'],
+        'turn': room_info['turn'],
+        'target': room_info['target'],
+        'complete': complete,
+        'last_player': player_num
+    }, room=room_id)
+
+@socketio.on('leave_chain_room')
+def handle_leave_chain_room(data=None, *args, **kwargs):
+    room_id = _clean_room_id((data or {}).get('room') or (data or {}).get('room_id')) if isinstance(data, dict) else None
+    if not room_id:
+        return
+    try:
+        leave_room(room_id)
+    except Exception:
+        pass
+    room_info = active_chain_rooms.get(room_id)
+    if room_info and request.sid in (room_info.get('host_sid'), room_info.get('guest_sid')):
+        emit('chain_partner_left', {'room_id': room_id}, room=room_id)
+        active_chain_rooms.pop(room_id, None)
 
 @socketio.on('join_duet_room')
 def handle_join_duet_room(data=None, *args, **kwargs):
@@ -4392,6 +4754,24 @@ def handle_dm_disconnect(*args, **kwargs):
         if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
             emit('duet_partner_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
             active_duet_rooms.pop(room_id, None)
+
+    # Cleanup Word Chain rooms on disconnect
+    for room_id, rinfo in list(active_chain_rooms.items()):
+        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+            emit('chain_partner_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
+            active_chain_rooms.pop(room_id, None)
+
+    # Cleanup This or That rooms on disconnect
+    for room_id, rinfo in list(active_tot_rooms.items()):
+        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+            emit('tot_partner_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
+            active_tot_rooms.pop(room_id, None)
+
+    # Cleanup Memory Match rooms on disconnect
+    for room_id, rinfo in list(active_memory_rooms.items()):
+        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+            emit('memory_partner_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
+            active_memory_rooms.pop(room_id, None)
 
     # Cleanup Emoji Decoder rooms on disconnect
     for room_id, rinfo in list(active_emoji_rooms.items()):

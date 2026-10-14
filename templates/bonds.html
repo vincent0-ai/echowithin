@@ -2736,7 +2736,7 @@
                     <div>
                         <strong style="font-size: 0.95rem; color: var(--primary-dark-color);">Challenge {{
                             bond.partner_username }}</strong>
-                        <div style="font-size: 0.78rem; color: var(--text-secondary);">Pick a game to start a 1v1 match
+                        <div style="font-size: 0.78rem; color: var(--text-secondary);">Pick a game to start a shared session
                         </div>
                     </div>
                     <div id="h2h-summary-{{ bond.id }}"
@@ -2747,69 +2747,15 @@
 
                 <div
                     style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
+                    {% for game in bond_games %}
                     <button type="button" class="btn btn-bond-outline"
                         style="text-align: center; padding: 0.6rem 0.4rem;"
-                        onclick="sendBondChallenge('{{ bond.id }}', 'tic_tac_toe')">
-                        <div style="font-weight: 600; font-size: 0.85rem;">Tic-Tac-Toe</div>
+                        onclick="sendBondChallenge('{{ bond.id }}', '{{ game.id }}')">
+                        <div style="font-weight: 600; font-size: 0.85rem;">{{ game.name }}</div>
                         <div style="font-size: 0.72rem; color: var(--text-secondary);"
-                            id="h2h-pill-tic_tac_toe-{{ bond.id }}">1v1</div>
+                            id="h2h-pill-{{ game.id }}-{{ bond.id }}">{{ game.type }} &middot; {{ game.players }}</div>
                     </button>
-                    <button type="button" class="btn btn-bond-outline"
-                        style="text-align: center; padding: 0.6rem 0.4rem;"
-                        onclick="sendBondChallenge('{{ bond.id }}', 'connect_four')">
-                        <div style="font-weight: 600; font-size: 0.85rem;">Connect Four</div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary);"
-                            id="h2h-pill-connect_four-{{ bond.id }}">1v1</div>
-                    </button>
-                    <button type="button" class="btn btn-bond-outline"
-                        style="text-align: center; padding: 0.6rem 0.4rem;"
-                        onclick="sendBondChallenge('{{ bond.id }}', 'dots_and_boxes')">
-                        <div style="font-weight: 600; font-size: 0.85rem;">Dots &amp; Boxes</div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary);"
-                            id="h2h-pill-dots_and_boxes-{{ bond.id }}">1v1</div>
-                    </button>
-                    <button type="button" class="btn btn-bond-outline"
-                        style="text-align: center; padding: 0.6rem 0.4rem;"
-                        onclick="sendBondChallenge('{{ bond.id }}', 'memory_match')">
-                        <div style="font-weight: 600; font-size: 0.85rem;">Memory Match</div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary);"
-                            id="h2h-pill-memory_match-{{ bond.id }}">1v1 / Co-op</div>
-                    </button>
-                    <button type="button" class="btn btn-bond-outline"
-                        style="text-align: center; padding: 0.6rem 0.4rem;"
-                        onclick="sendBondChallenge('{{ bond.id }}', 'this_or_that')">
-                        <div style="font-weight: 600; font-size: 0.85rem;">This or That</div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary);"
-                            id="h2h-pill-this_or_that-{{ bond.id }}">Play Together</div>
-                    </button>
-                    <button type="button" class="btn btn-bond-outline"
-                        style="text-align: center; padding: 0.6rem 0.4rem;"
-                        onclick="sendBondChallenge('{{ bond.id }}', 'emoji_decoder')">
-                        <div style="font-weight: 600; font-size: 0.85rem;">Emoji Decoder</div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary);"
-                            id="h2h-pill-emoji_decoder-{{ bond.id }}">Co-op</div>
-                    </button>
-                    <button type="button" class="btn btn-bond-outline"
-                        style="text-align: center; padding: 0.6rem 0.4rem;"
-                        onclick="sendBondChallenge('{{ bond.id }}', 'ping_pong')">
-                        <div style="font-weight: 600; font-size: 0.85rem;">Ping Pong</div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary);"
-                            id="h2h-pill-ping_pong-{{ bond.id }}">1v1</div>
-                    </button>
-                    <button type="button" class="btn btn-bond-outline"
-                        style="text-align: center; padding: 0.6rem 0.4rem;"
-                        onclick="sendBondChallenge('{{ bond.id }}', 'slime_volleyball')">
-                        <div style="font-weight: 600; font-size: 0.85rem;">Slime Volleyball</div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary);"
-                            id="h2h-pill-slime_volleyball-{{ bond.id }}">1v1</div>
-                    </button>
-                    <button type="button" class="btn btn-bond-outline"
-                        style="text-align: center; padding: 0.6rem 0.4rem;"
-                        onclick="sendBondChallenge('{{ bond.id }}', 'team_crossword')">
-                        <div style="font-weight: 600; font-size: 0.85rem;">Crossword</div>
-                        <div style="font-size: 0.72rem; color: var(--text-secondary);"
-                            id="h2h-pill-team_crossword-{{ bond.id }}">Co-op</div>
-                    </button>
+                    {% endfor %}
                 </div>
 
                 <!-- Detailed H2H History Table -->

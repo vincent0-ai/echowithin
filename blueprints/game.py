@@ -5,6 +5,7 @@ import datetime, secrets, hashlib
 from security import limits
 import database
 from cachetools import TTLCache
+from blueprints.game_registry import all_games
 
 bp = Blueprint('game', __name__)
 
@@ -185,7 +186,7 @@ def games_list():
     _prune_unattended_lobbies()
     raw_lobbies = list(m.game_sessions_conf.find({'host_id': ObjectId(current_user.id)}).sort('created_at', -1).limit(50))
     lobbies = [_decrypt_lobby(l) for l in raw_lobbies]
-    return render_template('games_list.html', lobbies=lobbies, active_page='games')
+    return render_template('games_list.html', lobbies=lobbies, games=all_games(), active_page='games')
 
 @bp.route('/games/join', methods=['GET', 'POST'])
 @bp.route('/join', methods=['GET', 'POST'])

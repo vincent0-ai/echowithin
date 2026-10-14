@@ -1,25 +1,32 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const emojis = ['❤️', '💍', '🌹', '🏠', '☀️', '🌙', '⭐', '🎵', '📸', '🎂', '🌊', '🔥', '🦋', '🌸', '🎭', '💎', '🧸', '🎪'];
-    
+    const symbols = [
+        'heart', 'ring', 'rose', 'home', 'sun', 'moon', 'star', 'music',
+        'camera', 'cake', 'wave', 'fire', 'butterfly', 'flower', 'theater',
+        'diamond', 'gift', 'spark'
+    ];
+    const labels = {
+        heart: 'HEART', ring: 'RING', rose: 'ROSE', home: 'HOME',
+        sun: 'SUN', moon: 'MOON', star: 'STAR', music: 'MUSIC',
+        camera: 'PHOTO', cake: 'CAKE', wave: 'WAVE', fire: 'FIRE',
+        butterfly: 'WINGS', flower: 'FLOWER', theater: 'STAGE',
+        diamond: 'GEM', gift: 'GIFT', spark: 'SPARK'
+    };
+
     let mode = 'solo';
     let size = 16;
     let cards = [];
     let flippedCards = [];
     let matchedPairs = 0;
-    
     let player1Score = 0;
     let player2Score = 0;
-    let currentPlayer = 1; // 1 or 2
-    
+    let currentPlayer = 1;
     let timerInterval = null;
     let timeElapsed = 0;
-    
-    let isMyTurn = true;
     let socket = null;
     let roomId = null;
-    let amIHost = false;
+    let myPlayerNum = 1;
     let lockBoard = false;
-    
+
     const ui = {
         setupPanel: document.getElementById('setup-panel'),
         gameInfo: document.getElementById('game-info'),
@@ -38,97 +45,136 @@ document.addEventListener('DOMContentLoaded', () => {
         onlineStatus: document.getElementById('online-status')
     };
 
+    const params = new URLSearchParams(window.location.search);
+    const urlRoom = params.get('room');
+    const bondId = params.get('bond_id');
+
     ui.startBtn.addEventListener('click', startGame);
     ui.replayBtn.addEventListener('click', resetGame);
     ui.modeSelect.addEventListener('change', () => {
-        if(ui.modeSelect.value === 'online') {
-            ui.onlineStatus.textContent = "Connecting to socket room...";
-            initSocket();
-        } else {
-            ui.onlineStatus.textContent = "";
-            if (socket) socket.disconnect();
-            socket = null;
-        }
+        if (ui.modeSelect.value === 'online') initSocket();
+        else disconnectSocket();
     });
 
-    function initSocket() {
-        if (typeof io === 'undefined') {
-            ui.onlineStatus.textContent = "Socket.IO not available.";
-            ui.startBtn.disabled = true;
-            return;
-        }
-        
-        const params = new URLSearchParams(window.location.search);
-        roomId = params.get('room');
-        const bondId = params.get('bond_id');
-        
-        if (!roomId) {
-            ui.onlineStatus.textContent = "Error: No room ID in URL.";
-            ui.startBtn.disabled = true;
-            return;
-        }
+    if (urlRoom) {
+        ui.modeSelect.value = 'online';
+        initSocket();
+    }
 
-        socket = io();
-        ui.startBtn.disabled = false;
-        
-        socket.emit('memory_join_room', { room: roomId, bond_id: bondId });
-        
-        socket.on('memory_room_joined', (data) => {
-            amIHost = data.host;
-            ui.onlineStatus.textContent = amIHost ? "Waiting for opponent... You are host." : "Connected as guest.";
+    function setStatus(message, isError = false) {
+        ui.onlineStatus.textContent = message || '';
+        ui.onlineStatus.style.color = isError ? 'var(--danger-color,#dc2626)' : 'var(--text-secondary)';
+    }
+
+    function disconnectSocket() {
+        if (socket) socket.disconnect();
+        socket = null;
+        setStatus('');
+    }
+
+    function initSocket() {
+        if (socket) return;
+        if (typeof io === 'undefined') {
+            setStatus('Live play is unavailable. Try again after reconnecting.', true);
+            return;
+        }
+        roomId = urlRoom || `memory_${Math.random().toString(36).slice(2, 8)}`;
+        socket = io({ transports: ['websocket', 'polling'] });
+        setStatus('Connecting to room...');
+
+        socket.on('connect', () => {
+            socket.emit('memory_join_room', { room: roomId, bond_id: bondId || undefined });
         });
-        
+
+        socket.on('memory_room_joined', (data) => {
+            myPlayerNum = data.player_num || 1;
+            mode = 'online';
+            setupBoard(data.cards || [], { online: true, labels: data.labels || labels });
+            currentPlayer = data.turn || 1;
+            player1Score = Number((data.scores || {})['1'] || 0);
+            player2Score = Number((data.scores || {})['2'] || 0);
+            markMatched(data.matched || []);
+            updateScoreUI();
+            updateTurnUI();
+            setStatus(data.partner_connected ? 'Partner connected.' : 'Waiting for partner...');
+        });
+
+        socket.on('memory_partner_update', (data) => {
+            setStatus(data.partner_connected ? 'Partner connected.' : 'Waiting for partner...');
+        });
+
         socket.on('memory_start_game', (data) => {
-            handleRemoteStart(data);
+            setupBoard(data.cards || [], { online: true, labels: data.labels || labels });
+            currentPlayer = data.turn || 1;
+            player1Score = Number((data.scores || {})['1'] || 0);
+            player2Score = Number((data.scores || {})['2'] || 0);
+            updateScoreUI();
+            updateTurnUI();
+            hideGameOver();
         });
 
         socket.on('memory_flip_card', (data) => {
-            handleRemoteFlip(data.index);
+            const cardElement = ui.gridContainer.children[data.index];
+            if (cardElement) cardElement.classList.add('flipped');
         });
 
         socket.on('memory_card_result', (data) => {
-            handleRemoteResult(data);
+            lockBoard = true;
+            setTimeout(() => {
+                const c1 = ui.gridContainer.children[data.c1];
+                const c2 = ui.gridContainer.children[data.c2];
+                if (data.match) {
+                    if (c1) c1.classList.add('matched');
+                    if (c2) c2.classList.add('matched');
+                    matchedPairs++;
+                } else {
+                    if (c1) c1.classList.remove('flipped');
+                    if (c2) c2.classList.remove('flipped');
+                }
+                player1Score = Number((data.scores || {})['1'] || 0);
+                player2Score = Number((data.scores || {})['2'] || 0);
+                currentPlayer = data.turn || currentPlayer;
+                updateScoreUI();
+                updateTurnUI();
+                lockBoard = false;
+                if (data.complete) showGameOver();
+            }, 700);
         });
 
         socket.on('memory_turn_change', (data) => {
-            currentPlayer = data.turn;
-            isMyTurn = (amIHost && currentPlayer === 1) || (!amIHost && currentPlayer === 2);
+            currentPlayer = data.turn || currentPlayer;
             updateTurnUI();
+        });
+
+        socket.on('memory_error', (data) => {
+            setStatus((data && data.message) || 'Game sync error. Please retry.', true);
+            setTimeout(() => setStatus(currentPlayer === myPlayerNum ? 'Your turn.' : 'Waiting for partner...'), 2200);
+        });
+
+        socket.on('memory_partner_left', () => {
+            setStatus('Partner left. Start a fresh challenge.', true);
         });
     }
 
     function startGame() {
         mode = ui.modeSelect.value;
-        size = parseInt(ui.sizeSelect.value);
-        
+        size = parseInt(ui.sizeSelect.value, 10);
         if (mode === 'online') {
-            if (!amIHost) {
-                alert("Only host can start the game.");
-                return;
+            initSocket();
+            if (socket && roomId && myPlayerNum === 1) {
+                socket.emit('memory_start_game', { room: roomId, size });
+            } else {
+                setStatus('Waiting for host to restart the board.');
             }
-            const gameCards = generateCards(size);
-            socket.emit('memory_start_game', { room: roomId, size, cards: gameCards });
-            setupBoard(gameCards);
-        } else {
-            setupBoard(generateCards(size));
+            return;
         }
-    }
-
-    function handleRemoteStart(data) {
-        if (amIHost) return;
-        size = data.size;
-        ui.sizeSelect.value = size;
-        mode = 'online';
-        ui.modeSelect.value = 'online';
-        setupBoard(data.cards);
+        setupBoard(generateCards(size), { online: false, labels });
     }
 
     function generateCards(gridSize) {
-        let pairsCount = gridSize / 2;
-        let selectedEmojis = emojis.slice(0, pairsCount);
-        let deck = [...selectedEmojis, ...selectedEmojis];
-        
-        // Shuffle
+        const pairsCount = gridSize / 2;
+        const selected = symbols.slice(0, pairsCount);
+        const deck = [...selected, ...selected];
         for (let i = deck.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [deck[i], deck[j]] = [deck[j], deck[i]];
@@ -136,14 +182,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return deck;
     }
 
-    function setupBoard(deck) {
+    function setupBoard(deck, options = {}) {
         ui.setupPanel.style.display = 'none';
         ui.gameInfo.style.display = 'flex';
         ui.gridContainer.style.display = 'grid';
-        
+        size = deck.length || size;
         ui.gridContainer.className = `grid-container size-${size === 16 ? '4x4' : '6x6'}`;
         ui.gridContainer.innerHTML = '';
-        
+
         cards = deck;
         flippedCards = [];
         matchedPairs = 0;
@@ -151,138 +197,89 @@ document.addEventListener('DOMContentLoaded', () => {
         player2Score = 0;
         currentPlayer = 1;
         lockBoard = false;
-        
+
         if (mode === 'solo') {
             ui.scoreP2.style.display = 'none';
             ui.turnIndicator.style.display = 'none';
             ui.timer.style.display = 'block';
             ui.scoreP1.textContent = 'Pairs: 0';
             startTimer();
-            isMyTurn = true;
         } else {
             ui.scoreP2.style.display = 'block';
             ui.turnIndicator.style.display = 'block';
             ui.timer.style.display = 'none';
             updateScoreUI();
-            
-            if (mode === 'online') {
-                isMyTurn = amIHost;
-            } else {
-                isMyTurn = true;
-            }
             updateTurnUI();
         }
 
-        cards.forEach((emoji, index) => {
+        const displayLabels = options.labels || labels;
+        cards.forEach((symbol, index) => {
             const cardElement = document.createElement('div');
             cardElement.className = 'card';
             cardElement.dataset.index = index;
-            cardElement.dataset.emoji = emoji;
-            
+            cardElement.dataset.symbol = symbol;
             cardElement.innerHTML = `
-                <div class="card-face card-back"></div>
-                <div class="card-face card-front">${emoji}</div>
+                <div class="card-face card-back">?</div>
+                <div class="card-face card-front">${displayLabels[symbol] || symbol}</div>
             `;
-            
             cardElement.addEventListener('click', () => onCardClick(index, cardElement));
             ui.gridContainer.appendChild(cardElement);
         });
     }
 
     function onCardClick(index, cardElement) {
-        if (lockBoard || !isMyTurn) return;
+        if (lockBoard) return;
         if (cardElement.classList.contains('flipped') || cardElement.classList.contains('matched')) return;
-
-        flipCard(index, cardElement);
-
         if (mode === 'online') {
+            if (currentPlayer !== myPlayerNum) {
+                setStatus('Waiting for your turn.');
+                return;
+            }
             socket.emit('memory_flip_card', { room: roomId, index });
+            return;
         }
 
-        checkMatch();
-    }
-
-    function flipCard(index, cardElement) {
         cardElement.classList.add('flipped');
-        flippedCards.push({ index, element: cardElement, emoji: cards[index] });
+        flippedCards.push({ index, element: cardElement, symbol: cards[index] });
+        checkLocalMatch();
     }
 
-    function handleRemoteFlip(index) {
-        if (isMyTurn) return; // Ignore if it's my turn
-        const cardElement = ui.gridContainer.children[index];
-        if (cardElement) {
-            flipCard(index, cardElement);
-        }
-    }
-
-    function checkMatch() {
+    function checkLocalMatch() {
         if (flippedCards.length < 2) return;
-
         lockBoard = true;
         const [card1, card2] = flippedCards;
-        const isMatch = card1.emoji === card2.emoji;
-
-        if (mode === 'online') {
-            if (amIHost) {
-                // Host decides result
-                setTimeout(() => {
-                    socket.emit('memory_card_result', { room: roomId, match: isMatch, c1: card1.index, c2: card2.index });
-                    processResult(isMatch, card1, card2);
-                }, 1000);
-            }
-        } else {
-            setTimeout(() => {
-                processResult(isMatch, card1, card2);
-            }, 1000);
-        }
-    }
-
-    function handleRemoteResult(data) {
-        if (amIHost) return;
-        const card1 = { index: data.c1, element: ui.gridContainer.children[data.c1] };
-        const card2 = { index: data.c2, element: ui.gridContainer.children[data.c2] };
-        processResult(data.match, card1, card2);
-    }
-
-    function processResult(isMatch, card1, card2) {
-        if (isMatch) {
-            card1.element.classList.add('matched');
-            card2.element.classList.add('matched');
-            matchedPairs++;
-            
-            if (mode === 'solo') {
-                player1Score++;
-                ui.scoreP1.textContent = `Pairs: ${player1Score}`;
-            } else {
-                if (currentPlayer === 1) player1Score++;
-                else player2Score++;
-                updateScoreUI();
-            }
-            
-            checkWin();
-        } else {
-            card1.element.classList.remove('flipped');
-            card2.element.classList.remove('flipped');
-            
-            if (mode !== 'solo') {
-                currentPlayer = currentPlayer === 1 ? 2 : 1;
-                updateTurnUI();
-                if (mode === 'online' && amIHost) {
-                    socket.emit('memory_turn_change', { room: roomId, turn: currentPlayer });
+        const isMatch = card1.symbol === card2.symbol;
+        setTimeout(() => {
+            if (isMatch) {
+                card1.element.classList.add('matched');
+                card2.element.classList.add('matched');
+                matchedPairs++;
+                if (mode === 'solo') {
+                    player1Score++;
+                    ui.scoreP1.textContent = `Pairs: ${player1Score}`;
+                } else {
+                    if (currentPlayer === 1) player1Score++;
+                    else player2Score++;
+                    updateScoreUI();
                 }
+            } else {
+                card1.element.classList.remove('flipped');
+                card2.element.classList.remove('flipped');
+                if (mode !== 'solo') currentPlayer = currentPlayer === 1 ? 2 : 1;
+                updateTurnUI();
             }
-        }
+            flippedCards = [];
+            lockBoard = false;
+            if (matchedPairs === cards.length / 2) showGameOver();
+        }, 700);
+    }
 
-        flippedCards = [];
-        lockBoard = false;
-        
-        if (mode === 'online' && !amIHost) {
-            isMyTurn = (currentPlayer === 2);
-        } else if (mode === 'online' && amIHost) {
-            isMyTurn = (currentPlayer === 1);
-        } else {
-            isMyTurn = true; // Local/solo always true
-        }
+    function markMatched(indexes) {
+        indexes.forEach((idx) => {
+            const card = ui.gridContainer.children[idx];
+            if (card) card.classList.add('flipped', 'matched');
+        });
+        matchedPairs = Math.floor(indexes.length / 2);
     }
 
     function updateScoreUI() {
@@ -292,15 +289,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateTurnUI() {
         if (mode === 'online') {
-            ui.turnIndicator.textContent = isMyTurn ? "Your Turn" : "Opponent's Turn";
+            ui.turnIndicator.textContent = currentPlayer === myPlayerNum ? 'Your Turn' : 'Partner Turn';
         } else {
-            ui.turnIndicator.textContent = `Player ${currentPlayer}'s Turn`;
+            ui.turnIndicator.textContent = `Player ${currentPlayer} Turn`;
         }
     }
 
     function startTimer() {
         timeElapsed = 0;
-        ui.timer.textContent = `Time: 0s`;
+        ui.timer.textContent = 'Time: 0s';
         if (timerInterval) clearInterval(timerInterval);
         timerInterval = setInterval(() => {
             timeElapsed++;
@@ -308,50 +305,38 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1000);
     }
 
-    function checkWin() {
-        if (matchedPairs === size / 2) {
-            if (timerInterval) clearInterval(timerInterval);
-            setTimeout(showGameOver, 500);
-        }
-    }
-
     function showGameOver() {
+        if (timerInterval) clearInterval(timerInterval);
         ui.modal.style.display = 'flex';
         if (mode === 'solo') {
-            let bestTime = localStorage.getItem(`memoryBestTime_${size}`) || Infinity;
-            let isNewBest = false;
-            if (timeElapsed < bestTime) {
-                bestTime = timeElapsed;
-                localStorage.setItem(`memoryBestTime_${size}`, bestTime);
-                isNewBest = true;
-            }
-            ui.winnerText.textContent = 'You Win!';
-            ui.statsText.innerHTML = `Time: ${timeElapsed}s<br>Best Time: ${bestTime}s ${isNewBest ? '(New Best!)' : ''}`;
-        } else {
-            if (player1Score > player2Score) {
-                ui.winnerText.textContent = mode === 'online' && amIHost ? 'You Win!' : mode === 'online' ? 'Opponent Wins!' : 'Player 1 Wins!';
-            } else if (player2Score > player1Score) {
-                ui.winnerText.textContent = mode === 'online' && !amIHost ? 'You Win!' : mode === 'online' ? 'Opponent Wins!' : 'Player 2 Wins!';
-            } else {
-                ui.winnerText.textContent = 'It\\'s a Tie!';
-            }
-            ui.statsText.textContent = `Score: ${player1Score} - ${player2Score}`;
+            const key = `memoryBestTime_${size}`;
+            const previous = Number(localStorage.getItem(key) || Infinity);
+            const isNewBest = timeElapsed < previous;
+            if (isNewBest) localStorage.setItem(key, String(timeElapsed));
+            ui.winnerText.textContent = 'You Win';
+            ui.statsText.innerHTML = `Time: ${timeElapsed}s<br>Best Time: ${isNewBest ? timeElapsed : previous}s`;
+            return;
         }
-        
-        if (mode === 'online' && !amIHost) {
-            ui.replayBtn.style.display = 'none'; // Only host can restart
-            ui.statsText.innerHTML += '<br>Waiting for host to restart...';
-        } else {
-            ui.replayBtn.style.display = 'inline-block';
+        if (player1Score === player2Score) ui.winnerText.textContent = 'Tie Game';
+        else {
+            const winner = player1Score > player2Score ? 1 : 2;
+            ui.winnerText.textContent = mode === 'online'
+                ? (winner === myPlayerNum ? 'You Win' : 'Partner Wins')
+                : `Player ${winner} Wins`;
         }
-        
-        if (mode === 'online' && amIHost) {
-            socket.emit('memory_game_over', { room: roomId, p1Score: player1Score, p2Score: player2Score });
-        }
+        ui.statsText.textContent = `Score: ${player1Score} - ${player2Score}`;
+    }
+
+    function hideGameOver() {
+        ui.modal.style.display = 'none';
     }
 
     function resetGame() {
-        ui.modal.style.display = 'none';
+        hideGameOver();
+        if (mode === 'online' && socket && roomId && myPlayerNum === 1) {
+            socket.emit('memory_start_game', { room: roomId, size });
+            return;
+        }
         ui.setupPanel.style.display = 'block';
         ui.gameInfo.style.display = 'none';
         ui.gridContainer.style.display = 'none';

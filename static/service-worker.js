@@ -45,7 +45,10 @@ const PAGES_TO_CACHE = [
   '/games/ping-pong',
   '/games/snake',
   '/games/word-duet',
-  '/games/team-crossword'
+  '/games/team-crossword',
+  '/games/emoji-decoder',
+  '/games/memory-match',
+  '/games/this-or-that'
 ];
 
 // Minimal offline HTML served when /offline isn't cached

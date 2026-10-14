@@ -7,6 +7,7 @@ import os
 import random
 import secrets
 from security import limits
+from blueprints.game_registry import BOND_GAME_LABELS, all_games, game_route
 
 def csrf_exempt(view):
     """Mark view as exempt from CSRF protection."""
@@ -1499,6 +1500,7 @@ def bonds_page():
                            bond_types=BOND_TYPES,
                            bond_moods=BOND_MOODS,
                            question_bank=QUESTION_BANK,
+                           bond_games=all_games(),
                            user_tier=user_tier,
                            has_app_lock=has_app_lock,
                            is_unlocked=is_unlocked)
@@ -8283,18 +8285,6 @@ def api_process_calendar_reminders():
 
 # --- Bond Game Challenges & Head-to-Head Records ---
 
-BOND_GAME_LABELS = {
-    'tic_tac_toe': 'Tic-Tac-Toe',
-    'connect_four': 'Connect Four',
-    'dots_and_boxes': 'Dots & Boxes',
-    'ping_pong': 'Ping Pong',
-    'slime_volleyball': 'Slime Volleyball',
-    'emoji_decoder': 'Emoji Decoder',
-    'memory_match': 'Memory Match',
-    'this_or_that': 'This or That',
-    'team_crossword': 'Team Crossword',
-}
-
 
 @bp.route('/api/bonds/<bond_id>/challenge', methods=['POST'])
 @login_required
@@ -8322,19 +8312,10 @@ def api_bond_challenge(bond_id):
 
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
-    game_routes = {
-        'tic_tac_toe': '/games/tic-tac-toe',
-        'connect_four': '/games/connect-four',
-        'dots_and_boxes': '/games/dots-and-boxes',
-        'ping_pong': '/games/ping-pong',
-        'slime_volleyball': '/games/slime-volleyball',
-        'emoji_decoder': '/games/emoji-decoder',
-        'memory_match': '/games/memory-match',
-        'this_or_that': '/games/this-or-that',
-        'team_crossword': '/games/team-crossword',
-    }
-    room_id = f"bond_{game[:3]}_{str(bond_id)[-6:]}"
-    game_url = f"{game_routes.get(game, '/games')}?room={room_id}&bond_id={bond_id}"
+    route = game_route(game, for_bond=True)
+    room_id = f"bond_{game[:4]}_{secrets.token_urlsafe(6)}"
+    join_char = '&' if '?' in route else '?'
+    game_url = f"{route}{join_char}room={room_id}&bond_id={bond_id}"
 
     # Emit real-time challenge to partner
     partner_room = f"user_{partner_id}"

@@ -222,14 +222,17 @@ class TestSlimeVolleyballControlsAndServeSync:
         assert 'id="touch-jump"' in content
 
     def test_slime_volleyball_js_serve_state_sync_and_slider(self):
-        """Verify static/slime_volleyball.js synchronizes serveState and includes anti-loop hit guard."""
+        """Verify static/slime_volleyball.js synchronizes serveState and uses
+        single-authority guest sync (seq stale-drop; the old p2LastHitTime
+        timer guard was the phantom-bounce mechanism and is gone)."""
         import os
         js_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'slime_volleyball.js')
         with open(js_path, 'r', encoding='utf-8') as f:
             content = f.read()
 
         assert 'serveState: GameState.serveState' in content
-        assert 'p2LastHitTime' in content
+        assert 'p2LastHitTime' not in content
+        assert 'GameState.lastHostSeq' in content
         assert 'slime-slider-wrapper' in content
         assert 'updateSlider' in content
 

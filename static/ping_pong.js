@@ -115,8 +115,7 @@
     }
   }
 
-  // Netcode tuning knobs (Commit 0: instrumentation only; values unchanged).
-  // Later commits will wire INTERP_DELAY_MS / SNAP_ERROR_PX / HIT_COOLDOWN_MS.
+  // Netcode tuning knobs (tick/sync rates, interp, keep-alive).
   const NETCODE_CONFIG = {
     TICK_HZ: 60,
     SNAP_HZ: 20,
@@ -127,42 +126,8 @@
     PADDLE_KEEPALIVE_MS: 500
   };
 
-  // Temporary baseline instrumentation (Phase 1.4). TEMPORARILY default-on
-  // so live baseline can be collected without a URL flag; remove later.
-  // Opt out via ?netdebug=0 or localStorage ew_pong_netdebug=0.
-  const NETCODE_DEBUG = (function () {
-    try {
-      if (typeof window !== 'undefined' && window.location
-          && /[?&]netdebug=0/.test(window.location.search)) return false;
-      if (typeof localStorage !== 'undefined'
-          && localStorage.getItem('ew_pong_netdebug') === '0') return false;
-    } catch (e) {}
-    return true;
-  })();
-
-  // Baseline stats bucket. Read via window.__pongNetstats or
-  // window.__pong.__netstats. No gameplay effect.
-  const netStats = {
-    paddleSent: 0, paddleRecv: 0, ballSent: 0, ballRecv: 0,
-    paddleBytesSent: 0, ballBytesSent: 0,
-    ballGaps: 0, paddleGaps: 0,
-    lastBallRecvAt: 0, lastPaddleRecvAt: 0,
-    lastBallDeltaMs: 0, lastPaddleDeltaMs: 0,
-    lastSnapDistPx: 0, tunnelSuspects: 0, phantomGuardHits: 0,
-    lastBallSeq: -1, lastPaddleSeqSeen: -1,
-    droppedStaleBall: 0
-  };
-  function netLog(...args) {
-    if (NETCODE_DEBUG && typeof console !== 'undefined'
-        && typeof console.log === 'function') {
-      console.log('[pong-net]', ...args);
-    }
-  }
-  function payloadBytes(obj) {
-    try { return JSON.stringify(obj).length; } catch (e) { return 0; }
-  }
-  // Transport tuning (Commit 5): 2-decimal floats cut ~30% off sync
-  // payloads. Physics runs full-precision locally; only the wire is rounded.
+  // Transport tuning: 2-decimal floats cut ~30% off sync payloads.
+  // Physics runs full-precision locally; only the wire is rounded.
   function r2(v) {
     const n = Number(v);
     return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
@@ -867,8 +832,6 @@
           seq: state.pongSeq,
           tSend: tSend
         };
-        netStats.ballSent++;
-        netStats.ballBytesSent += payloadBytes(payload);
         state.socket.emit('pong_ball_sync', payload);
       }
     }
@@ -1226,14 +1189,6 @@
       // Opponent paddle renders from live, validated sync state with smooth LERP interpolation.
       if (!data || data.room_id !== state.roomId) return;
       if (data.player === state.playerIndex) return; // ignore our own echo
-      const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      if (netStats.lastPaddleRecvAt) {
-        const dt = nowMs - netStats.lastPaddleRecvAt;
-        netStats.lastPaddleDeltaMs = dt;
-        if (dt > 150) netStats.paddleGaps++;
-      }
-      netStats.lastPaddleRecvAt = nowMs;
-      netStats.paddleRecv++;
       const y = Number(data.y);
       if (!Number.isFinite(y)) return;
       const clamped = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, y));
@@ -1242,48 +1197,22 @@
       } else {
         state.p1.targetY = clamped;
       }
-      if (NETCODE_DEBUG && netStats.paddleRecv % 60 === 0) {
-        netLog('paddle', { recv: netStats.paddleRecv, sent: netStats.paddleSent,
-          lastDeltaMs: Math.round(netStats.lastPaddleDeltaMs), gaps: netStats.paddleGaps });
-      }
     });
 
     state.socket.on('pong_ball_sync', (data) => {
       if (!data || data.room_id !== state.roomId) return;
       if (!state.isHost) {
-        // Commit 1: drop stale/out-of-order host snapshots by sequence id.
+        // Drop stale/out-of-order host snapshots by sequence id.
         // (seq shares a counter with paddle sync, so it is monotonic.)
         const seq = (typeof data.seq === 'number' && Number.isFinite(data.seq)) ? data.seq : null;
         if (seq !== null) {
-          if (seq <= state.lastBallSeq) {
-            netStats.droppedStaleBall++;
-            netLog('dropped stale ball', { seq: seq, last: state.lastBallSeq });
-            return;
-          }
+          if (seq <= state.lastBallSeq) return;
           state.lastBallSeq = seq;
         }
-        // Arrival stats (baseline counters).
-        const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-        if (netStats.lastBallRecvAt) {
-          const dt = nowMs - netStats.lastBallRecvAt;
-          netStats.lastBallDeltaMs = dt;
-          if (dt > 100) netStats.ballGaps++;
-        }
-        netStats.lastBallRecvAt = nowMs;
-        netStats.ballRecv++;
         const num = (v, fallback) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
         const hx = num(data.x, state.ball.x), hy = num(data.y, state.ball.y);
-        const dx = hx - state.ball.x, dy = hy - state.ball.y;
-        netStats.lastSnapDistPx = Math.sqrt(dx * dx + dy * dy);
-        // Tunnel suspect: host ball at high speed crossing our paddle plane
-        // between snapshots (count only; guest no longer simulates hits).
-        if (Math.abs(num(data.vx, 0)) > 9) netStats.tunnelSuspects++;
-        if (typeof data.tSend === 'number' && Number.isFinite(data.tSend)) {
-          netStats.lastRttSampleMs = nowMs - data.tSend;
-        }
         // Host is the sole authority: adopt its snapshot. Safe to snap
-        // (no competing guest writer since Commit 1a); interpolation
-        // buffer arrives in Commit 3.
+        // (no competing guest writer); lerp only smooths the paddles.
         state.ball.x = hx;
         state.ball.y = hy;
         state.ball.vx = num(data.vx, state.ball.vx);
@@ -1538,8 +1467,6 @@
       seq: state.pongSeq,
       tSend: now
     };
-    netStats.paddleSent++;
-    netStats.paddleBytesSent += payloadBytes(payload);
     state.socket.emit('pong_paddle_sync', payload);
   }
 
@@ -1671,10 +1598,8 @@
       return isMuted;
     },
     getRankedScore: getPongRankedScore,
-    __netstats: netStats,
     __netcode: NETCODE_CONFIG
   };
-  window.__pongNetstats = netStats;
 
   // Automatic pause when leaving browser tab
   document.addEventListener('visibilitychange', () => {

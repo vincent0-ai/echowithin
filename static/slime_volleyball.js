@@ -31,7 +31,7 @@
   const FRICTION = 1.0;
   const WIN_SCORE = 5;
 
-  // Netcode tuning knobs (Commit 0: instrumentation only; values unchanged).
+  // Netcode tuning knobs (tick/sync rates, interp).
   const SLIME_NETCODE = {
     TICK_HZ: 60,
     SNAP_HZ: 18,
@@ -40,35 +40,7 @@
     HIT_COOLDOWN_MS: 120
   };
 
-  // Temporary baseline instrumentation (Phase 1.4). TEMPORARILY default-on
-  // so live baseline can be collected without a URL flag; remove later.
-  // Opt out via ?netdebug=0 or localStorage ew_slime_netdebug=0.
-  const SLIME_NETDEBUG = (function () {
-    try {
-      if (typeof window !== 'undefined' && window.location
-          && /[?&]netdebug=0/.test(window.location.search)) return false;
-      if (typeof localStorage !== 'undefined'
-          && localStorage.getItem('ew_slime_netdebug') === '0') return false;
-    } catch (e) {}
-    return true;
-  })();
-  const slimeNetStats = {
-    hostSent: 0, hostRecv: 0, inputSent: 0, inputRecv: 0,
-    hostBytesSent: 0, inputBytesSent: 0,
-    hostGaps: 0, lastHostRecvAt: 0, lastHostDeltaMs: 0,
-    lastSnapDist: 0, guardHolds: 0, snapFrames: 0,
-    lastHostSeq: -1, droppedStale: 0
-  };
-  function slimeNetLog(...args) {
-    if (SLIME_NETDEBUG && typeof console !== 'undefined'
-        && typeof console.log === 'function') {
-      console.log('[slime-net]', ...args);
-    }
-  }
-  function slimePayloadBytes(obj) {
-    try { return JSON.stringify(obj).length; } catch (e) { return 0; }
-  }
-  // Transport tuning (Commit 5): 2-decimal floats on the wire only.
+  // Transport tuning: 2-decimal floats on the wire only.
   function sr2(v) {
     const n = Number(v);
     return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
@@ -562,8 +534,7 @@
     // Post-restart: skip position lerping for a few sync frames so stale
     // host data doesn't pull slimes away from their reset positions.
     syncSnapFrames: 0,
-    p2LastHitTime: 0,
-    slimeSeq: 0,       // outgoing sequence for host_sync/input (Commit 0)
+    slimeSeq: 0,       // outgoing sequence for host_sync/input
     lastHostSeq: -1,   // last accepted host seq (stale-drop, Commit 2)
     lastInputSeq: 0,   // host-side: newest guest input seq seen (echoed as ack)
     hostAck: 0,        // guest-side: newest input seq the host has acked
@@ -631,7 +602,6 @@
     GameState.serving = winnerDir;
     GameState.serveState = 'SERVE_COUNTDOWN';
     GameState.delay = 60; // 1.0 second countdown at 60Hz
-    GameState.p2LastHitTime = 0;
 
     // Position slimes cleanly at baseline
     GameState.p1.reset();
@@ -1221,8 +1191,6 @@
           tSend: tSend,
           ack: GameState.lastInputSeq
         };
-        slimeNetStats.hostSent++;
-        slimeNetStats.hostBytesSent += slimePayloadBytes(payload);
         GameState.socket.emit('slime_host_sync', payload);
       } else {
         // Guest sends inputs and coordinates to Host
@@ -1243,8 +1211,6 @@
           seq: GameState.slimeSeq,
           tSend: tSend
         };
-        slimeNetStats.inputSent++;
-        slimeNetStats.inputBytesSent += slimePayloadBytes(payload);
         GameState.socket.emit('slime_player_input', payload);
       }
     }, 55); // ~18 Hz
@@ -1298,38 +1264,16 @@
         if (!GameState.isHost) {
           if (!data || data.room_id !== GameState.roomId || !data.ball || !data.p1 || !Array.isArray(data.scores)) return;
 
-          // Commit 2: drop stale/out-of-order host snapshots by sequence id.
+          // Drop stale/out-of-order host snapshots by sequence id.
           const hSeq = (typeof data.seq === 'number' && Number.isFinite(data.seq)) ? data.seq : null;
           if (hSeq !== null) {
-            if (hSeq <= GameState.lastHostSeq) {
-              slimeNetStats.droppedStale++;
-              slimeNetLog('dropped stale host_sync', { seq: hSeq, last: GameState.lastHostSeq });
-              return;
-            }
+            if (hSeq <= GameState.lastHostSeq) return;
             GameState.lastHostSeq = hSeq;
           }
-          // Record host ack of our inputs (Commit 3 lag-comp reads this).
+          // Record host ack of our inputs.
           const ack = (typeof data.ack === 'number' && Number.isFinite(data.ack)) ? data.ack : null;
           if (ack !== null && ack > GameState.hostAck) {
             GameState.hostAck = ack;
-          }
-
-          // Arrival stats (baseline counters).
-          const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-          if (slimeNetStats.lastHostRecvAt) {
-            const dt = nowMs - slimeNetStats.lastHostRecvAt;
-            slimeNetStats.lastHostDeltaMs = dt;
-            if (dt > 120) slimeNetStats.hostGaps++;
-          }
-          slimeNetStats.lastHostRecvAt = nowMs;
-          slimeNetStats.hostRecv++;
-          const hx = Number(data.ball.x) || 0, hy = Number(data.ball.y) || 11;
-          const sdx = hx - GameState.ball.x, sdy = hy - GameState.ball.y;
-          slimeNetStats.lastSnapDist = Math.sqrt(sdx * sdx + sdy * sdy);
-          if (SLIME_NETDEBUG && slimeNetStats.hostRecv % 60 === 0) {
-            slimeNetLog('host_sync', { recv: slimeNetStats.hostRecv, sent: slimeNetStats.hostSent,
-              lastDeltaMs: Math.round(slimeNetStats.lastHostDeltaMs), gaps: slimeNetStats.hostGaps,
-              snapDist: slimeNetStats.lastSnapDist.toFixed(2) });
           }
 
           const hostServeState = data.serveState || (data.ball && data.ball.vx === 0 && data.ball.vy === 0 ? 'SERVE_COUNTDOWN' : 'PLAYING');
@@ -1345,7 +1289,6 @@
             GameState.ball.vy = 0;
             GameState.p1.x = Number(data.p1.x) || (-REF_W / 4);
             GameState.p1.y = Number(data.p1.y) || REF_U;
-            GameState.p2LastHitTime = 0;
           } else {
             // Host is in 'PLAYING'
             if (GameState.serveState === 'SERVE_COUNTDOWN') {
@@ -1357,10 +1300,8 @@
               GameState.ball.vy = Number(data.ball.vy) || 0;
               GameState.p1.x = Number(data.p1.x) || (-REF_W / 4);
               GameState.p1.y = Number(data.p1.y) || REF_U;
-              GameState.p2LastHitTime = 0;
             } else if (GameState.syncSnapFrames > 0) {
               GameState.syncSnapFrames--;
-              slimeNetStats.snapFrames++;
               GameState.ball.x = Number(data.ball.x) || 0;
               GameState.ball.y = Number(data.ball.y) || 11;
               GameState.p1.x = Number(data.p1.x) || (-REF_W / 4);
@@ -1368,10 +1309,8 @@
               GameState.ball.vx = Number(data.ball.vx) || 0;
               GameState.ball.vy = Number(data.ball.vy) || 0;
             } else {
-              // Smooth lerp during active play. Commit 2: the 260ms
-              // pre-hit guard is gone — the guest no longer predicts
-              // bounces, so there is no guest prediction to protect and
-              // the host velocity is always adopted (no more reverses).
+              // Smooth lerp during active play. The guest never predicts
+              // bounces, so the host velocity is always adopted.
               const hostVx = Number(data.ball.vx) || 0;
               GameState.ball.x = GameState.ball.x * 0.25 + (Number(data.ball.x) || 0) * 0.75;
               GameState.ball.y = GameState.ball.y * 0.25 + (Number(data.ball.y) || 11) * 0.75;
@@ -1388,9 +1327,8 @@
           GameState.p2.score = Math.max(0, Math.floor(Number(data.scores[1]) || 0));
           if (data.rallyCount !== undefined) {
             const rc = Number(data.rallyCount) || 0;
-            // Commit 2: the guest no longer runs bounceSlime locally, so it
-            // would miss hit sounds. The host increments rallyCount on every
-            // real bounce — play the sound when it advances.
+            // The guest never runs bounceSlime locally, so hit sounds come
+            // from the host's authoritative rallyCount advancing.
             if (rc > GameState.lastHostRally && GameState.serveState === 'PLAYING'
                 && !GameState.isPaused && !GameState.gameOver) {
               try { SFX.bounce(); } catch (e) {}
@@ -1411,9 +1349,7 @@
 
       GameState.socket.on('slime_player_input', (data) => {
         if (GameState.isHost && data.p2) {
-          slimeNetStats.inputRecv++;
-          // Track newest guest input seq; echoed back as `ack` so the guest
-          // (Commit 3 lag-comp) can tell which inputs the host has applied.
+          // Track newest guest input seq; echoed back as `ack`.
           const inSeq = (typeof data.seq === 'number' && Number.isFinite(data.seq)) ? data.seq : null;
           if (inSeq !== null && inSeq > GameState.lastInputSeq) {
             GameState.lastInputSeq = inSeq;
@@ -1867,10 +1803,8 @@
     getBestRallyVolleys: () => GameState.bestRallyVolleys,
     getRankedScore: getSavedSlimeRankedScore,
     syncScores: syncAllScores,
-    __netstats: slimeNetStats,
     __netcode: SLIME_NETCODE
   };
-  window.__slimeNetstats = slimeNetStats;
 
   // Check URL room param
   const slimeUrlRoom = new URLSearchParams(window.location.search).get('room');

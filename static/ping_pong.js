@@ -103,7 +103,9 @@
     wasDropped: false,    // our socket dropped mid-match; rejoin on reconnect
     rejoinAttempts: 0,    // capped rejoin attempts (initial + 1 retry max)
     lastPaddleSend: 0,    // throttle clock for paddle sync (~20 Hz)
-    noContestTimer: null  // pending voided-match timer after opponent drop
+    noContestTimer: null,  // pending voided-match timer after opponent drop
+    pongSeq: 0,          // outgoing sequence for paddle+ball sync (Commit 0)
+    lastBallSeq: -1      // last accepted host ball seq (stale-drop, Commit 1+)
   };
 
   const PONG_DEBUG = false;
@@ -111,6 +113,52 @@
     if (PONG_DEBUG && typeof console !== 'undefined' && typeof console.debug === 'function') {
       console.debug('[pong]', ...args);
     }
+  }
+
+  // Netcode tuning knobs (Commit 0: instrumentation only; values unchanged).
+  // Later commits will wire INTERP_DELAY_MS / SNAP_ERROR_PX / HIT_COOLDOWN_MS.
+  const NETCODE_CONFIG = {
+    TICK_HZ: 60,
+    SNAP_HZ: 20,
+    INTERP_DELAY_MS: 100,
+    REWIND_CAP_MS: 175,
+    SNAP_ERROR_PX: 60,
+    HIT_COOLDOWN_MS: 120
+  };
+
+  // Temporary baseline instrumentation (Phase 1.4). Enabled via
+  // ?netdebug=1 or localStorage ew_pong_netdebug=1. Default off: zero
+  // gameplay/behavior change; only counters + console output.
+  const NETCODE_DEBUG = (function () {
+    try {
+      if (typeof window !== 'undefined' && window.location
+          && /[?&]netdebug=1/.test(window.location.search)) return true;
+      if (typeof localStorage !== 'undefined'
+          && localStorage.getItem('ew_pong_netdebug') === '1') return true;
+    } catch (e) {}
+    return false;
+  })();
+
+  // Baseline stats bucket. Read via window.__pongNetstats or
+  // window.__pong.__netstats. No gameplay effect.
+  const netStats = {
+    paddleSent: 0, paddleRecv: 0, ballSent: 0, ballRecv: 0,
+    paddleBytesSent: 0, ballBytesSent: 0,
+    ballGaps: 0, paddleGaps: 0,
+    lastBallRecvAt: 0, lastPaddleRecvAt: 0,
+    lastBallDeltaMs: 0, lastPaddleDeltaMs: 0,
+    lastSnapDistPx: 0, tunnelSuspects: 0, phantomGuardHits: 0,
+    lastBallSeq: -1, lastPaddleSeqSeen: -1,
+    droppedStaleBall: 0
+  };
+  function netLog(...args) {
+    if (NETCODE_DEBUG && typeof console !== 'undefined'
+        && typeof console.debug === 'function') {
+      console.debug('[pong-net]', ...args);
+    }
+  }
+  function payloadBytes(obj) {
+    try { return JSON.stringify(obj).length; } catch (e) { return 0; }
   }
 
   // First-to-N that actually governs THIS match: the server-shared room
@@ -791,7 +839,10 @@
     if (state.mode === 'online' && state.isHost && state.socket) {
       if (now - state.lastSyncTime > 30) {
         state.lastSyncTime = now;
-        state.socket.emit('pong_ball_sync', {
+        state.pongSeq = (state.pongSeq + 1) >>> 0;
+        const tSend = (typeof performance !== 'undefined' && performance.now)
+          ? performance.now() : Date.now();
+        const payload = {
           room_id: state.roomId,
           x: state.ball.x,
           y: state.ball.y,
@@ -799,8 +850,13 @@
           vy: state.ball.vy,
           speed: state.ball.speed,
           p1Y: state.p1.y,
-          volleys: state.consecutiveVolleys
-        });
+          volleys: state.consecutiveVolleys,
+          seq: state.pongSeq,
+          tSend: tSend
+        };
+        netStats.ballSent++;
+        netStats.ballBytesSent += payloadBytes(payload);
+        state.socket.emit('pong_ball_sync', payload);
       }
     }
   }
@@ -1156,6 +1212,14 @@
       // Opponent paddle renders from live, validated sync state with smooth LERP interpolation.
       if (!data || data.room_id !== state.roomId) return;
       if (data.player === state.playerIndex) return; // ignore our own echo
+      const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (netStats.lastPaddleRecvAt) {
+        const dt = nowMs - netStats.lastPaddleRecvAt;
+        netStats.lastPaddleDeltaMs = dt;
+        if (dt > 150) netStats.paddleGaps++;
+      }
+      netStats.lastPaddleRecvAt = nowMs;
+      netStats.paddleRecv++;
       const y = Number(data.y);
       if (!Number.isFinite(y)) return;
       const clamped = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, y));
@@ -1164,14 +1228,36 @@
       } else {
         state.p1.targetY = clamped;
       }
+      if (NETCODE_DEBUG && netStats.paddleRecv % 60 === 0) {
+        netLog('paddle', { recv: netStats.paddleRecv, sent: netStats.paddleSent,
+          lastDeltaMs: Math.round(netStats.lastPaddleDeltaMs), gaps: netStats.paddleGaps });
+      }
     });
 
     state.socket.on('pong_ball_sync', (data) => {
       if (!data || data.room_id !== state.roomId) return;
       if (!state.isHost) {
+        // Baseline: record arrival + snap distance before applying (no logic change).
+        const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        if (netStats.lastBallRecvAt) {
+          const dt = nowMs - netStats.lastBallRecvAt;
+          netStats.lastBallDeltaMs = dt;
+          if (dt > 100) netStats.ballGaps++;
+        }
+        netStats.lastBallRecvAt = nowMs;
+        netStats.ballRecv++;
         const num = (v, fallback) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
-        state.ball.x = num(data.x, state.ball.x);
-        state.ball.y = num(data.y, state.ball.y);
+        const hx = num(data.x, state.ball.x), hy = num(data.y, state.ball.y);
+        const dx = hx - state.ball.x, dy = hy - state.ball.y;
+        netStats.lastSnapDistPx = Math.sqrt(dx * dx + dy * dy);
+        // Tunnel suspect: host ball at high speed crossing our paddle plane
+        // between snapshots (count only; no gameplay change in Commit 0).
+        if (Math.abs(num(data.vx, 0)) > 9) netStats.tunnelSuspects++;
+        if (typeof data.tSend === 'number' && Number.isFinite(data.tSend)) {
+          netStats.lastRttSampleMs = nowMs - data.tSend;
+        }
+        state.ball.x = hx;
+        state.ball.y = hy;
         state.ball.vx = num(data.vx, state.ball.vx);
         state.ball.vy = num(data.vy, state.ball.vy);
         state.ball.speed = num(data.speed, state.ball.speed);
@@ -1414,11 +1500,17 @@
     if (now - state.lastPaddleSend < 50) return;
     state.lastPaddleSend = now;
     const y = state.playerIndex === 0 ? state.p1.y : state.p2.y;
-    state.socket.emit('pong_paddle_sync', {
+    state.pongSeq = (state.pongSeq + 1) >>> 0;
+    const payload = {
       room_id: state.roomId,
       player: state.playerIndex,
-      y: y
-    });
+      y: y,
+      seq: state.pongSeq,
+      tSend: now
+    };
+    netStats.paddleSent++;
+    netStats.paddleBytesSent += payloadBytes(payload);
+    state.socket.emit('pong_paddle_sync', payload);
   }
 
   function sendChallenge(targetSid, targetName) {
@@ -1548,8 +1640,11 @@
       localStorage.setItem('ew_pong_muted', isMuted ? '1' : '0');
       return isMuted;
     },
-    getRankedScore: getPongRankedScore
+    getRankedScore: getPongRankedScore,
+    __netstats: netStats,
+    __netcode: NETCODE_CONFIG
   };
+  window.__pongNetstats = netStats;
 
   // Automatic pause when leaving browser tab
   document.addEventListener('visibilitychange', () => {

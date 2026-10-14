@@ -31,6 +31,43 @@
   const FRICTION = 1.0;
   const WIN_SCORE = 5;
 
+  // Netcode tuning knobs (Commit 0: instrumentation only; values unchanged).
+  const SLIME_NETCODE = {
+    TICK_HZ: 60,
+    SNAP_HZ: 18,
+    INTERP_DELAY_MS: 100,
+    REWIND_CAP_MS: 175,
+    HIT_COOLDOWN_MS: 120
+  };
+
+  // Temporary baseline instrumentation (Phase 1.4). Enabled via
+  // ?netdebug=1 or localStorage ew_slime_netdebug=1. Default off.
+  const SLIME_NETDEBUG = (function () {
+    try {
+      if (typeof window !== 'undefined' && window.location
+          && /[?&]netdebug=1/.test(window.location.search)) return true;
+      if (typeof localStorage !== 'undefined'
+          && localStorage.getItem('ew_slime_netdebug') === '1') return true;
+    } catch (e) {}
+    return false;
+  })();
+  const slimeNetStats = {
+    hostSent: 0, hostRecv: 0, inputSent: 0, inputRecv: 0,
+    hostBytesSent: 0, inputBytesSent: 0,
+    hostGaps: 0, lastHostRecvAt: 0, lastHostDeltaMs: 0,
+    lastSnapDist: 0, guardHolds: 0, snapFrames: 0,
+    lastHostSeq: -1, droppedStale: 0
+  };
+  function slimeNetLog(...args) {
+    if (SLIME_NETDEBUG && typeof console !== 'undefined'
+        && typeof console.debug === 'function') {
+      console.debug('[slime-net]', ...args);
+    }
+  }
+  function slimePayloadBytes(obj) {
+    try { return JSON.stringify(obj).length; } catch (e) { return 0; }
+  }
+
   // AI Difficulty & Paddle Physics Presets
   const DIFFICULTY_CONFIG = {
     easy: {
@@ -519,7 +556,9 @@
     // Post-restart: skip position lerping for a few sync frames so stale
     // host data doesn't pull slimes away from their reset positions.
     syncSnapFrames: 0,
-    p2LastHitTime: 0
+    p2LastHitTime: 0,
+    slimeSeq: 0,       // outgoing sequence for host_sync/input (Commit 0)
+    lastHostSeq: -1    // last accepted host seq (stale-drop, Commit 2+)
   };
 
   function applyDifficulty(diff) {
@@ -1149,7 +1188,10 @@
 
       if (GameState.isHost) {
         // Host broadcasts state to Guest (including p2 state to keep sync tight)
-        GameState.socket.emit('slime_host_sync', {
+        GameState.slimeSeq = (GameState.slimeSeq + 1) >>> 0;
+        const tSend = (typeof performance !== 'undefined' && performance.now)
+          ? performance.now() : Date.now();
+        const payload = {
           room_id: GameState.roomId,
           ball: { x: GameState.ball.x, y: GameState.ball.y, vx: GameState.ball.vx, vy: GameState.ball.vy },
           p1: { x: GameState.p1.x, y: GameState.p1.y, vx: GameState.p1.vx, vy: GameState.p1.vy },
@@ -1158,11 +1200,19 @@
           serveState: GameState.serveState,
           serving: GameState.serving,
           delay: GameState.delay,
-          rallyCount: GameState.rallyCount
-        });
+          rallyCount: GameState.rallyCount,
+          seq: GameState.slimeSeq,
+          tSend: tSend
+        };
+        slimeNetStats.hostSent++;
+        slimeNetStats.hostBytesSent += slimePayloadBytes(payload);
+        GameState.socket.emit('slime_host_sync', payload);
       } else {
         // Guest sends inputs and coordinates to Host
-        GameState.socket.emit('slime_player_input', {
+        GameState.slimeSeq = (GameState.slimeSeq + 1) >>> 0;
+        const tSend = (typeof performance !== 'undefined' && performance.now)
+          ? performance.now() : Date.now();
+        const payload = {
           room_id: GameState.roomId,
           p2: {
             x: GameState.p2.x, y: GameState.p2.y,
@@ -1172,8 +1222,13 @@
             // can call setInput() — without this, P2 is ground-locked on
             // the host because vy is never set to PLAYER_SPEED_Y.
             jump: !!(keys.w || keys.up)
-          }
-        });
+          },
+          seq: GameState.slimeSeq,
+          tSend: tSend
+        };
+        slimeNetStats.inputSent++;
+        slimeNetStats.inputBytesSent += slimePayloadBytes(payload);
+        GameState.socket.emit('slime_player_input', payload);
       }
     }, 55); // ~18 Hz
   }
@@ -1223,6 +1278,24 @@
         if (!GameState.isHost) {
           if (!data || data.room_id !== GameState.roomId || !data.ball || !data.p1 || !Array.isArray(data.scores)) return;
 
+          // Baseline arrival stats (no logic change in Commit 0).
+          const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+          if (slimeNetStats.lastHostRecvAt) {
+            const dt = nowMs - slimeNetStats.lastHostRecvAt;
+            slimeNetStats.lastHostDeltaMs = dt;
+            if (dt > 120) slimeNetStats.hostGaps++;
+          }
+          slimeNetStats.lastHostRecvAt = nowMs;
+          slimeNetStats.hostRecv++;
+          const hx = Number(data.ball.x) || 0, hy = Number(data.ball.y) || 11;
+          const sdx = hx - GameState.ball.x, sdy = hy - GameState.ball.y;
+          slimeNetStats.lastSnapDist = Math.sqrt(sdx * sdx + sdy * sdy);
+          if (SLIME_NETDEBUG && slimeNetStats.hostRecv % 60 === 0) {
+            slimeNetLog('host_sync', { recv: slimeNetStats.hostRecv, sent: slimeNetStats.hostSent,
+              lastDeltaMs: Math.round(slimeNetStats.lastHostDeltaMs), gaps: slimeNetStats.hostGaps,
+              snapDist: slimeNetStats.lastSnapDist.toFixed(2) });
+          }
+
           const hostServeState = data.serveState || (data.ball && data.ball.vx === 0 && data.ball.vy === 0 ? 'SERVE_COUNTDOWN' : 'PLAYING');
 
           if (hostServeState === 'SERVE_COUNTDOWN') {
@@ -1251,6 +1324,7 @@
               GameState.p2LastHitTime = 0;
             } else if (GameState.syncSnapFrames > 0) {
               GameState.syncSnapFrames--;
+              slimeNetStats.snapFrames++;
               GameState.ball.x = Number(data.ball.x) || 0;
               GameState.ball.y = Number(data.ball.y) || 11;
               GameState.p1.x = Number(data.p1.x) || (-REF_W / 4);
@@ -1267,6 +1341,8 @@
               // still has the old pre-hit velocity (vx >= 0): do not overwrite Guest's bounce!
               if (guestRecentlyHit && hostVx >= 0 && GameState.ball.vx < 0) {
                 // Keep guest prediction alive until host registers the hit
+                slimeNetStats.guardHolds++;
+                slimeNetLog('guard-hold', { hostVx: hostVx, guestVx: GameState.ball.vx });
               } else {
                 if (guestRecentlyHit && hostVx < 0) {
                   GameState.p2LastHitTime = 0; // Host acknowledged the hit!
@@ -1301,6 +1377,7 @@
 
       GameState.socket.on('slime_player_input', (data) => {
         if (GameState.isHost && data.p2) {
+          slimeNetStats.inputRecv++;
           GameState.p2.desiredVx = Number(data.p2.desiredVx) || 0;
           // Apply guest jump intent: the Slime class only jumps inside
           // setInput(), which is never called for P2 on the host in online
@@ -1746,8 +1823,11 @@
     getVolleysReturned: () => GameState.volleysReturned,
     getBestRallyVolleys: () => GameState.bestRallyVolleys,
     getRankedScore: getSavedSlimeRankedScore,
-    syncScores: syncAllScores
+    syncScores: syncAllScores,
+    __netstats: slimeNetStats,
+    __netcode: SLIME_NETCODE
   };
+  window.__slimeNetstats = slimeNetStats;
 
   // Check URL room param
   const slimeUrlRoom = new URLSearchParams(window.location.search).get('room');

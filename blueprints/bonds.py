@@ -8285,6 +8285,71 @@ def api_process_calendar_reminders():
 
 # --- Bond Game Challenges & Head-to-Head Records ---
 
+# Open waiting rooms younger than this are reused instead of spawning a new
+# challenge room (auto-join: button jumps into the partner's waiting room if
+# one exists, else creates one). Keeps missed invite dialogs from stranding
+# players in duplicate rooms.
+BOND_OPEN_ROOM_TTL_S = 600
+
+# Game id -> in-memory room dict on the main module (single-worker).
+_BOND_GAME_ROOM_ATTRS = {
+    'tic_tac_toe': 'active_ttt_rooms',
+    'connect_four': 'active_c4_rooms',
+    'dots_and_boxes': 'active_dnb_rooms',
+    'ping_pong': 'active_pong_rooms',
+    'slime_volleyball': 'active_slime_rooms',
+    'gomoku': 'active_gomoku_rooms',
+    'whack_a_mole': 'active_whack_rooms',
+    'air_hockey': 'active_air_rooms',
+    'memory_match': 'active_memory_rooms',
+    'word_duet': 'active_duet_rooms',
+    'sudoku': 'active_sudoku_rooms',
+    'this_or_that': 'active_tot_rooms',
+    'emoji_decoder': 'active_emoji_rooms',
+    'team_crossword': 'active_crossword_rooms',
+}
+
+
+def _bond_game_url(game, room_id, bond_id):
+    route = game_route(game, for_bond=True)
+    join_char = '&' if '?' in route else '?'
+    return f"{route}{join_char}room={room_id}&bond_id={bond_id}"
+
+
+def _find_open_bond_room(m, game, bond_id, user_id_str, partner_id, now_utc):
+    """Return (room_id, waiter_is_partner) for a joinable waiting room.
+
+    Joinable = same bond + same game, guest seat still empty, host present,
+    created within BOND_OPEN_ROOM_TTL_S. Prefers the partner's room; falls
+    back to our own waiting room (avoids duplicate rooms on re-click).
+    """
+    rooms = getattr(m, _BOND_GAME_ROOM_ATTRS.get(game, ''), None)
+    if not isinstance(rooms, dict):
+        return None, False
+    own = None
+    for room_id, info in rooms.items():
+        if not isinstance(info, dict):
+            continue
+        if info.get('bond_id') != bond_id:
+            continue
+        if info.get('guest_sid') is not None or not info.get('host_sid'):
+            continue
+        created = info.get('created_at')
+        try:
+            age = (now_utc - created).total_seconds() if created else None
+        except Exception:
+            age = None
+        if age is None or age < 0 or age > BOND_OPEN_ROOM_TTL_S:
+            continue
+        waiter = str(info.get('host_user_id') or '')
+        if waiter and waiter == str(partner_id):
+            return room_id, True
+        if waiter and waiter == str(user_id_str) and own is None:
+            own = room_id
+    if own:
+        return own, False
+    return None, False
+
 
 @bp.route('/api/bonds/<bond_id>/challenge', methods=['POST'])
 @login_required
@@ -8312,10 +8377,32 @@ def api_bond_challenge(bond_id):
 
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
+    # Auto-join: reuse an open waiting room instead of spawning duplicates.
+    open_room_id, waiter_is_partner = _find_open_bond_room(
+        m, game, bond_id, user_id_str, partner_id, now_utc)
+    if open_room_id:
+        game_url = _bond_game_url(game, open_room_id, bond_id)
+        if not waiter_is_partner:
+            # Reusing our own room: refresh the partner's invite so a missed
+            # dialog doesn't strand them. (Partner's room needs no re-ping:
+            # our join event notifies them.)
+            m.socketio.emit('bond_game_challenge', {
+                'bond_id': bond_id,
+                'game': game,
+                'game_label': BOND_GAME_LABELS[game],
+                'game_url': game_url,
+                'room_id': open_room_id,
+                'challenger_id': user_id_str,
+                'challenger_name': current_user.username,
+                'created_at': now_utc.isoformat().replace('+00:00', 'Z'),
+                'reused': True,
+            }, room=f"user_{partner_id}")
+        return jsonify({'success': True, 'game': game, 'room_id': open_room_id,
+                        'game_url': game_url, 'reused': True})
+
     route = game_route(game, for_bond=True)
     room_id = f"bond_{game[:4]}_{secrets.token_urlsafe(6)}"
-    join_char = '&' if '?' in route else '?'
-    game_url = f"{route}{join_char}room={room_id}&bond_id={bond_id}"
+    game_url = _bond_game_url(game, room_id, bond_id)
 
     # Emit real-time challenge to partner
     partner_room = f"user_{partner_id}"

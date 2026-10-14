@@ -7833,7 +7833,7 @@
                     return;
                 }
                 if (data.game_url) {
-                    if (window.showCustomToast) showCustomToast('Challenge sent! Opening game room...', 'success');
+                    if (window.showCustomToast) showCustomToast(data.reused ? 'Joining your partner\'s room...' : 'Challenge sent! Opening game room...', 'success');
                     setTimeout(function () {
                         window.location.href = data.game_url;
                     }, 400);

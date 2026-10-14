@@ -332,6 +332,7 @@
 
   function handleLineClick(edge) {
     if (!edge || state.isGameOver || state.isCpuThinking) return;
+    if (state.mode === 'online' && state.pendingEcho) return; // one unacked move
 
     // Check if already drawn
     if (edge.type === 'h' && state.hEdges[edge.row][edge.col] !== null) return;
@@ -340,6 +341,14 @@
     if (state.mode === 'online') {
       if (!state.opponentJoined || state.turn !== state.myPlayer) return;
       if (state.socket && state.roomId) {
+        // Optimistic UI (Commit 4): paint edge + sound instantly. Boxes,
+        // scores, and turn arrive with the server echo (no local eval, so
+        // no double scoring on extra-turn captures).
+        if (edge.type === 'h') state.hEdges[edge.row][edge.col] = state.myPlayer;
+        else state.vEdges[edge.row][edge.col] = state.myPlayer;
+        playLineSound();
+        render();
+        state.pendingEcho = { type: edge.type, row: edge.row, col: edge.col, player: state.myPlayer };
         state.socket.emit('dnb_line', {
           room_id: state.roomId,
           type: edge.type,
@@ -730,6 +739,7 @@
     state.isGameOver = false;
     state.isCpuThinking = false;
     state.hoverEdge = null;
+    state.pendingEcho = null; // new game: nothing unacked
 
     const overlay = document.getElementById('dnb-result-overlay');
     if (overlay) overlay.style.display = 'none';
@@ -889,7 +899,13 @@
 
       state.scores = data.scores;
       state.turn = data.next_turn;
-      playLineSound();
+      // Skip echo sound for our own optimistic edge (already played).
+      const pe = state.pendingEcho;
+      if (!(pe && pe.type === data.type && pe.row === data.row
+            && pe.col === data.col && pe.player === data.player)) {
+        playLineSound();
+      }
+      state.pendingEcho = null;
       if (data.completed_boxes.length > 0) playBoxSound();
 
       updateScoreboard();

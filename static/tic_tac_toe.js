@@ -392,12 +392,20 @@
   function handleCellClick(index) {
     if (state.isGameOver || state.isThinking) return;
     if (state.board[index] !== '') return;
+    if (state.mode === 'online' && state.pendingEcho) return; // one unacked move
 
     if (state.mode === 'online') {
       if (!state.opponentJoined) return;
       if (state.turn !== state.mySymbol) return;
       // Send move to server
       if (state.socket && state.roomId) {
+        // Optimistic UI (Commit 4): paint + sound instantly; the server
+        // echo (full board + turn) confirms and self-heals. Win/draw is
+        // evaluated on echo only, so no double endGame/submit.
+        state.board[index] = state.mySymbol;
+        playMoveSound(state.mySymbol);
+        renderBoard();
+        state.pendingEcho = { index, symbol: state.mySymbol };
         state.socket.emit('ttt_move', { room_id: state.roomId, index });
       }
       return;
@@ -520,6 +528,7 @@
     state.board = Array(9).fill('');
     state.isGameOver = false;
     state.isThinking = false;
+    state.pendingEcho = null; // new game: nothing unacked
 
     if (startingTurn) {
       state.starter = startingTurn;
@@ -737,7 +746,12 @@
       state.board = data.board;
       state.turn = data.next_turn;
       state.scores = data.scores;
-      playMoveSound(data.symbol);
+      // Skip echo sound for our own optimistic move (already played).
+      if (!(state.pendingEcho && data.index === state.pendingEcho.index
+            && data.symbol === state.pendingEcho.symbol)) {
+        playMoveSound(data.symbol);
+      }
+      state.pendingEcho = null;
       renderBoard();
       updateScoreboard();
       updateTurnDisplay();

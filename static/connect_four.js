@@ -311,11 +311,17 @@
 
   function dropPiece(col) {
     if (state.isGameOver || state.animating || state.isCpuThinking) return;
+    if (state.mode === 'online' && state.echoPending) return; // one unacked move
 
     if (state.mode === 'online') {
       if (!state.opponentJoined || state.turn !== state.myPlayer) return;
       if (getDropRow(col) === -1) return;
       if (state.socket && state.roomId) {
+        // Optimistic UI (Commit 4): start the drop animation instantly;
+        // finishDrop paints only (no turn flip / win eval / sound — the
+        // server echo does all three). Silent here avoids double sound.
+        state.echoPending = { col, player: state.myPlayer };
+        startDropAnimation(col, getDropRow(col), state.turn);
         state.socket.emit('c4_move', { room_id: state.roomId, col });
       }
       return;
@@ -340,6 +346,17 @@
     const row = state.animRow;
     const col = state.animCol;
     const player = state.turn;
+
+    // Online optimistic paint (Commit 4): cell only. Turn flip, win/draw
+    // evaluation, and sound arrive with the server echo.
+    if (state.mode === 'online' && state.echoPending) {
+      state.board[row][col] = player;
+      state.animating = false;
+      state.animCol = -1;
+      state.animRow = -1;
+      state.animProgress = 0;
+      return;
+    }
 
     state.board[row][col] = player;
     state.animating = false;
@@ -715,6 +732,7 @@
     state.animProgress = 0;
     state.animating = false;
     state.isCpuThinking = false;
+    state.echoPending = null; // new game: nothing unacked
 
     const overlay = document.getElementById('c4-result-overlay');
     if (overlay) overlay.style.display = 'none';
@@ -865,6 +883,12 @@
       state.board = data.board;
       state.turn = data.next_turn;
       state.scores = data.scores;
+      // Cancel any in-flight optimistic animation: the echo is final.
+      state.animating = false;
+      state.animCol = -1;
+      state.animRow = -1;
+      state.animProgress = 0;
+      state.echoPending = null;
       playDropSound();
       updateScoreboard();
       updateTurnDisplay();

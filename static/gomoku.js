@@ -164,8 +164,16 @@
 
   function placeStone(idx) {
     if (state.over || state.board[idx] !== -1) return false;
+    if (state.mode === 'online' && state.pendingEcho !== null && state.pendingEcho !== undefined) return false; // one unacked move
     if (state.mode === 'online' && state.turn !== state.player) return false;
-    if (state.mode === 'online' && socket && state.roomId) socket.emit('gomoku_move', { room_id: state.roomId, idx: idx });
+    if (state.mode === 'online' && socket && state.roomId) {
+      // Optimistic UI (Commit 4): paint instantly; the server echo applies
+      // authoritatively (moves++, turn, win/draw). No local eval here.
+      state.board[idx] = state.player;
+      state.pendingEcho = idx;
+      draw();
+      socket.emit('gomoku_move', { room_id: state.roomId, idx: idx });
+    }
     else applyMove(idx, state.turn);
     return true;
   }
@@ -191,6 +199,7 @@
 
   function resetBoard() {
     state.board = new Array(CELLS).fill(-1); state.moves = 0; state.over = false; winLine = null;
+    state.pendingEcho = null; // new game: nothing unacked
     state.turn = (state.mode === 'online') ? state.turn : 0;
     hideResult(); draw();
     setStatus(state.mode === 'local' ? 'Player 1 to move' : 'Your turn');
@@ -282,6 +291,7 @@
     });
     socket.on('gomoku_move_made', function (d) {
       state.board[d.idx] = d.player; state.moves++;
+      if (state.pendingEcho === d.idx) state.pendingEcho = null;
       state.scores = d.scores; state.turn = d.next_turn;
       if (d.winner !== null && d.winner !== undefined || d.is_draw) {
         var w = d.is_draw ? null : d.winner;
@@ -299,6 +309,7 @@
     });
     socket.on('gomoku_match_found', function (d) {
       state.roomId = d.room_id; state.player = d.player; state.isHost = d.is_host;
+      state.pendingEcho = null;
       state.turn = d.turn; state.board = new Array(CELLS).fill(-1); state.moves = 0; state.over = false; winLine = null;
       hideResult(); draw(); setStatus('Matched! ' + (state.turn === state.player ? 'Your turn.' : 'Waiting.'));
     });
@@ -309,6 +320,7 @@
 
   function resetBoardSilent() {
     state.board = new Array(CELLS).fill(-1); state.moves = 0; state.over = false; winLine = null;
+    state.pendingEcho = null; // new game: nothing unacked
     hideResult(); draw();
   }
 

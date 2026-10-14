@@ -126,17 +126,17 @@
     HIT_COOLDOWN_MS: 120
   };
 
-  // Temporary baseline instrumentation (Phase 1.4). Enabled via
-  // ?netdebug=1 or localStorage ew_pong_netdebug=1. Default off: zero
-  // gameplay/behavior change; only counters + console output.
+  // Temporary baseline instrumentation (Phase 1.4). TEMPORARILY default-on
+  // so live baseline can be collected without a URL flag; remove later.
+  // Opt out via ?netdebug=0 or localStorage ew_pong_netdebug=0.
   const NETCODE_DEBUG = (function () {
     try {
       if (typeof window !== 'undefined' && window.location
-          && /[?&]netdebug=1/.test(window.location.search)) return true;
+          && /[?&]netdebug=0/.test(window.location.search)) return false;
       if (typeof localStorage !== 'undefined'
-          && localStorage.getItem('ew_pong_netdebug') === '1') return true;
+          && localStorage.getItem('ew_pong_netdebug') === '0') return false;
     } catch (e) {}
-    return false;
+    return true;
   })();
 
   // Baseline stats bucket. Read via window.__pongNetstats or
@@ -153,8 +153,8 @@
   };
   function netLog(...args) {
     if (NETCODE_DEBUG && typeof console !== 'undefined'
-        && typeof console.debug === 'function') {
-      console.debug('[pong-net]', ...args);
+        && typeof console.log === 'function') {
+      console.log('[pong-net]', ...args);
     }
   }
   function payloadBytes(obj) {

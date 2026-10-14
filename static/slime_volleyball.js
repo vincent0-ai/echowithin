@@ -40,16 +40,17 @@
     HIT_COOLDOWN_MS: 120
   };
 
-  // Temporary baseline instrumentation (Phase 1.4). Enabled via
-  // ?netdebug=1 or localStorage ew_slime_netdebug=1. Default off.
+  // Temporary baseline instrumentation (Phase 1.4). TEMPORARILY default-on
+  // so live baseline can be collected without a URL flag; remove later.
+  // Opt out via ?netdebug=0 or localStorage ew_slime_netdebug=0.
   const SLIME_NETDEBUG = (function () {
     try {
       if (typeof window !== 'undefined' && window.location
-          && /[?&]netdebug=1/.test(window.location.search)) return true;
+          && /[?&]netdebug=0/.test(window.location.search)) return false;
       if (typeof localStorage !== 'undefined'
-          && localStorage.getItem('ew_slime_netdebug') === '1') return true;
+          && localStorage.getItem('ew_slime_netdebug') === '0') return false;
     } catch (e) {}
-    return false;
+    return true;
   })();
   const slimeNetStats = {
     hostSent: 0, hostRecv: 0, inputSent: 0, inputRecv: 0,
@@ -60,8 +61,8 @@
   };
   function slimeNetLog(...args) {
     if (SLIME_NETDEBUG && typeof console !== 'undefined'
-        && typeof console.debug === 'function') {
-      console.debug('[slime-net]', ...args);
+        && typeof console.log === 'function') {
+      console.log('[slime-net]', ...args);
     }
   }
   function slimePayloadBytes(obj) {

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}<title>Sudoku Together — EchoWithin</title>{% endblock %}
+{% block content %}
+<style nonce="{{ csp_nonce }}">
+  #mobile-reload-btn, .mobile-fab { display: none !important; }
+  .sudoku-stage { padding: 1.25rem; display: flex; flex-direction: column; align-items: center; border-radius: 12px;
+    background: var(--surface-bg, #fdfbf7); border: 1px solid var(--border-color); max-width: 560px; margin: 0 auto; position: relative; }
+  .sudoku-grid { display: grid; grid-template-columns: repeat(9, 1fr); width: 100%; max-width: 440px;
+    border: 2px solid #5c3d2e; border-radius: 4px; overflow: hidden; background: #fff; }
+  .sudoku-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 1.15rem;
+    font-weight: 600; color: var(--text-dark-color); border-right: 1px solid #e5ddd0; border-bottom: 1px solid #e5ddd0;
+    cursor: pointer; user-select: none; position: relative; background: #fff; }
+  .sudoku-cell:nth-child(3n) { border-right: 1px solid #5c3d2e; }
+  .sudoku-cell:nth-child(9n) { border-right: none; }
+  .sudoku-cell:nth-child(n+19):nth-child(-n+27), .sudoku-cell:nth-child(n+46):nth-child(-n+54) { border-bottom: 1px solid #5c3d2e; }
+  .sudoku-cell.given { color: #5c3d2e; font-weight: 800; background: #faf6ef; cursor: default; }
+  .sudoku-cell.entry { color: #2c5f8a; }
+  .sudoku-cell.error { color: #b8423f; background: #fdeeee; }
+  .sudoku-cell.selected { outline: 2px solid #c68a35; outline-offset: -2px; }
+  .sudoku-cell.related { background: #f6f1e7; }
+  .sudoku-cell.partner { box-shadow: inset 0 0 0 2px #3f7e52; }
+  .sudoku-pad { display: grid; grid-template-columns: repeat(9, 1fr); gap: 0.35rem; width: 100%; max-width: 440px; margin-top: 0.85rem; }
+  .sudoku-pad button { padding: 0.55rem 0; border-radius: 8px; border: 1px solid var(--border-color); background: #fff;
+    font-size: 1rem; font-weight: 700; color: var(--text-dark-color); cursor: pointer; }
+  .sudoku-overlay { position: absolute; inset: 0; background: rgba(20,14,10,0.82); border-radius: 12px; display: none;
+    flex-direction: column; justify-content: center; align-items: center; gap: 1rem; z-index: 20; padding: 1.5rem; text-align: center; }
+</style>
+
+<div class="content-wrapper" style="max-width: 900px; margin: 0 auto; padding-bottom: 2rem;">
+  <div class="ew-header-row" style="margin-bottom: 1rem;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <h2 style="margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--text-dark-color);">Sudoku Together</h2>
+        <span class="ew-badge">Co-op Puzzle</span>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+        A fresh puzzle every visit. Solve solo or with a partner.
+      </div>
+    </div>
+    <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">Back to Games</a>
+  </div>
+
+  <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center;">
+    <button type="button" id="tab-solo" class="ew-btn ew-btn--sm mode-tab" style="cursor: pointer;">Solo</button>
+    <button type="button" id="tab-coop" class="ew-btn--outline ew-btn--sm mode-tab" style="cursor: pointer;">Co-op Solve</button>
+    <span class="ew-badge" id="sudoku-diff-badge">Medium</span>
+    <button type="button" id="sudoku-new-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">New Puzzle</button>
+    <button type="button" id="sudoku-erase-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">Erase</button>
+  </div>
+
+  <div id="online-panel" class="ew-card" style="display: none; margin-bottom: 1rem; padding: 1rem 1.25rem;">
+    <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+      <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary);">Room Code:</span>
+      <input type="text" id="room-code-input" placeholder="e.g. sudoku_duo" style="width: 130px; padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; background: var(--surface-bg); color: var(--text-dark-color);">
+      <button type="button" id="join-room-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Join</button>
+      <button type="button" id="create-room-btn" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor: pointer;">Create</button>
+      <button type="button" id="copy-link-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">Copy Link</button>
+    </div>
+    <div id="room-status" style="margin-top: 0.6rem; font-size: 0.8rem; color: var(--text-secondary);">Share the room code to solve together.</div>
+  </div>
+
+  <div class="sudoku-stage">
+    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; gap: 0.5rem; flex-wrap: wrap;">
+      <div class="ew-badge" style="font-weight: 700;">Mistakes: <span id="sudoku-mistakes">0</span>/3</div>
+      <div class="ew-badge" style="font-weight: 700;">Time: <span id="sudoku-time">0:00</span></div>
+      <div class="ew-badge" id="sudoku-partner" style="display: none; font-weight: 700;">Partner: <span id="sudoku-partner-name">–</span></div>
+    </div>
+    <div class="sudoku-grid" id="sudoku-grid" role="grid" aria-label="Sudoku grid"></div>
+    <div class="sudoku-pad" id="sudoku-pad" aria-label="Number pad"></div>
+    <div id="sudoku-result-overlay" class="sudoku-overlay">
+      <h3 id="sudoku-result-title" style="margin: 0; font-size: 1.5rem; font-weight: 800; color: #fff;">SOLVED!</h3>
+      <p id="sudoku-result-subtitle" style="margin: 0; font-size: 0.9rem; color: var(--text-secondary);">Nicely done.</p>
+      <button type="button" id="sudoku-again-btn" class="ew-btn ew-btn--sm" style="padding: 0.5rem 1.25rem; font-weight: 700; cursor: pointer;">New Puzzle</button>
+    </div>
+  </div>
+
+  {% include "partials/game_reaction_bar.html" %}
+
+  <div style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">
+    Tap a cell, then a number. Three mistakes ends the round.
+  </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='sudoku.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
+{% endblock %}

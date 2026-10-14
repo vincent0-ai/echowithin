@@ -635,6 +635,110 @@ GAMES = [
             <path d="M152,24 Q160,30 168,24 M152,36 Q160,30 168,36" fill="none" stroke="#3e2217" stroke-width="1" />
           </svg>""",
     },
+    {
+        "id": "gomoku",
+        "name": "Gomoku",
+        "type": "versus",
+        "players": "2",
+        "description": "Place five stones in a row before your opponent does.",
+        "icon": "fa-solid fa-circle-nodes",
+        "category": "arcade",
+        "route": "/games/gomoku",
+        "bond_route": "/games/gomoku",
+        "badge": "1v1 & Solo",
+        "cta": "Play 1v1",
+        "art_bg": "#f6efe4",
+        "art_svg": """<svg viewBox="0 0 320 120" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+            <rect width="320" height="120" fill="#f6efe4" />
+            <g stroke="#c9b795" stroke-width="1.5">
+              <line x1="90" y1="20" x2="230" y2="20" /><line x1="90" y1="40" x2="230" y2="40" />
+              <line x1="90" y1="60" x2="230" y2="60" /><line x1="90" y1="80" x2="230" y2="80" />
+              <line x1="90" y1="100" x2="230" y2="100" />
+              <line x1="90" y1="20" x2="90" y2="100" /><line x1="125" y1="20" x2="125" y2="100" />
+              <line x1="160" y1="20" x2="160" y2="100" /><line x1="195" y1="20" x2="195" y2="100" />
+              <line x1="230" y1="20" x2="230" y2="100" />
+            </g>
+            <circle cx="125" cy="40" r="8" fill="#3e2217" /><circle cx="160" cy="40" r="8" fill="#3e2217" />
+            <circle cx="195" cy="40" r="8" fill="#3e2217" /><circle cx="142" cy="60" r="8" fill="#ffffff" stroke="#3e2217" stroke-width="1.5" />
+            <circle cx="177" cy="60" r="8" fill="#ffffff" stroke="#3e2217" stroke-width="1.5" />
+            <circle cx="125" cy="80" r="8" fill="#3e2217" /><circle cx="160" cy="80" r="8" fill="#3e2217" />
+          </svg>""",
+    },
+    {
+        "id": "sudoku",
+        "name": "Sudoku Together",
+        "type": "co-op",
+        "players": "1-2",
+        "description": "Solve a fresh daily puzzle solo or with a partner.",
+        "icon": "fa-solid fa-table-cells-large",
+        "category": "coop",
+        "route": "/games/sudoku",
+        "bond_route": "/games/sudoku",
+        "badge": "Co-op Puzzle",
+        "cta": "Solve Together",
+        "art_bg": "#fdfbf7",
+        "art_svg": """<svg viewBox="0 0 320 120" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+            <rect width="320" height="120" fill="#fdfbf7" />
+            <g transform="translate(115, 15)">
+              <rect x="0" y="0" width="90" height="90" fill="#ffffff" stroke="#5c3d2e" stroke-width="2" />
+              <line x1="30" y1="0" x2="30" y2="90" stroke="#cbbfae" stroke-width="1" />
+              <line x1="60" y1="0" x2="60" y2="90" stroke="#cbbfae" stroke-width="1" />
+              <line x1="0" y1="30" x2="90" y2="30" stroke="#cbbfae" stroke-width="1" />
+              <line x1="0" y1="60" x2="90" y2="60" stroke="#cbbfae" stroke-width="1" />
+              <text x="15" y="22" font-size="13" text-anchor="middle" fill="#5c3d2e" font-weight="700" font-family="sans-serif">5</text>
+              <text x="45" y="52" font-size="13" text-anchor="middle" fill="#2c5f8a" font-weight="700" font-family="sans-serif">9</text>
+              <text x="75" y="82" font-size="13" text-anchor="middle" fill="#5c3d2e" font-weight="700" font-family="sans-serif">3</text>
+            </g>
+          </svg>""",
+    },
+    {
+        "id": "whack_a_mole",
+        "name": "Whack-'Em-All",
+        "type": "versus",
+        "players": "1-2",
+        "description": "Tap fast, score fast. Beat your best or duel a friend.",
+        "icon": "fa-solid fa-hammer",
+        "category": "arcade",
+        "route": "/games/whack-a-mole",
+        "bond_route": "/games/whack-a-mole",
+        "badge": "Solo & Duel",
+        "cta": "Play",
+        "art_bg": "#f3ece2",
+        "art_svg": """<svg viewBox="0 0 320 120" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+            <rect width="320" height="120" fill="#f3ece2" />
+            <ellipse cx="110" cy="95" rx="26" ry="9" fill="#cbbfae" />
+            <ellipse cx="160" cy="95" rx="26" ry="9" fill="#cbbfae" />
+            <ellipse cx="210" cy="95" rx="26" ry="9" fill="#cbbfae" />
+            <ellipse cx="110" cy="90" rx="20" ry="7" fill="#8a6f55" />
+            <ellipse cx="210" cy="90" rx="20" ry="7" fill="#8a6f55" />
+            <circle cx="160" cy="62" r="20" fill="#5c3d2e" />
+            <circle cx="153" cy="58" r="3" fill="#ffffff" /><circle cx="167" cy="58" r="3" fill="#ffffff" />
+            <ellipse cx="160" cy="70" rx="7" ry="5" fill="#f3ece2" />
+          </svg>""",
+    },
+    {
+        "id": "air_hockey",
+        "name": "Air Hockey",
+        "type": "versus",
+        "players": "2",
+        "description": "Slide, defend, and score in a fast live duel.",
+        "icon": "fa-solid fa-disc",
+        "category": "arcade",
+        "route": "/games/air-hockey",
+        "bond_route": "/games/air-hockey",
+        "badge": "1v1 & Solo",
+        "cta": "Play 1v1",
+        "art_bg": "#eef2f5",
+        "art_svg": """<svg viewBox="0 0 320 120" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+            <rect width="320" height="120" fill="#eef2f5" />
+            <rect x="90" y="10" width="140" height="100" rx="30" fill="#ffffff" stroke="#2c5f8a" stroke-width="2" />
+            <line x1="90" y1="60" x2="230" y2="60" stroke="#2c5f8a" stroke-width="1.5" stroke-dasharray="5,4" />
+            <circle cx="160" cy="60" r="10" fill="none" stroke="#2c5f8a" stroke-width="1.5" />
+            <circle cx="160" cy="30" r="11" fill="#b8423f" stroke="#ffffff" stroke-width="2" />
+            <circle cx="160" cy="92" r="11" fill="#2c5f8a" stroke="#ffffff" stroke-width="2" />
+            <circle cx="196" cy="60" r="6" fill="#3e2217" />
+          </svg>""",
+    },
 ]
 
 

@@ -3272,10 +3272,14 @@
                 const isC4 = (gTypeNorm === 'connect_four' || gTypeNorm === 'connectfour');
                 const isDNB = (gTypeNorm === 'dots_and_boxes' || gTypeNorm === 'dnb' || gTypeNorm === 'dotsandboxes');
                 const isPong = (gTypeNorm === 'ping_pong' || gTypeNorm === 'pong' || gTypeNorm === 'pingpong');
+                const isGomoku = (gTypeNorm === 'gomoku');
+                const isSudoku = (gTypeNorm === 'sudoku');
+                const isWhack = (gTypeNorm === 'whack_a_mole' || gTypeNorm === 'whack');
+                const isAir = (gTypeNorm === 'air_hockey' || gTypeNorm === 'air');
                 const isDuet = (gTypeNorm === 'word_duet' || gTypeNorm === 'duet');
                 const isCrossword = (gTypeNorm === 'team_crossword' || gTypeNorm === 'crossword' || gTypeNorm === 'xword');
-                const isCoop = isDuet || isCrossword;
-                const is1v1 = isSlime || isTTT || isC4 || isDNB || isPong;
+                const isCoop = isDuet || isCrossword || isSudoku;
+                const is1v1 = isSlime || isTTT || isC4 || isDNB || isPong || isGomoku || isWhack || isAir;
 
                 let joinUrl = gd.game_url || '';
                 if (!joinUrl) {
@@ -3289,6 +3293,14 @@
                         joinUrl = `/games/dots-and-boxes?room=${encodeURIComponent(gLobby)}`;
                     } else if (isPong) {
                         joinUrl = `/games/ping-pong?room=${encodeURIComponent(gLobby)}`;
+                    } else if (isGomoku) {
+                        joinUrl = `/games/gomoku?room=${encodeURIComponent(gLobby)}`;
+                    } else if (isSudoku) {
+                        joinUrl = `/games/sudoku?room=${encodeURIComponent(gLobby)}`;
+                    } else if (isWhack) {
+                        joinUrl = `/games/whack-a-mole?room=${encodeURIComponent(gLobby)}`;
+                    } else if (isAir) {
+                        joinUrl = `/games/air-hockey?room=${encodeURIComponent(gLobby)}`;
                     } else if (isDuet) {
                         joinUrl = `/games/word-duet?room=${encodeURIComponent(gLobby)}`;
                     } else if (isCrossword) {
@@ -5557,6 +5569,22 @@
             autoCreateDuelInvite('ping_pong', 'Ping Pong 1v1', '/games/ping-pong', 'pong');
         };
 
+        window.inviteGomoku = function () {
+            autoCreateDuelInvite('gomoku', 'Gomoku 1v1', '/games/gomoku', 'gomoku');
+        };
+
+        window.inviteSudoku = function () {
+            autoCreateDuelInvite('sudoku', 'Sudoku Together', '/games/sudoku', 'sudoku');
+        };
+
+        window.inviteWhackAMole = function () {
+            autoCreateDuelInvite('whack_a_mole', "Whack-'Em-All Duel", '/games/whack-a-mole', 'whack');
+        };
+
+        window.inviteAirHockey = function () {
+            autoCreateDuelInvite('air_hockey', 'Air Hockey 1v1', '/games/air-hockey', 'air');
+        };
+
         window.inviteWordDuet = function () {
             autoCreateDuelInvite('word_duet', 'Word Bond: Duet', '/games/word-duet', 'duet');
         };
@@ -5591,6 +5619,14 @@
                     cleanUrl = '/games/word-duet?room=' + encodeURIComponent(cleanLobbyId);
                 } else if (normType === 'team_crossword' || normType === 'crossword' || normType === 'xword') {
                     cleanUrl = '/games/team-crossword?room=' + encodeURIComponent(cleanLobbyId);
+                } else if (normType === 'gomoku') {
+                    cleanUrl = '/games/gomoku?room=' + encodeURIComponent(cleanLobbyId);
+                } else if (normType === 'sudoku') {
+                    cleanUrl = '/games/sudoku?room=' + encodeURIComponent(cleanLobbyId);
+                } else if (normType === 'whack_a_mole' || normType === 'whack') {
+                    cleanUrl = '/games/whack-a-mole?room=' + encodeURIComponent(cleanLobbyId);
+                } else if (normType === 'air_hockey' || normType === 'air') {
+                    cleanUrl = '/games/air-hockey?room=' + encodeURIComponent(cleanLobbyId);
                 } else if (cleanLobbyId) {
                     cleanUrl = '/g/' + encodeURIComponent(cleanLobbyId);
                 }
@@ -5647,6 +5683,10 @@
             const pongMatch = val.match(/ping-pong\?room=([a-zA-Z0-9_\-]+)/i);
             const duetMatch = val.match(/word-duet\?room=([a-zA-Z0-9_\-]+)/i);
             const xwordMatch = val.match(/team-crossword\?room=([a-zA-Z0-9_\-]+)/i);
+            const gomokuMatch = val.match(/gomoku\?room=([a-zA-Z0-9_\-]+)/i);
+            const sudokuMatch = val.match(/sudoku\?room=([a-zA-Z0-9_\-]+)/i);
+            const whackMatch = val.match(/whack-a-mole\?room=([a-zA-Z0-9_\-]+)/i);
+            const airMatch = val.match(/air-hockey\?room=([a-zA-Z0-9_\-]+)/i);
             const gMatch = val.match(/\/g\/([a-zA-Z0-9_\-]+)/i);
 
             if (slimeMatch) {
@@ -5684,6 +5724,26 @@
                 type = 'team_crossword';
                 title = 'Team Crossword';
                 url = '/games/team-crossword?room=' + encodeURIComponent(code);
+            } else if (gomokuMatch) {
+                code = gomokuMatch[1];
+                type = 'gomoku';
+                title = 'Gomoku 1v1';
+                url = '/games/gomoku?room=' + encodeURIComponent(code);
+            } else if (sudokuMatch) {
+                code = sudokuMatch[1];
+                type = 'sudoku';
+                title = 'Sudoku Together';
+                url = '/games/sudoku?room=' + encodeURIComponent(code);
+            } else if (whackMatch) {
+                code = whackMatch[1];
+                type = 'whack_a_mole';
+                title = "Whack-'Em-All Duel";
+                url = '/games/whack-a-mole?room=' + encodeURIComponent(code);
+            } else if (airMatch) {
+                code = airMatch[1];
+                type = 'air_hockey';
+                title = 'Air Hockey 1v1';
+                url = '/games/air-hockey?room=' + encodeURIComponent(code);
             } else if (gMatch) {
                 code = gMatch[1];
                 type = 'party_game';
@@ -5717,6 +5777,22 @@
                 type = 'team_crossword';
                 title = 'Team Crossword';
                 url = '/games/team-crossword?room=' + encodeURIComponent(code);
+            } else if (/^gomoku-/i.test(val) || /^gomoku_/i.test(val)) {
+                type = 'gomoku';
+                title = 'Gomoku 1v1';
+                url = '/games/gomoku?room=' + encodeURIComponent(code);
+            } else if (/^sudoku-/i.test(val) || /^sudoku_/i.test(val)) {
+                type = 'sudoku';
+                title = 'Sudoku Together';
+                url = '/games/sudoku?room=' + encodeURIComponent(code);
+            } else if (/^whack-/i.test(val) || /^whack_/i.test(val)) {
+                type = 'whack_a_mole';
+                title = "Whack-'Em-All Duel";
+                url = '/games/whack-a-mole?room=' + encodeURIComponent(code);
+            } else if (/^air-/i.test(val) || /^air_/i.test(val)) {
+                type = 'air_hockey';
+                title = 'Air Hockey 1v1';
+                url = '/games/air-hockey?room=' + encodeURIComponent(code);
             }
 
             window.sendGameInvite(code, type, title, url);

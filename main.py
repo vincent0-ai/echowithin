@@ -1180,7 +1180,8 @@ database.community_tournaments_conf = community_tournaments_conf
 
 
 # --- Match History Recording & ELO ---
-GAMES_WITH_MATCH_TRACKING = ('tic_tac_toe', 'connect_four', 'dots_and_boxes', 'ping_pong', 'slime_volleyball')
+GAMES_WITH_MATCH_TRACKING = ('tic_tac_toe', 'connect_four', 'dots_and_boxes', 'ping_pong', 'slime_volleyball',
+                             'gomoku', 'whack_a_mole', 'air_hockey')
 ELO_DEFAULT = 1200
 ELO_FLOOR = 100
 
@@ -2713,7 +2714,8 @@ def _prune_unattended_game_rooms():
     for store in (active_pong_rooms, active_slime_rooms, active_ttt_rooms,
                   active_c4_rooms, active_dnb_rooms, active_duet_rooms,
                   active_emoji_rooms, active_crossword_rooms, active_tot_rooms,
-                  active_memory_rooms, active_chain_rooms):
+                  active_memory_rooms, active_chain_rooms, active_gomoku_rooms,
+                  active_whack_rooms, active_sudoku_rooms, active_air_rooms):
         for rid, rinfo in list(store.items()):
             created = rinfo.get('created_at')
             if created:
@@ -3551,6 +3553,642 @@ def handle_cancel_c4_matchmaking(data=None, *args, **kwargs):
     c4_matchmaking_queue = [q for q in c4_matchmaking_queue if q['sid'] != sid]
     broadcast_matchmaking_queue(c4_matchmaking_queue, 'c4_queue_updated')
     emit('c4_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
+
+
+# --- Gomoku 15x15 1v1 Handlers (server-authoritative, mirrors Connect Four) ---
+active_gomoku_rooms = {}
+gomoku_matchmaking_queue = []
+
+GOMOKU_SIZE = 15
+GOMOKU_CELLS = GOMOKU_SIZE * GOMOKU_SIZE
+
+def check_gomoku_win(board, r, c, player):
+    """Return the winning line (5+ stones) through (r, c), or None."""
+    n = GOMOKU_SIZE
+    for dr, dc in ((0, 1), (1, 0), (1, 1), (1, -1)):
+        line = [(r, c)]
+        nr, nc = r + dr, c + dc
+        while 0 <= nr < n and 0 <= nc < n and board[nr * n + nc] == player:
+            line.append((nr, nc))
+            nr += dr
+            nc += dc
+        nr, nc = r - dr, c - dc
+        while 0 <= nr < n and 0 <= nc < n and board[nr * n + nc] == player:
+            line.insert(0, (nr, nc))
+            nr -= dr
+            nc -= dc
+        if len(line) >= 5:
+            return line
+    return None
+
+
+def _gomoku_new_room(sid, user_name, user_uid, bond_id=None):
+    return {
+        'host_sid': sid,
+        'host_name': user_name,
+        'host_user_id': user_uid,
+        'guest_sid': None,
+        'guest_name': None,
+        'guest_user_id': None,
+        'board': [-1] * GOMOKU_CELLS,
+        'turn': 0,
+        'moves': 0,
+        'scores': [0, 0, 0],
+        'bond_id': bond_id,
+        'tournament_id': None,
+        'created_at': datetime.datetime.now(datetime.timezone.utc),
+    }
+
+
+@socketio.on('join_gomoku_room')
+def handle_join_gomoku_room(data=None, *args, **kwargs):
+    payload = data if isinstance(data, dict) else {}
+    room_id = payload.get('room_id')
+    if not room_id or not isinstance(room_id, str):
+        return
+    room_id = room_id.strip()[:32]
+    if not room_id:
+        return
+    _prune_unattended_game_rooms()
+    join_room(room_id)
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    sid = request.sid
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
+    room_info = active_gomoku_rooms.get(room_id)
+    if not room_info:
+        room_info = _gomoku_new_room(sid, user_name, user_uid, payload.get('bond_id'))
+        active_gomoku_rooms[room_id] = room_info
+        emit('gomoku_room_joined', {'room_id': room_id, 'is_host': True, 'host_name': user_name,
+                                    'guest_name': None, 'player': 0}, room=sid)
+    elif room_info.get('host_sid') == sid:
+        emit('gomoku_room_joined', {'room_id': room_id, 'is_host': True, 'host_name': room_info['host_name'],
+                                    'guest_name': room_info.get('guest_name'), 'player': 0}, room=sid)
+    elif room_info.get('guest_sid') == sid:
+        emit('gomoku_room_joined', {'room_id': room_id, 'is_host': False, 'host_name': room_info['host_name'],
+                                    'guest_name': room_info['guest_name'], 'player': 1}, room=sid)
+    elif room_info.get('guest_sid') is not None:
+        emit('gomoku_room_error', {'message': 'Room is already full.'}, room=sid)
+    else:
+        starter = secrets.choice([0, 1])
+        room_info.update({'guest_sid': sid, 'guest_name': user_name, 'guest_user_id': user_uid,
+                          'starter': starter, 'turn': starter})
+        emit('gomoku_room_joined', {'room_id': room_id, 'is_host': False, 'host_name': room_info['host_name'],
+                                    'guest_name': user_name, 'player': 1, 'turn': starter}, room=sid)
+        emit('gomoku_room_joined', {'room_id': room_id, 'is_host': True, 'host_name': room_info['host_name'],
+                                    'guest_name': user_name, 'player': 0, 'turn': starter}, room=room_info['host_sid'])
+
+@socketio.on('leave_gomoku_room')
+def handle_leave_gomoku_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id:
+        return
+    sid = request.sid
+    try:
+        leave_room(room_id)
+    except Exception:
+        pass
+    room_info = active_gomoku_rooms.get(room_id)
+    if room_info and (room_info.get('host_sid') == sid or room_info.get('guest_sid') == sid):
+        emit('gomoku_player_left', {'room_id': room_id}, room=room_id)
+        active_gomoku_rooms.pop(room_id, None)
+
+@socketio.on('gomoku_move')
+def handle_gomoku_move(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    try:
+        idx = int(data.get('idx'))
+    except (ValueError, TypeError):
+        return
+    if not (0 <= idx < GOMOKU_CELLS):
+        return
+    room_info = active_gomoku_rooms.get(room_id)
+    if not room_info:
+        return
+    sid = request.sid
+    turn = room_info.get('turn', 0)
+    expected_sid = room_info.get('host_sid') if turn == 0 else room_info.get('guest_sid')
+    if sid != expected_sid or room_info['board'][idx] != -1:
+        return
+    room_info['board'][idx] = turn
+    room_info['moves'] += 1
+    r, c = divmod(idx, GOMOKU_SIZE)
+    win_line = check_gomoku_win(room_info['board'], r, c, turn)
+    is_draw = (win_line is None) and room_info['moves'] >= GOMOKU_CELLS
+    winner = None
+    if win_line:
+        winner = turn
+        room_info['scores'][turn] += 1
+    elif is_draw:
+        room_info['scores'][2] += 1
+    room_info['turn'] = 1 - turn
+    emit('gomoku_move_made', {'idx': idx, 'r': r, 'c': c, 'player': turn, 'winner': winner,
+                              'win_line': win_line, 'is_draw': is_draw, 'next_turn': room_info['turn'],
+                              'scores': room_info['scores']}, room=room_id)
+    if winner is not None or is_draw:
+        host_uid = room_info.get('host_user_id')
+        guest_uid = room_info.get('guest_user_id')
+        if host_uid and guest_uid:
+            winner_id = host_uid if winner == 0 else (guest_uid if winner == 1 else None)
+            record_match_result(
+                game='gomoku', room_id=room_id,
+                players=[{'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
+                         {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}],
+                winner_id=winner_id,
+                score={'host': room_info['scores'][0], 'guest': room_info['scores'][1], 'draws': room_info['scores'][2]},
+                metadata={'mode': 'online'}, bond_id=room_info.get('bond_id'))
+
+@socketio.on('gomoku_restart')
+def handle_gomoku_restart(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_info = active_gomoku_rooms.get(data.get('room_id'))
+    if not room_info:
+        return
+    room_info['board'] = [-1] * GOMOKU_CELLS
+    room_info['moves'] = 0
+    room_info['turn'] = secrets.choice([0, 1])
+    emit('gomoku_restarted', {'turn': room_info['turn']}, room=data.get('room_id'))
+
+@socketio.on('find_gomoku_match')
+def handle_find_gomoku_match(data=None, *args, **kwargs):
+    sid = request.sid
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    req_data = data if isinstance(data, dict) else {}
+    global gomoku_matchmaking_queue
+    gomoku_matchmaking_queue = [q for q in gomoku_matchmaking_queue if q['sid'] != sid]
+    if req_data.get('mode', 'auto') == 'auto' and gomoku_matchmaking_queue:
+        opponent = gomoku_matchmaking_queue.pop(0)
+        room_id = f"gomoku_{secrets.token_hex(4)}"
+        user_id = str(current_user.id) if current_user.is_authenticated else None
+        starter = secrets.choice([0, 1])
+        active_gomoku_rooms[room_id] = _gomoku_new_room(opponent['sid'], opponent['user_name'], opponent.get('user_id'))
+        active_gomoku_rooms[room_id].update({'guest_sid': sid, 'guest_name': user_name, 'guest_user_id': user_id,
+                                             'starter': starter, 'turn': starter})
+        try:
+            join_room(room_id, sid=opponent['sid'])
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+        emit('gomoku_match_found', {'room_id': room_id, 'is_host': True, 'host_name': opponent['user_name'],
+                                    'guest_name': user_name, 'player': 0, 'turn': starter}, room=opponent['sid'])
+        emit('gomoku_match_found', {'room_id': room_id, 'is_host': False, 'host_name': opponent['user_name'],
+                                    'guest_name': user_name, 'player': 1, 'turn': starter}, room=sid)
+        broadcast_matchmaking_queue(gomoku_matchmaking_queue, 'gomoku_queue_updated')
+    else:
+        gomoku_matchmaking_queue.append({'sid': sid, 'user_name': user_name,
+                                         'user_id': str(current_user.id) if current_user.is_authenticated else None,
+                                         'created_at': datetime.datetime.now(datetime.timezone.utc)})
+        broadcast_matchmaking_queue(gomoku_matchmaking_queue, 'gomoku_queue_updated')
+        emit('gomoku_matchmaking_waiting', {'status': 'waiting'}, room=sid)
+
+@socketio.on('cancel_gomoku_matchmaking')
+def handle_cancel_gomoku_matchmaking(data=None, *args, **kwargs):
+    sid = request.sid
+    global gomoku_matchmaking_queue
+    gomoku_matchmaking_queue = [q for q in gomoku_matchmaking_queue if q['sid'] != sid]
+    broadcast_matchmaking_queue(gomoku_matchmaking_queue, 'gomoku_queue_updated')
+    emit('gomoku_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
+
+
+# --- Whack-'Em-All Score-Duel Handlers (same-seed rounds, scores only) ---
+active_whack_rooms = {}
+whack_matchmaking_queue = []
+
+WHACK_ROUND_SECS = 30
+
+@socketio.on('join_whack_room')
+def handle_join_whack_room(data=None, *args, **kwargs):
+    payload = data if isinstance(data, dict) else {}
+    room_id = payload.get('room_id')
+    if not room_id or not isinstance(room_id, str):
+        return
+    room_id = room_id.strip()[:32]
+    if not room_id:
+        return
+    _prune_unattended_game_rooms()
+    join_room(room_id)
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    sid = request.sid
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
+    room_info = active_whack_rooms.get(room_id)
+    if not room_info:
+        try:
+            seed = int(payload.get('seed', 0)) or secrets.randbelow(2 ** 31)
+        except (ValueError, TypeError):
+            seed = secrets.randbelow(2 ** 31)
+        room_info = {
+            'host_sid': sid, 'host_name': user_name, 'host_user_id': user_uid,
+            'guest_sid': None, 'guest_name': None, 'guest_user_id': None,
+            'seed': seed, 'scores': [0, 0], 'finished': [False, False],
+            'bond_id': payload.get('bond_id'),
+            'created_at': datetime.datetime.now(datetime.timezone.utc),
+        }
+        active_whack_rooms[room_id] = room_info
+        emit('whack_room_joined', {'room_id': room_id, 'is_host': True, 'player': 0,
+                                   'seed': seed, 'host_name': user_name, 'guest_name': None}, room=sid)
+    elif room_info.get('host_sid') == sid:
+        emit('whack_room_joined', {'room_id': room_id, 'is_host': True, 'player': 0,
+                                   'seed': room_info['seed'], 'host_name': room_info['host_name'],
+                                   'guest_name': room_info.get('guest_name')}, room=sid)
+    elif room_info.get('guest_sid') == sid:
+        emit('whack_room_joined', {'room_id': room_id, 'is_host': False, 'player': 1,
+                                   'seed': room_info['seed'], 'host_name': room_info['host_name'],
+                                   'guest_name': room_info['guest_name']}, room=sid)
+    elif room_info.get('guest_sid') is not None:
+        emit('whack_room_error', {'message': 'Room is already full.'}, room=sid)
+    else:
+        room_info.update({'guest_sid': sid, 'guest_name': user_name, 'guest_user_id': user_uid})
+        emit('whack_room_joined', {'room_id': room_id, 'is_host': False, 'player': 1,
+                                   'seed': room_info['seed'], 'host_name': room_info['host_name'],
+                                   'guest_name': user_name}, room=sid)
+        emit('whack_room_joined', {'room_id': room_id, 'is_host': True, 'player': 0,
+                                   'seed': room_info['seed'], 'host_name': room_info['host_name'],
+                                   'guest_name': user_name}, room=room_info['host_sid'])
+
+@socketio.on('leave_whack_room')
+def handle_leave_whack_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id:
+        return
+    sid = request.sid
+    try:
+        leave_room(room_id)
+    except Exception:
+        pass
+    room_info = active_whack_rooms.get(room_id)
+    if room_info and (room_info.get('host_sid') == sid or room_info.get('guest_sid') == sid):
+        emit('whack_player_left', {'room_id': room_id}, room=room_id)
+        active_whack_rooms.pop(room_id, None)
+
+@socketio.on('whack_score')
+def handle_whack_score(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    room_info = active_whack_rooms.get(room_id)
+    if not room_info:
+        return
+    sid = request.sid
+    try:
+        score = max(0, min(int(data.get('score', 0)), 10000))
+    except (ValueError, TypeError):
+        return
+    if sid == room_info.get('host_sid'):
+        room_info['scores'][0] = score
+    elif sid == room_info.get('guest_sid'):
+        room_info['scores'][1] = score
+    else:
+        return
+    emit('whack_state', {'scores': room_info['scores']}, room=room_id, include_self=False)
+
+@socketio.on('whack_finish')
+def handle_whack_finish(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    room_info = active_whack_rooms.get(room_id)
+    if not room_info:
+        return
+    sid = request.sid
+    try:
+        score = max(0, min(int(data.get('score', 0)), 10000))
+    except (ValueError, TypeError):
+        return
+    idx = 0 if sid == room_info.get('host_sid') else (1 if sid == room_info.get('guest_sid') else None)
+    if idx is None:
+        return
+    room_info['scores'][idx] = score
+    room_info['finished'][idx] = True
+    if all(room_info['finished']):
+        scores = room_info['scores']
+        winner_id = None
+        host_uid = room_info.get('host_user_id')
+        guest_uid = room_info.get('guest_user_id')
+        if scores[0] != scores[1]:
+            winner_id = host_uid if scores[0] > scores[1] else guest_uid
+        emit('whack_result', {'scores': scores, 'winner': 0 if scores[0] > scores[1] else (1 if scores[1] > scores[0] else None)}, room=room_id)
+        if host_uid and guest_uid:
+            record_match_result(
+                game='whack_a_mole', room_id=room_id,
+                players=[{'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
+                         {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}],
+                winner_id=winner_id, score={'host': scores[0], 'guest': scores[1]},
+                metadata={'mode': 'online'}, bond_id=room_info.get('bond_id'))
+    else:
+        emit('whack_state', {'scores': room_info['scores']}, room=room_id, include_self=False)
+
+@socketio.on('find_whack_match')
+def handle_find_whack_match(data=None, *args, **kwargs):
+    sid = request.sid
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    req_data = data if isinstance(data, dict) else {}
+    global whack_matchmaking_queue
+    whack_matchmaking_queue = [q for q in whack_matchmaking_queue if q['sid'] != sid]
+    if req_data.get('mode', 'auto') == 'auto' and whack_matchmaking_queue:
+        opponent = whack_matchmaking_queue.pop(0)
+        room_id = f"whack_{secrets.token_hex(4)}"
+        user_id = str(current_user.id) if current_user.is_authenticated else None
+        seed = secrets.randbelow(2 ** 31)
+        active_whack_rooms[room_id] = {
+            'host_sid': opponent['sid'], 'host_name': opponent['user_name'], 'host_user_id': opponent.get('user_id'),
+            'guest_sid': sid, 'guest_name': user_name, 'guest_user_id': user_id,
+            'seed': seed, 'scores': [0, 0], 'finished': [False, False],
+            'created_at': datetime.datetime.now(datetime.timezone.utc),
+        }
+        try:
+            join_room(room_id, sid=opponent['sid'])
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+        emit('whack_match_found', {'room_id': room_id, 'seed': seed, 'is_host': True,
+                                   'host_name': opponent['user_name'], 'guest_name': user_name, 'player': 0}, room=opponent['sid'])
+        emit('whack_match_found', {'room_id': room_id, 'seed': seed, 'is_host': False,
+                                   'host_name': opponent['user_name'], 'guest_name': user_name, 'player': 1}, room=sid)
+        broadcast_matchmaking_queue(whack_matchmaking_queue, 'whack_queue_updated')
+    else:
+        whack_matchmaking_queue.append({'sid': sid, 'user_name': user_name,
+                                        'user_id': str(current_user.id) if current_user.is_authenticated else None,
+                                        'created_at': datetime.datetime.now(datetime.timezone.utc)})
+        broadcast_matchmaking_queue(whack_matchmaking_queue, 'whack_queue_updated')
+        emit('whack_matchmaking_waiting', {'status': 'waiting'}, room=sid)
+
+@socketio.on('cancel_whack_matchmaking')
+def handle_cancel_whack_matchmaking(data=None, *args, **kwargs):
+    sid = request.sid
+    global whack_matchmaking_queue
+    whack_matchmaking_queue = [q for q in whack_matchmaking_queue if q['sid'] != sid]
+    broadcast_matchmaking_queue(whack_matchmaking_queue, 'whack_queue_updated')
+    emit('whack_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
+
+
+# --- Sudoku Together Co-op Handlers (shared grid, mirrors Team Crossword) ---
+active_sudoku_rooms = {}
+
+@socketio.on('join_sudoku_room')
+def handle_join_sudoku_room(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    if not room_id or not isinstance(room_id, str):
+        return
+    room_id = room_id.strip()[:32]
+    if not room_id:
+        return
+    sid = request.sid
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Partner'
+    join_room(room_id)
+    room_info = active_sudoku_rooms.get(room_id)
+    if not room_info:
+        room_info = {
+            'host_sid': sid, 'host_name': user_name, 'guest_sid': None, 'guest_name': None,
+            'grid': [0] * 81,
+            'created_at': datetime.datetime.now(datetime.timezone.utc),
+        }
+        active_sudoku_rooms[room_id] = room_info
+        emit('sudoku_room_joined', {'room_id': room_id, 'is_host': True, 'grid': room_info['grid'],
+                                    'partner_name': None}, room=sid)
+    else:
+        if sid != room_info.get('host_sid'):
+            room_info['guest_sid'] = sid
+            room_info['guest_name'] = user_name
+        emit('sudoku_room_joined', {'room_id': room_id, 'is_host': sid == room_info.get('host_sid'),
+                                    'grid': room_info['grid'],
+                                    'partner_name': room_info['host_name'] if sid != room_info.get('host_sid') else room_info.get('guest_name')}, room=sid)
+        if room_info.get('host_sid') and sid != room_info.get('host_sid'):
+            emit('sudoku_room_joined', {'room_id': room_id, 'is_host': True, 'grid': room_info['grid'],
+                                        'partner_name': user_name}, room=room_info['host_sid'])
+
+@socketio.on('sudoku_cell_update')
+def handle_sudoku_cell_update(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    try:
+        r, c, v = int(data.get('r', -1)), int(data.get('c', -1)), int(data.get('v', -1))
+    except (ValueError, TypeError):
+        return
+    if not (0 <= r < 9 and 0 <= c < 9 and 0 <= v <= 9):
+        return
+    if room_id in active_sudoku_rooms:
+        active_sudoku_rooms[room_id]['grid'][r * 9 + c] = v
+    if room_id:
+        emit('sudoku_cell_update', {'r': r, 'c': c, 'v': v}, room=room_id, include_self=False)
+
+@socketio.on('sudoku_cursor_move')
+def handle_sudoku_cursor_move(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    try:
+        r, c = int(data.get('r', -1)), int(data.get('c', -1))
+    except (ValueError, TypeError):
+        return
+    if room_id and 0 <= r < 9 and 0 <= c < 9:
+        emit('sudoku_cursor_move', {'r': r, 'c': c}, room=room_id, include_self=False)
+
+@socketio.on('sudoku_restart')
+def handle_sudoku_restart(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_info = active_sudoku_rooms.get(data.get('room_id'))
+    if not room_info:
+        return
+    if room_info.get('guest_sid') and room_info.get('host_sid') != request.sid:
+        return
+    room_info['grid'] = [0] * 81
+    emit('sudoku_restarted', {}, room=data.get('room_id'))
+
+@socketio.on('sudoku_solved')
+def handle_sudoku_solved(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    if data.get('room_id'):
+        emit('sudoku_solved', {}, room=data.get('room_id'), include_self=False)
+
+@socketio.on('leave_sudoku_room')
+def handle_leave_sudoku_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id:
+        return
+    sid = request.sid
+    try:
+        leave_room(room_id)
+    except Exception:
+        pass
+    room_info = active_sudoku_rooms.get(room_id)
+    if room_info and (room_info.get('host_sid') == sid or room_info.get('guest_sid') == sid):
+        emit('sudoku_partner_left', {'room_id': room_id, 'reason': 'left'}, room=room_id)
+        active_sudoku_rooms.pop(room_id, None)
+
+
+# --- Air Hockey 1v1 Handlers (host-authoritative relay, mirrors Pong) ---
+active_air_rooms = {}
+air_matchmaking_queue = []
+AIR_TARGET = 7
+
+def _air_new_room(sid, user_name, user_uid, bond_id=None):
+    return {
+        'host_sid': sid, 'host_name': user_name, 'host_user_id': user_uid,
+        'guest_sid': None, 'guest_name': None, 'guest_user_id': None,
+        'scores': [0, 0], 'target': AIR_TARGET, 'bond_id': bond_id,
+        'tournament_id': None,
+        'created_at': datetime.datetime.now(datetime.timezone.utc),
+    }
+
+@socketio.on('join_air_room')
+def handle_join_air_room(data=None, *args, **kwargs):
+    payload = data if isinstance(data, dict) else {}
+    room_id = payload.get('room_id')
+    if not room_id or not isinstance(room_id, str):
+        return
+    room_id = room_id.strip()[:32]
+    if not room_id:
+        return
+    _prune_unattended_game_rooms()
+    join_room(room_id)
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    sid = request.sid
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
+    room_info = active_air_rooms.get(room_id)
+    if not room_info:
+        room_info = _air_new_room(sid, user_name, user_uid, payload.get('bond_id'))
+        active_air_rooms[room_id] = room_info
+        emit('air_room_joined', {'room_id': room_id, 'is_host': True, 'player': 0, 'target': AIR_TARGET,
+                                 'host_name': user_name, 'guest_name': None}, room=sid)
+    elif room_info.get('host_sid') == sid:
+        emit('air_room_joined', {'room_id': room_id, 'is_host': True, 'player': 0, 'target': room_info.get('target', AIR_TARGET),
+                                 'host_name': room_info['host_name'], 'guest_name': room_info.get('guest_name')}, room=sid)
+    elif room_info.get('guest_sid') == sid:
+        emit('air_room_joined', {'room_id': room_id, 'is_host': False, 'player': 1, 'target': room_info.get('target', AIR_TARGET),
+                                 'host_name': room_info['host_name'], 'guest_name': room_info['guest_name']}, room=sid)
+    elif room_info.get('guest_sid') is not None:
+        emit('air_room_error', {'message': 'Room is already full.'}, room=sid)
+    else:
+        room_info.update({'guest_sid': sid, 'guest_name': user_name, 'guest_user_id': user_uid})
+        emit('air_room_joined', {'room_id': room_id, 'is_host': False, 'player': 1, 'target': room_info.get('target', AIR_TARGET),
+                                 'host_name': room_info['host_name'], 'guest_name': user_name}, room=sid)
+        emit('air_room_joined', {'room_id': room_id, 'is_host': True, 'player': 0, 'target': room_info.get('target', AIR_TARGET),
+                                 'host_name': room_info['host_name'], 'guest_name': user_name}, room=room_info['host_sid'])
+
+@socketio.on('leave_air_room')
+def handle_leave_air_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id:
+        return
+    sid = request.sid
+    try:
+        leave_room(room_id)
+    except Exception:
+        pass
+    room_info = active_air_rooms.get(room_id)
+    if room_info and (room_info.get('host_sid') == sid or room_info.get('guest_sid') == sid):
+        emit('air_player_left', {'room_id': room_id}, room=room_id)
+        active_air_rooms.pop(room_id, None)
+
+@socketio.on('air_input')
+def handle_air_input(data=None, *args, **kwargs):
+    """Guest paddle input relayed to the host simulator only."""
+    if not isinstance(data, dict):
+        return
+    room_info = active_air_rooms.get(data.get('room_id'))
+    if not room_info or request.sid != room_info.get('guest_sid') or not room_info.get('host_sid'):
+        return
+    try:
+        x, y = float(data.get('x', 0)), float(data.get('y', 0))
+    except (ValueError, TypeError):
+        return
+    emit('air_input', {'x': max(-1.0, min(1.0, x)), 'y': max(-1.0, min(1.0, y))}, room=room_info['host_sid'])
+
+@socketio.on('air_state')
+def handle_air_state(data=None, *args, **kwargs):
+    """Host physics snapshot broadcast to the room."""
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    room_info = active_air_rooms.get(room_id)
+    if not room_info or request.sid != room_info.get('host_sid'):
+        return
+    emit('air_state', {'puck': data.get('puck'), 'p1': data.get('p1'), 'p2': data.get('p2'),
+                       'scores': room_info.get('scores', [0, 0])}, room=room_id, include_self=False)
+
+@socketio.on('air_score')
+def handle_air_score(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    room_info = active_air_rooms.get(room_id)
+    if not room_info or request.sid != room_info.get('host_sid'):
+        return
+    try:
+        scores = [max(0, min(int(data.get('scores', [0, 0])[0]), 99)),
+                  max(0, min(int(data.get('scores', [0, 0])[1]), 99))]
+    except (ValueError, TypeError, IndexError):
+        return
+    room_info['scores'] = scores
+    emit('air_score_update', {'scores': scores, 'target': room_info.get('target', AIR_TARGET)}, room=room_id)
+    if max(scores) >= room_info.get('target', AIR_TARGET):
+        host_uid = room_info.get('host_user_id')
+        guest_uid = room_info.get('guest_user_id')
+        winner_id = None
+        if host_uid and guest_uid:
+            winner_id = host_uid if scores[0] > scores[1] else guest_uid
+            record_match_result(
+                game='air_hockey', room_id=room_id,
+                players=[{'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
+                         {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}],
+                winner_id=winner_id, score={'host': scores[0], 'guest': scores[1]},
+                metadata={'mode': 'online'}, bond_id=room_info.get('bond_id'))
+        emit('air_result', {'scores': scores, 'winner': 0 if scores[0] > scores[1] else 1}, room=room_id)
+
+@socketio.on('air_restart')
+def handle_air_restart(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_info = active_air_rooms.get(data.get('room_id'))
+    if not room_info:
+        return
+    room_info['scores'] = [0, 0]
+    emit('air_restarted', {'target': room_info.get('target', AIR_TARGET)}, room=data.get('room_id'))
+
+@socketio.on('find_air_match')
+def handle_find_air_match(data=None, *args, **kwargs):
+    sid = request.sid
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    req_data = data if isinstance(data, dict) else {}
+    global air_matchmaking_queue
+    air_matchmaking_queue = [q for q in air_matchmaking_queue if q['sid'] != sid]
+    if req_data.get('mode', 'auto') == 'auto' and air_matchmaking_queue:
+        opponent = air_matchmaking_queue.pop(0)
+        room_id = f"air_{secrets.token_hex(4)}"
+        user_id = str(current_user.id) if current_user.is_authenticated else None
+        active_air_rooms[room_id] = _air_new_room(opponent['sid'], opponent['user_name'], opponent.get('user_id'))
+        active_air_rooms[room_id].update({'guest_sid': sid, 'guest_name': user_name, 'guest_user_id': user_id})
+        try:
+            join_room(room_id, sid=opponent['sid'])
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+        emit('air_match_found', {'room_id': room_id, 'is_host': True, 'player': 0, 'target': AIR_TARGET,
+                                 'host_name': opponent['user_name'], 'guest_name': user_name}, room=opponent['sid'])
+        emit('air_match_found', {'room_id': room_id, 'is_host': False, 'player': 1, 'target': AIR_TARGET,
+                                 'host_name': opponent['user_name'], 'guest_name': user_name}, room=sid)
+        broadcast_matchmaking_queue(air_matchmaking_queue, 'air_queue_updated')
+    else:
+        air_matchmaking_queue.append({'sid': sid, 'user_name': user_name,
+                                      'user_id': str(current_user.id) if current_user.is_authenticated else None,
+                                      'created_at': datetime.datetime.now(datetime.timezone.utc)})
+        broadcast_matchmaking_queue(air_matchmaking_queue, 'air_queue_updated')
+        emit('air_matchmaking_waiting', {'status': 'waiting'}, room=sid)
+
+@socketio.on('cancel_air_matchmaking')
+def handle_cancel_air_matchmaking(data=None, *args, **kwargs):
+    sid = request.sid
+    global air_matchmaking_queue
+    air_matchmaking_queue = [q for q in air_matchmaking_queue if q['sid'] != sid]
+    broadcast_matchmaking_queue(air_matchmaking_queue, 'air_queue_updated')
+    emit('air_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
 
 
 # --- Dots and Boxes 1v1 Real-Time Handlers ---
@@ -4509,6 +5147,72 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
         emit('dnb_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1, 'turn': starter}, room=sid)
         broadcast_matchmaking_queue(dnb_matchmaking_queue, 'dnb_queue_updated')
 
+    elif game == 'gomoku':
+        global gomoku_matchmaking_queue
+        challenger = next((q for q in gomoku_matchmaking_queue if q['sid'] == challenger_sid), None)
+        c_name = challenger['user_name'] if challenger else 'Challenger'
+        gomoku_matchmaking_queue = [q for q in gomoku_matchmaking_queue if q['sid'] not in (sid, challenger_sid)]
+        room_id = f"gomoku_{secrets.token_hex(4)}"
+        c_uid = challenger.get('user_id') if challenger else None
+        user_uid = str(current_user.id) if current_user.is_authenticated else None
+        starter = secrets.choice([0, 1])
+        active_gomoku_rooms[room_id] = _gomoku_new_room(challenger_sid, c_name, c_uid)
+        active_gomoku_rooms[room_id].update({'guest_sid': sid, 'guest_name': user_name, 'guest_user_id': user_uid,
+                                             'starter': starter, 'turn': starter})
+        try:
+            join_room(room_id, sid=challenger_sid)
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+        emit('gomoku_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0, 'turn': starter}, room=challenger_sid)
+        emit('gomoku_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1, 'turn': starter}, room=sid)
+        broadcast_matchmaking_queue(gomoku_matchmaking_queue, 'gomoku_queue_updated')
+
+    elif game == 'whack':
+        global whack_matchmaking_queue
+        challenger = next((q for q in whack_matchmaking_queue if q['sid'] == challenger_sid), None)
+        c_name = challenger['user_name'] if challenger else 'Challenger'
+        whack_matchmaking_queue = [q for q in whack_matchmaking_queue if q['sid'] not in (sid, challenger_sid)]
+        room_id = f"whack_{secrets.token_hex(4)}"
+        c_uid = challenger.get('user_id') if challenger else None
+        user_uid = str(current_user.id) if current_user.is_authenticated else None
+        seed = secrets.randbelow(2 ** 31)
+        active_whack_rooms[room_id] = {
+            'host_sid': challenger_sid, 'host_name': c_name, 'host_user_id': c_uid,
+            'guest_sid': sid, 'guest_name': user_name, 'guest_user_id': user_uid,
+            'seed': seed, 'scores': [0, 0], 'finished': [False, False],
+            'created_at': datetime.datetime.now(datetime.timezone.utc),
+        }
+        try:
+            join_room(room_id, sid=challenger_sid)
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+        emit('whack_match_found', {'room_id': room_id, 'seed': seed, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0}, room=challenger_sid)
+        emit('whack_match_found', {'room_id': room_id, 'seed': seed, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1}, room=sid)
+        broadcast_matchmaking_queue(whack_matchmaking_queue, 'whack_queue_updated')
+
+    elif game == 'air':
+        global air_matchmaking_queue
+        challenger = next((q for q in air_matchmaking_queue if q['sid'] == challenger_sid), None)
+        c_name = challenger['user_name'] if challenger else 'Challenger'
+        air_matchmaking_queue = [q for q in air_matchmaking_queue if q['sid'] not in (sid, challenger_sid)]
+        room_id = f"air_{secrets.token_hex(4)}"
+        c_uid = challenger.get('user_id') if challenger else None
+        user_uid = str(current_user.id) if current_user.is_authenticated else None
+        active_air_rooms[room_id] = _air_new_room(challenger_sid, c_name, c_uid)
+        active_air_rooms[room_id].update({'guest_sid': sid, 'guest_name': user_name, 'guest_user_id': user_uid})
+        try:
+            join_room(room_id, sid=challenger_sid)
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+        emit('air_match_found', {'room_id': room_id, 'is_host': True, 'player': 0, 'target': AIR_TARGET,
+                                 'host_name': c_name, 'guest_name': user_name}, room=challenger_sid)
+        emit('air_match_found', {'room_id': room_id, 'is_host': False, 'player': 1, 'target': AIR_TARGET,
+                                 'host_name': c_name, 'guest_name': user_name}, room=sid)
+        broadcast_matchmaking_queue(air_matchmaking_queue, 'air_queue_updated')
+
 @socketio.on('decline_game_challenge')
 def handle_decline_game_challenge(data=None, *args, **kwargs):
     if not isinstance(data, dict):
@@ -4924,6 +5628,14 @@ def handle_send_dm(data=None, *args, **kwargs):
                     g_url = f"/games/word-duet?room={lobby_id}"
                 elif g_type in ('team_crossword', 'crossword', 'xword'):
                     g_url = f"/games/team-crossword?room={lobby_id}"
+                elif g_type in ('gomoku',):
+                    g_url = f"/games/gomoku?room={lobby_id}"
+                elif g_type in ('sudoku',):
+                    g_url = f"/games/sudoku?room={lobby_id}"
+                elif g_type in ('whack_a_mole', 'whack'):
+                    g_url = f"/games/whack-a-mole?room={lobby_id}"
+                elif g_type in ('air_hockey', 'air'):
+                    g_url = f"/games/air-hockey?room={lobby_id}"
                 elif lobby_id:
                     g_url = f"/g/{lobby_id}"
             message_doc['game_data'] = {

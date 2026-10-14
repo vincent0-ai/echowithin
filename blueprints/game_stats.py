@@ -18,6 +18,9 @@ GAME_LABELS = {
     'dots_and_boxes': 'Dots & Boxes',
     'ping_pong': 'Ping Pong',
     'slime_volleyball': 'Slime Volleyball',
+    'gomoku': 'Gomoku',
+    'whack_a_mole': "Whack-'Em-All",
+    'air_hockey': 'Air Hockey',
 }
 
 

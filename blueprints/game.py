@@ -283,6 +283,98 @@ def memory_match():
 def this_or_that():
     return render_template('this_or_that.html', active_page='games')
 
+@bp.route('/games/gomoku')
+def gomoku():
+    return render_template('gomoku.html', active_page='games')
+
+@bp.route('/games/sudoku')
+def sudoku():
+    return render_template('sudoku.html', active_page='games')
+
+@bp.route('/games/whack-a-mole')
+def whack_a_mole():
+    return render_template('whack_a_mole.html', active_page='games')
+
+@bp.route('/games/air-hockey')
+def air_hockey():
+    return render_template('air_hockey.html', active_page='games')
+
+_SUDOKU_API_URL = 'https://sudoku-api.vercel.app/api/dosuku'
+_SUDOKU_CACHE = {}
+_SUDOKU_CACHE_TTL = 600
+
+
+def _sudoku_fallback_board(seed=None):
+    """Local seeded 9x9 generator (backtracking + hole dig). No external deps."""
+    import random
+    rng = random.Random(seed)
+    grid = [[0] * 9 for _ in range(9)]
+
+    def _valid(g, r, c, n):
+        if any(g[r][i] == n for i in range(9)):
+            return False
+        if any(g[i][c] == n for i in range(9)):
+            return False
+        br, bc = 3 * (r // 3), 3 * (c // 3)
+        return all(g[br + i][bc + j] != n for i in range(3) for j in range(3))
+
+    def _fill(g, pos=0):
+        if pos == 81:
+            return True
+        r, c = divmod(pos, 9)
+        if g[r][c]:
+            return _fill(g, pos + 1)
+        nums = list(range(1, 10))
+        rng.shuffle(nums)
+        for n in nums:
+            if _valid(g, r, c, n):
+                g[r][c] = n
+                if _fill(g, pos + 1):
+                    return True
+                g[r][c] = 0
+        return False
+
+    _fill(grid)
+    solution = [row[:] for row in grid]
+    holes = {'easy': 36, 'medium': 44, 'hard': 50}.get('medium', 44)
+    cells = [(r, c) for r in range(9) for c in range(9)]
+    rng.shuffle(cells)
+    for r, c in cells[:holes]:
+        grid[r][c] = 0
+    return {'puzzle': grid, 'solution': solution, 'difficulty': 'medium'}
+
+
+@bp.route('/api/games/sudoku/new', methods=['GET'])
+@limits(calls=30, period=60)
+def api_sudoku_new():
+    """Fresh Sudoku board: free Dosuku API first, local generator fallback."""
+    import time
+    import urllib.request
+    import urllib.parse
+    import json as _json
+    difficulty = (request.args.get('difficulty') or 'medium').strip().lower()
+    if difficulty not in ('easy', 'medium', 'hard'):
+        difficulty = 'medium'
+    now_ts = time.time()
+    cached = _SUDOKU_CACHE.get(difficulty)
+    if cached and now_ts - cached[0] < _SUDOKU_CACHE_TTL:
+        return jsonify({'success': True, 'source': 'cache', **cached[1]})
+    try:
+        query = '{newboard(limit:1){grids{value solution difficulty}}}'
+        url = _SUDOKU_API_URL + '?query=' + urllib.parse.quote(query)
+        req = urllib.request.Request(url, headers={'User-Agent': 'EchoWithin/1.0'})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            payload = _json.loads(resp.read().decode('utf-8'))
+        grid = payload['newboard']['grids'][0]
+        board = {'puzzle': grid['value'], 'solution': grid['solution'],
+                 'difficulty': str(grid.get('difficulty') or difficulty).lower()}
+    except Exception:
+        board = _sudoku_fallback_board(seed=int(now_ts))
+        board = dict(board, difficulty=difficulty)
+        return jsonify({'success': True, 'source': 'local', **board})
+    _SUDOKU_CACHE[difficulty] = (now_ts, board)
+    return jsonify({'success': True, 'source': 'api', **board})
+
 @bp.route('/games/create', methods=['GET', 'POST'])
 @login_required
 @limits(calls=10, period=60)
@@ -1732,7 +1824,11 @@ VALID_ARCADE_CATEGORIES = {
     'connect_four': ('win_streak', 'total_wins', 'ranked_score'),
     'dots_and_boxes': ('win_streak', 'total_wins', 'ranked_score'),
     'ping_pong': ('win_streak', 'volleys_returned', 'total_wins', 'ranked_score'),
-    'snake': ('high_score', 'ranked_score', 'food_eaten')
+    'snake': ('high_score', 'ranked_score', 'food_eaten'),
+    'gomoku': ('win_streak', 'total_wins', 'ranked_score'),
+    'whack_a_mole': ('high_score', 'ranked_score'),
+    'sudoku': ('ranked_score',),
+    'air_hockey': ('win_streak', 'total_wins', 'ranked_score')
 }
 
 @bp.route('/api/games/leaderboard/submit', methods=['POST'])

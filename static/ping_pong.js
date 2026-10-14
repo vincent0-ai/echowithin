@@ -123,7 +123,8 @@
     INTERP_DELAY_MS: 100,
     REWIND_CAP_MS: 175,
     SNAP_ERROR_PX: 60,
-    HIT_COOLDOWN_MS: 120
+    HIT_COOLDOWN_MS: 120,
+    PADDLE_KEEPALIVE_MS: 500
   };
 
   // Temporary baseline instrumentation (Phase 1.4). TEMPORARILY default-on
@@ -668,6 +669,11 @@
         state.p2.y += state.p2.dy;
         state.p2.y = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, state.p2.y));
         sendPaddleSync();
+      } else if (now - state.lastPaddleSend > NETCODE_CONFIG.PADDLE_KEEPALIVE_MS) {
+        // Keep-alive (Commit 3): idle = silent made the opponent's paddle
+        // freeze then jump. Re-assert position twice a second so the host's
+        // lerp target never goes stale. Capped by sendPaddleSync throttle.
+        sendPaddleSync();
       }
       // LERP remote host paddle (P1)
       if (typeof state.p1.targetY === 'number') {
@@ -700,6 +706,9 @@
       state.p1.y += state.p1.dy;
       state.p1.y = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, state.p1.y));
       if (state.mode === 'online' && state.isHost) sendPaddleSync();
+    } else if (state.mode === 'online' && state.isHost && now - state.lastPaddleSend > NETCODE_CONFIG.PADDLE_KEEPALIVE_MS) {
+      // Keep-alive (Commit 3): same idle-silence fix for the host paddle.
+      sendPaddleSync();
     }
 
     if (state.mode === 'online' && state.isHost) {

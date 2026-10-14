@@ -454,7 +454,12 @@ def cleanup_stale_global_state():
             active_game_players.pop(lobby_id, None)
 # Restrict CORS to the canonical domain (prevents Cross-Site WebSocket Hijacking)
 _ALLOWED_ORIGINS = os.environ.get('SOCKETIO_ALLOWED_ORIGINS', 'https://echowithin.xyz,https://blog.echowithin.xyz,https://staging.echowithin.xyz').split(',')
-socketio = SocketIO(cors_allowed_origins=_ALLOWED_ORIGINS, async_mode='gevent')
+# Engine.IO heartbeat tuned for long-haul links (EU VPS <-> Nairobi clients):
+# default ping_timeout (60s) with default interval (25s) drops jittery mobile
+# clients too eagerly; keep interval, allow a longer timeout. No compression
+# or batching changes here — game payloads are small, high-frequency JSON.
+socketio = SocketIO(cors_allowed_origins=_ALLOWED_ORIGINS, async_mode='gevent',
+                    ping_interval=25, ping_timeout=120)
 
 # Use ProxyFix to handle headers from reverse proxies (like Render)
 # This is important for url_for to generate correct https links.

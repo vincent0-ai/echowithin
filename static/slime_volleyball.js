@@ -68,6 +68,11 @@
   function slimePayloadBytes(obj) {
     try { return JSON.stringify(obj).length; } catch (e) { return 0; }
   }
+  // Transport tuning (Commit 5): 2-decimal floats on the wire only.
+  function sr2(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+  }
 
   // AI Difficulty & Paddle Physics Presets
   const DIFFICULTY_CONFIG = {
@@ -1204,9 +1209,9 @@
           ? performance.now() : Date.now();
         const payload = {
           room_id: GameState.roomId,
-          ball: { x: GameState.ball.x, y: GameState.ball.y, vx: GameState.ball.vx, vy: GameState.ball.vy },
-          p1: { x: GameState.p1.x, y: GameState.p1.y, vx: GameState.p1.vx, vy: GameState.p1.vy },
-          p2: { x: GameState.p2.x, y: GameState.p2.y, vx: GameState.p2.vx, vy: GameState.p2.vy },
+          ball: { x: sr2(GameState.ball.x), y: sr2(GameState.ball.y), vx: sr2(GameState.ball.vx), vy: sr2(GameState.ball.vy) },
+          p1: { x: sr2(GameState.p1.x), y: sr2(GameState.p1.y), vx: sr2(GameState.p1.vx), vy: sr2(GameState.p1.vy) },
+          p2: { x: sr2(GameState.p2.x), y: sr2(GameState.p2.y), vx: sr2(GameState.p2.vx), vy: sr2(GameState.p2.vy) },
           scores: [GameState.p1.score, GameState.p2.score],
           serveState: GameState.serveState,
           serving: GameState.serving,
@@ -1227,9 +1232,9 @@
         const payload = {
           room_id: GameState.roomId,
           p2: {
-            x: GameState.p2.x, y: GameState.p2.y,
-            vx: GameState.p2.vx, vy: GameState.p2.vy,
-            desiredVx: GameState.p2.desiredVx,
+            x: sr2(GameState.p2.x), y: sr2(GameState.p2.y),
+            vx: sr2(GameState.p2.vx), vy: sr2(GameState.p2.vy),
+            desiredVx: sr2(GameState.p2.desiredVx),
             // Jump intent: the host must know when P2 wants to jump so it
             // can call setInput() — without this, P2 is ground-locked on
             // the host because vy is never set to PLAYER_SPEED_Y.

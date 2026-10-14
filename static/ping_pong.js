@@ -161,6 +161,12 @@
   function payloadBytes(obj) {
     try { return JSON.stringify(obj).length; } catch (e) { return 0; }
   }
+  // Transport tuning (Commit 5): 2-decimal floats cut ~30% off sync
+  // payloads. Physics runs full-precision locally; only the wire is rounded.
+  function r2(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+  }
 
   // First-to-N that actually governs THIS match: the server-shared room
   // target while online in a room, otherwise the local setting.
@@ -851,12 +857,12 @@
           ? performance.now() : Date.now();
         const payload = {
           room_id: state.roomId,
-          x: state.ball.x,
-          y: state.ball.y,
-          vx: state.ball.vx,
-          vy: state.ball.vy,
-          speed: state.ball.speed,
-          p1Y: state.p1.y,
+          x: r2(state.ball.x),
+          y: r2(state.ball.y),
+          vx: r2(state.ball.vx),
+          vy: r2(state.ball.vy),
+          speed: r2(state.ball.speed),
+          p1Y: r2(state.p1.y),
           volleys: state.consecutiveVolleys,
           seq: state.pongSeq,
           tSend: tSend
@@ -1528,7 +1534,7 @@
     const payload = {
       room_id: state.roomId,
       player: state.playerIndex,
-      y: y,
+      y: r2(y),
       seq: state.pongSeq,
       tSend: now
     };

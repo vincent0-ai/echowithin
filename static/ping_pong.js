@@ -674,34 +674,16 @@
         state.p1.y += (state.p1.targetY - state.p1.y) * 0.45;
       }
 
-      // Extrapolate ball movement smoothly
+      // Extrapolate ball movement smoothly (visual only).
+      // Single-authority rule (Commit 1): the guest NEVER decides P2
+      // collisions — only the host's pong_ball_sync changes the ball's
+      // path. We deliberately do not call calculateBounce here, so a
+      // guest prediction can never fight the next host snapshot (the
+      // old "tunnel then snap-back" symptom).
       const prevX = state.ball.x;
       const prevY = state.ball.y;
-      const nextX = prevX + state.ball.vx;
-      const nextY = prevY + state.ball.vy;
-      const r = state.ball.radius;
-
-      // Guest client-side prediction: detect collision on guest's own paddle (P2)
-      // to eliminate any perceived delay or tunneling on the player's screen!
-      let guestHit = false;
-      if (state.ball.vx > 0) {
-        const planeX = state.p2.x;
-        if (prevX + r <= planeX && nextX + r >= planeX) {
-          const t = Math.max(0, Math.min(1, (planeX - (prevX + r)) / (nextX - prevX || 0.001)));
-          const hitY = prevY + t * state.ball.vy;
-          if (hitY + r >= state.p2.y - 10 && hitY - r <= state.p2.y + state.p2.height + 10) {
-            state.ball.x = planeX - r;
-            state.ball.y = hitY;
-            calculateBounce(state.p2, -1);
-            guestHit = true;
-          }
-        }
-      }
-
-      if (!guestHit) {
-        state.ball.x = nextX;
-        state.ball.y = nextY;
-      }
+      state.ball.x = prevX + state.ball.vx;
+      state.ball.y = prevY + state.ball.vy;
 
       if (state.ball.y - state.ball.radius < 0) {
         state.ball.y = state.ball.radius;
@@ -734,20 +716,32 @@
       state.p2.y = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, state.p2.y));
     }
 
-    // Ball physics with Continuous Collision Detection (CCD) to prevent tunneling
+    // Ball physics with Continuous Collision Detection (CCD) to prevent tunneling.
+    // Commit 1: sub-step the frame motion so no single sweep covers more
+    // than ~6px (MAX_SPEED=12 needs 2 steps); each sub-step runs the same
+    // swept-ray check plus the discrete fallback. Penetration is resolved
+    // by placing the ball at plane±r; vx direction guards stop re-hits.
+    const r = state.ball.radius;
+    const frameSpeed = Math.sqrt(state.ball.vx * state.ball.vx + state.ball.vy * state.ball.vy);
+    const subSteps = Math.min(4, Math.max(1, Math.ceil(frameSpeed / 6)));
+    const stepVX = state.ball.vx / subSteps;
+    const stepVY = state.ball.vy / subSteps;
+    let hitDetected = false;
+
+    for (let s = 0; s < subSteps && !hitDetected; s++) {
     const prevX = state.ball.x;
     const prevY = state.ball.y;
-    const nextX = prevX + state.ball.vx;
-    const nextY = prevY + state.ball.vy;
-    const r = state.ball.radius;
-    let hitDetected = false;
+    const nextX = prevX + stepVX;
+    const nextY = prevY + stepVY;
+    // hitDetected is loop-scoped (declared above); per-step work below.
+    let stepHit = false;
 
     // 1. Swept Ray CCD: Check Left Paddle (P1)
     if (state.ball.vx < 0) {
       const planeX = state.p1.x + state.p1.width;
-      if (prevX - r >= planeX - 2 && nextX - r <= planeX) {
+      if (prevX - r >= planeX - 2 - MAX_SPEED && nextX - r <= planeX) {
         const t = Math.max(0, Math.min(1, (prevX - r - planeX) / (prevX - nextX || 0.001)));
-        const hitY = prevY + t * state.ball.vy;
+        const hitY = prevY + t * stepVY;
         let padY = state.p1.y;
         let padH = state.p1.height;
         if (state.mode === 'online' && state.isHost && state.playerIndex === 1) {
@@ -758,16 +752,16 @@
           state.ball.x = planeX + r;
           state.ball.y = hitY;
           calculateBounce(state.p1, 1);
-          hitDetected = true;
+          stepHit = true;
         }
       }
     }
     // 2. Swept Ray CCD: Check Right Paddle (P2)
     else if (state.ball.vx > 0) {
       const planeX = state.p2.x;
-      if (prevX + r <= planeX + 2 && nextX + r >= planeX) {
+      if (prevX + r <= planeX + 2 + MAX_SPEED && nextX + r >= planeX) {
         const t = Math.max(0, Math.min(1, (planeX - (prevX + r)) / (nextX - prevX || 0.001)));
-        const hitY = prevY + t * state.ball.vy;
+        const hitY = prevY + t * stepVY;
         let padY = state.p2.y;
         let padH = state.p2.height;
         if (state.mode === 'online' && state.isHost && state.playerIndex === 0) {
@@ -778,12 +772,12 @@
           state.ball.x = planeX - r;
           state.ball.y = hitY;
           calculateBounce(state.p2, -1);
-          hitDetected = true;
+          stepHit = true;
         }
       }
     }
 
-    if (!hitDetected) {
+    if (!stepHit) {
       state.ball.x = nextX;
       state.ball.y = nextY;
 
@@ -804,12 +798,16 @@
         if (paddle === state.p1 && state.ball.vx < 0) {
           state.ball.x = state.p1.x + state.p1.width + state.ball.radius;
           calculateBounce(paddle, 1);
+          stepHit = true;
         } else if (paddle === state.p2 && state.ball.vx > 0) {
           state.ball.x = state.p2.x - state.ball.radius;
           calculateBounce(paddle, -1);
+          stepHit = true;
         }
       }
     }
+    if (stepHit) hitDetected = true;
+    } // end sub-step loop
 
     // Wall bounce (top and bottom)
     if (state.ball.y - state.ball.radius < 0) {
@@ -1168,6 +1166,7 @@
       state.connLost = false;
       state.wasDropped = false;
       state.rejoinAttempts = 0;
+      state.lastBallSeq = -1; // host may have reset its seq counter
       clearNoContestTimer();
       setRematchVisible(true);
       pongDebug('room joined', data);
@@ -1237,7 +1236,18 @@
     state.socket.on('pong_ball_sync', (data) => {
       if (!data || data.room_id !== state.roomId) return;
       if (!state.isHost) {
-        // Baseline: record arrival + snap distance before applying (no logic change).
+        // Commit 1: drop stale/out-of-order host snapshots by sequence id.
+        // (seq shares a counter with paddle sync, so it is monotonic.)
+        const seq = (typeof data.seq === 'number' && Number.isFinite(data.seq)) ? data.seq : null;
+        if (seq !== null) {
+          if (seq <= state.lastBallSeq) {
+            netStats.droppedStaleBall++;
+            netLog('dropped stale ball', { seq: seq, last: state.lastBallSeq });
+            return;
+          }
+          state.lastBallSeq = seq;
+        }
+        // Arrival stats (baseline counters).
         const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
         if (netStats.lastBallRecvAt) {
           const dt = nowMs - netStats.lastBallRecvAt;
@@ -1251,11 +1261,14 @@
         const dx = hx - state.ball.x, dy = hy - state.ball.y;
         netStats.lastSnapDistPx = Math.sqrt(dx * dx + dy * dy);
         // Tunnel suspect: host ball at high speed crossing our paddle plane
-        // between snapshots (count only; no gameplay change in Commit 0).
+        // between snapshots (count only; guest no longer simulates hits).
         if (Math.abs(num(data.vx, 0)) > 9) netStats.tunnelSuspects++;
         if (typeof data.tSend === 'number' && Number.isFinite(data.tSend)) {
           netStats.lastRttSampleMs = nowMs - data.tSend;
         }
+        // Host is the sole authority: adopt its snapshot. Safe to snap
+        // (no competing guest writer since Commit 1a); interpolation
+        // buffer arrives in Commit 3.
         state.ball.x = hx;
         state.ball.y = hy;
         state.ball.vx = num(data.vx, state.ball.vx);
@@ -1304,6 +1317,7 @@
       clearNoContestTimer();
       setRematchVisible(true);
       state.isPaused = false;
+      state.lastBallSeq = -1; // fresh rally series
       if (typeof window.__updatePongPauseBtn === 'function') {
         window.__updatePongPauseBtn(false);
       }
@@ -1327,6 +1341,7 @@
       state.roomTarget = (data && typeof data.target === 'number' && data.target > 0) ? data.target : null;
       state.rejoinAttempts = 0;
       state.wasDropped = false;
+      state.lastBallSeq = -1; // fresh match: host seq restarts
       clearNoContestTimer();
       setRematchVisible(true);
 

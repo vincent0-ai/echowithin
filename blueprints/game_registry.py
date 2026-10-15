@@ -47,7 +47,7 @@ GAMES = [
             <rect x="188" y="75" width="16" height="16" rx="2" fill="#ffffff" />
             <!-- Center Emblem -->
             <circle cx="160" cy="60" r="15" fill="#1b100b" stroke="#f5c452" stroke-width="2" />
-            <text x="160" y="66" font-size="14" text-anchor="middle" fill="#f5c452" font-weight="900" font-family="sans-serif">ΓÜí</text>
+            <polygon points="163,51 154,62 159,62 156,69 165,57 160,57" fill="#f5c452" />
           </svg>""",
     },
     {
@@ -73,7 +73,8 @@ GAMES = [
             <text x="100" y="49" font-size="9" text-anchor="middle" font-weight="700" fill="#5c3d2e" font-family="sans-serif">28%</text>
             <rect x="140" y="25" width="40" height="70" rx="5" fill="#2c5f8a" />
             <rect x="143" y="8" width="34" height="14" rx="3" fill="#2c5f8a" />
-            <text x="160" y="19" font-size="9" text-anchor="middle" font-weight="700" fill="#ffffff" font-family="sans-serif">54% Γ£ô</text>
+            <text x="158" y="19" font-size="9" text-anchor="middle" font-weight="700" fill="#ffffff" font-family="sans-serif">54%</text>
+            <polyline points="166,14 169,18 174,11" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
             <rect x="200" y="68" width="40" height="27" rx="5" fill="#3f7e52" />
             <rect x="203" y="51" width="34" height="14" rx="3" fill="#ffffff" stroke="#e0d7cb" />
             <text x="220" y="62" font-size="9" text-anchor="middle" font-weight="700" fill="#3f7e52" font-family="sans-serif">18%</text>
@@ -128,13 +129,13 @@ GAMES = [
             <rect x="52" y="44" width="48" height="4" rx="2" fill="#ded5c8" />
             <rect x="52" y="54" width="40" height="4" rx="2" fill="#ded5c8" />
             <circle cx="76" cy="74" r="8" fill="rgba(63,126,82,0.15)" />
-            <text x="76" y="78" font-size="10" text-anchor="middle" fill="#3f7e52" font-weight="800">Γ£ô</text>
+            <polyline points="71,74 75,78 81,69" fill="none" stroke="#3f7e52" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
             <rect x="126" y="24" width="68" height="72" rx="6" fill="#ffffff" stroke="#ded5c8" stroke-width="1.5" />
             <rect x="136" y="34" width="42" height="4" rx="2" fill="#c4b8aa" />
             <rect x="136" y="44" width="48" height="4" rx="2" fill="#ded5c8" />
             <rect x="136" y="54" width="34" height="4" rx="2" fill="#ded5c8" />
             <circle cx="160" cy="74" r="8" fill="rgba(63,126,82,0.15)" />
-            <text x="160" y="78" font-size="10" text-anchor="middle" fill="#3f7e52" font-weight="800">Γ£ô</text>
+            <polyline points="155,74 159,78 165,69" fill="none" stroke="#3f7e52" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
             <rect x="210" y="24" width="68" height="72" rx="6" fill="#ffffff" stroke="#e8c2be" stroke-width="1.5" />
             <rect x="220" y="34" width="38" height="4" rx="2" fill="#c4b8aa" />
             <rect x="220" y="44" width="48" height="4" rx="2" fill="#ded5c8" />
@@ -204,12 +205,12 @@ GAMES = [
             <g transform="translate(50, 24)">
               <rect width="72" height="32" rx="16" fill="#3e2217" />
               <polygon points="62,32 54,32 50,40" fill="#3e2217" />
-              <text x="36" y="21" font-size="13" text-anchor="middle" font-weight="700" fill="#ffffff" font-family="sans-serif">ΓÇ£ ... ΓÇ¥</text>
+              <text x="36" y="21" font-size="13" text-anchor="middle" font-weight="700" fill="#ffffff" font-family="sans-serif">"..."</text>
             </g>
             <g transform="translate(198, 48)">
               <rect width="72" height="32" rx="16" fill="#c68a35" />
               <polygon points="20,32 28,32 18,40" fill="#c68a35" />
-              <text x="36" y="21" font-size="12" text-anchor="middle" font-weight="800" fill="#ffffff" font-family="sans-serif">HA! ≡ƒÿé</text>
+              <text x="36" y="21" font-size="12" text-anchor="middle" font-weight="800" fill="#ffffff" font-family="sans-serif">HA!</text>
             </g>
           </svg>""",
     },
@@ -332,22 +333,22 @@ GAMES = [
             <g transform="translate(68, 26)">
               <rect width="44" height="66" rx="6" fill="#ffffff" stroke="#cbbfae" stroke-width="1.5" />
               <rect x="5" y="5" width="34" height="56" rx="4" fill="#ede4d7" />
-              <text x="22" y="38" font-size="20" text-anchor="middle" font-family="sans-serif">Γÿà</text>
+              <polygon points="22,21 24.6,28.4 32.5,28.6 26.2,33.4 28.5,40.9 22,36.4 15.5,40.9 17.8,33.4 11.5,28.6 19.4,28.4" fill="#5c3d2e" />
             </g>
             <g transform="translate(122, 26)">
               <rect width="44" height="66" rx="6" fill="#ffffff" stroke="#3f7e52" stroke-width="2" />
               <rect x="5" y="5" width="34" height="56" rx="4" fill="#e8f5ec" />
-              <text x="22" y="38" font-size="20" text-anchor="middle" font-family="sans-serif" fill="#2d6a3f">ΓÖÑ</text>
+              <path d="M22 40 C14 33 10 28 10 23 C10 18 14 16 17.5 18 C19.5 19.2 21 21 22 23 C23 21 24.5 19.2 26.5 18 C30 16 34 18 34 23 C34 28 30 33 22 40 Z" fill="#2d6a3f" />
             </g>
             <g transform="translate(176, 26)">
               <rect width="44" height="66" rx="6" fill="#ffffff" stroke="#3f7e52" stroke-width="2" />
               <rect x="5" y="5" width="34" height="56" rx="4" fill="#e8f5ec" />
-              <text x="22" y="38" font-size="20" text-anchor="middle" font-family="sans-serif" fill="#2d6a3f">ΓÖÑ</text>
+              <path d="M22 40 C14 33 10 28 10 23 C10 18 14 16 17.5 18 C19.5 19.2 21 21 22 23 C23 21 24.5 19.2 26.5 18 C30 16 34 18 34 23 C34 28 30 33 22 40 Z" fill="#2d6a3f" />
             </g>
             <g transform="translate(230, 26)">
               <rect width="44" height="66" rx="6" fill="#ffffff" stroke="#cbbfae" stroke-width="1.5" />
               <rect x="5" y="5" width="34" height="56" rx="4" fill="#ede4d7" />
-              <text x="22" y="38" font-size="20" text-anchor="middle" font-family="sans-serif">Γùå</text>
+              <polygon points="22,21 31,32 22,43 13,32" fill="#5c3d2e" />
             </g>
           </svg>""",
     },

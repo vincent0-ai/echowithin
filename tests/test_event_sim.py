@@ -699,28 +699,42 @@ class TestCoopSeatSteal:
             assert rooms['sim_reclaim']['guest_sid'] == 'sid_guest_fresh'
         finally:
             rooms.pop('sim_reclaim', None)
-    def test_non_numeric_int_fields_raise(self):
-        """OBSERVED: duet clue/guess/restart int() casts are unguarded; a
-        non-numeric count/card_idx/seed raises ValueError out of the handler."""
-        import pytest
+    def test_malformed_int_fields_dropped(self):
+        """FIXED (BUG-010/G4): non-numeric int fields are dropped silently,
+        never raising out of the handler (duet + crossword + emoji)."""
         import main as m
         h = _handlers()
         rooms = m.active_duet_rooms
         rooms.pop('sim_duet_int', None)
+        xrooms = m.active_crossword_rooms
+        xrooms.pop('sim_xw_int', None)
         try:
             _as_sid(m, 'sid_host', h['handle_join_duet_room'], {'room_id': 'sim_duet_int'},
                     user=_authed('u_host', 'Host'))
-            with pytest.raises(ValueError):
-                _as_sid(m, 'sid_host', h['handle_duet_give_clue'],
-                        {'room_id': 'sim_duet_int', 'clue': 'LOVE', 'count': 'abc'})
-            with pytest.raises(ValueError):
-                _as_sid(m, 'sid_host', h['handle_duet_guess_card'],
-                        {'room_id': 'sim_duet_int', 'card_idx': 'xyz'})
-            with pytest.raises(ValueError):
-                _as_sid(m, 'sid_host', h['handle_duet_restart'],
-                        {'room_id': 'sim_duet_int', 'seed': 'nope'})
+            e1 = _as_sid(m, 'sid_host', h['handle_duet_give_clue'],
+                         {'room_id': 'sim_duet_int', 'clue': 'LOVE', 'count': 'abc'})
+            assert _emits_to(e1, 'duet_clue_given', room='sim_duet_int') == []
+            e2 = _as_sid(m, 'sid_host', h['handle_duet_guess_card'],
+                         {'room_id': 'sim_duet_int', 'card_idx': 'xyz'})
+            assert _emits_to(e2, 'duet_card_guessed', room='sim_duet_int') == []
+            e3 = _as_sid(m, 'sid_host', h['handle_duet_restart'],
+                         {'room_id': 'sim_duet_int', 'seed': 'nope'})
+            restarted = _emits_to(e3, 'duet_restarted', room='sim_duet_int')
+            assert len(restarted) == 1
+            assert isinstance(restarted[0][0][1]['seed'], int)
+            _as_sid(m, 'sid_host', h['handle_join_crossword_room'],
+                    {'room_id': 'sim_xw_int', 'puzzle_idx': 'zz'},
+                    user=_authed('u_host', 'Host'))
+            assert xrooms['sim_xw_int']['puzzle_idx'] == 0
+            e4 = _as_sid(m, 'sid_host', h['handle_crossword_cell_update'],
+                         {'room_id': 'sim_xw_int', 'r': 'a', 'c': 'b', 'char': 'Q'})
+            assert _emits_to(e4, 'crossword_cell_update', room='sim_xw_int') == []
+            e5 = _as_sid(m, 'sid_host', h['handle_emoji_start_round'],
+                         {'room': 'sim_xw_int', 'round': 'zzz'})
+            assert _emits_to(e5, 'emoji_round_started') != []
         finally:
             rooms.pop('sim_duet_int', None)
+            xrooms.pop('sim_xw_int', None)
 
     def test_restart_requires_membership_no_ghost_broadcast(self):
         """FIXED (BUG-011): duet_restart drops non-members and unknown rooms;

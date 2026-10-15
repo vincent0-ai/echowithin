@@ -2722,8 +2722,8 @@ def handle_find_slime_match(data=None, *args, **kwargs):
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
     req_data = data if isinstance(data, dict) else {}
-    streak = int(req_data.get('streak', 0) or 0)
-    score = int(req_data.get('score', 0) or 0)
+    streak = _safe_int(req_data.get('streak', 0) or 0, default=0)
+    score = _safe_int(req_data.get('score', 0) or 0, default=0)
     mode = req_data.get('mode', 'auto')
 
     global slime_matchmaking_queue
@@ -3032,8 +3032,8 @@ def handle_find_pong_match(data=None, *args, **kwargs):
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
     req_data = data if isinstance(data, dict) else {}
-    streak = int(req_data.get('streak', 0) or 0)
-    score = int(req_data.get('score', 0) or 0)
+    streak = _safe_int(req_data.get('streak', 0) or 0, default=0)
+    score = _safe_int(req_data.get('score', 0) or 0, default=0)
     mode = req_data.get('mode', 'auto')
     try:
         target = int(req_data.get('target', 0) or 0)
@@ -3622,8 +3622,8 @@ def handle_find_c4_match(data=None, *args, **kwargs):
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
     req_data = data if isinstance(data, dict) else {}
-    streak = int(req_data.get('streak', 0) or 0)
-    score = int(req_data.get('score', 0) or 0)
+    streak = _safe_int(req_data.get('streak', 0) or 0, default=0)
+    score = _safe_int(req_data.get('score', 0) or 0, default=0)
     mode = req_data.get('mode', 'auto')
 
     global c4_matchmaking_queue
@@ -4663,8 +4663,8 @@ def handle_find_dnb_match(data=None, *args, **kwargs):
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
     req_data = data if isinstance(data, dict) else {}
-    streak = int(req_data.get('streak', 0) or 0)
-    score = int(req_data.get('score', 0) or 0)
+    streak = _safe_int(req_data.get('streak', 0) or 0, default=0)
+    score = _safe_int(req_data.get('score', 0) or 0, default=0)
     mode = req_data.get('mode', 'auto')
 
     global dnb_matchmaking_queue
@@ -4957,8 +4957,8 @@ def handle_duet_give_clue(data=None, *args, **kwargs):
         return
     room_id = data.get('room_id')
     clue = str(data.get('clue', '')).strip().upper()[:25]
-    count = int(data.get('count', 1))
-    if room_id and clue:
+    count = _safe_int(data.get('count', 1), default=None, lo=0)
+    if room_id and clue and count is not None:
         emit('duet_clue_given', {'clue': clue, 'count': count}, room=room_id, include_self=False)
 
 @socketio.on('duet_guess_card')
@@ -4966,8 +4966,8 @@ def handle_duet_guess_card(data=None, *args, **kwargs):
     if not isinstance(data, dict):
         return
     room_id = data.get('room_id')
-    card_idx = int(data.get('card_idx', 0))
-    if room_id:
+    card_idx = _safe_int(data.get('card_idx', 0), default=None, lo=0)
+    if room_id and card_idx is not None:
         emit('duet_card_guessed', {'card_idx': card_idx}, room=room_id, include_self=False)
 
 @socketio.on('duet_end_turn')
@@ -4986,7 +4986,9 @@ def handle_duet_restart(data=None, *args, **kwargs):
     room_info = active_duet_rooms.get(room_id)
     if not _duel_member(room_info, request.sid):
         return
-    seed = int(data.get('seed', secrets.randbelow(1000000)))
+    seed = _safe_int(data.get('seed'), default=None)
+    if seed is None:
+        seed = secrets.randbelow(1000000)
     active_giver = secrets.choice(['A', 'B'])
     room_info['seed'] = seed
     room_info['active_giver'] = active_giver
@@ -5105,7 +5107,7 @@ def handle_emoji_start_round(data=None, *args, **kwargs):
     room_id = data.get('room') or data.get('room_id')
     if room_id:
         room_info = active_emoji_rooms.get(room_id)
-        current_round = int(data.get('round', 1))
+        current_round = _safe_int(data.get('round', 1), default=1, lo=1)
         if room_info:
             if current_round == 1 or 'p1_starts' not in room_info:
                 room_info['p1_starts'] = secrets.choice([True, False])
@@ -5196,7 +5198,7 @@ def handle_join_crossword_room(data=None, *args, **kwargs):
     room_id = data.get('room_id')
     if not room_id:
         return
-    puzzle_idx = int(data.get('puzzle_idx', 0))
+    puzzle_idx = _safe_int(data.get('puzzle_idx', 0), default=0, lo=0)
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Partner'
     user_uid = str(current_user.id) if current_user.is_authenticated else None
@@ -5278,8 +5280,10 @@ def handle_crossword_cell_update(data=None, *args, **kwargs):
     if not isinstance(data, dict):
         return
     room_id = data.get('room_id')
-    r = int(data.get('r', 0))
-    c = int(data.get('c', 0))
+    r = _safe_int(data.get('r', 0), default=None)
+    c = _safe_int(data.get('c', 0), default=None)
+    if r is None or c is None:
+        return
     char = str(data.get('char', '')).upper()[:1]
     if room_id in active_crossword_rooms:
         idx = r * 5 + c
@@ -5293,8 +5297,10 @@ def handle_crossword_cursor_move(data=None, *args, **kwargs):
     if not isinstance(data, dict):
         return
     room_id = data.get('room_id')
-    r = int(data.get('r', 0))
-    c = int(data.get('c', 0))
+    r = _safe_int(data.get('r', 0), default=None)
+    c = _safe_int(data.get('c', 0), default=None)
+    if r is None or c is None:
+        return
     d = str(data.get('dir', 'across'))
     if room_id:
         emit('crossword_cursor_move', {'r': r, 'c': c, 'dir': d}, room=room_id, include_self=False)
@@ -5304,7 +5310,7 @@ def handle_crossword_restart(data=None, *args, **kwargs):
     if not isinstance(data, dict):
         return
     room_id = data.get('room_id')
-    p_idx = int(data.get('puzzle_idx', 0))
+    p_idx = _safe_int(data.get('puzzle_idx', 0), default=0, lo=0)
     room_info = active_crossword_rooms.get(room_id)
     if not room_info:
         return
@@ -5346,8 +5352,8 @@ def handle_send_game_challenge(data=None, *args, **kwargs):
         return
     game = data.get('game')
     target_sid = data.get('target_sid')
-    streak = int(data.get('streak', 0) or 0)
-    score = int(data.get('score', 0) or 0)
+    streak = _safe_int(data.get('streak', 0) or 0, default=0)
+    score = _safe_int(data.get('score', 0) or 0, default=0)
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
 

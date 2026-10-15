@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let timeElapsed = 0;
     let socket = null;
     let roomId = null;
+    let joinedRoom = false;
     let myPlayerNum = 1;
     let lockBoard = false;
 
@@ -52,13 +53,21 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.startBtn.addEventListener('click', startGame);
     ui.replayBtn.addEventListener('click', resetGame);
     ui.modeSelect.addEventListener('change', () => {
-        if (ui.modeSelect.value === 'online') initSocket();
-        else disconnectSocket();
+        if (ui.modeSelect.value === 'online') {
+            if (socket) disconnectSocket();
+            ui.startBtn.textContent = urlRoom ? 'Join Room' : 'Create Room';
+            setStatus(urlRoom
+                ? 'Room ' + urlRoom + ' — pick a board size, then Join Room.'
+                : 'Pick a board size, then Create Room to invite a partner.');
+        } else {
+            disconnectSocket();
+        }
     });
 
     if (urlRoom) {
         ui.modeSelect.value = 'online';
-        initSocket();
+        ui.startBtn.textContent = 'Join Room';
+        setStatus('Room ' + urlRoom + ' — pick a board size, then Join Room. The host deals.');
     }
 
     function setStatus(message, isError = false) {
@@ -69,6 +78,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function disconnectSocket() {
         if (socket) socket.disconnect();
         socket = null;
+        joinedRoom = false;
+        roomId = null;
+        ui.sizeSelect.disabled = false;
+        ui.startBtn.disabled = false;
+        ui.startBtn.textContent = 'Start Game';
         setStatus('');
     }
 
@@ -89,6 +103,20 @@ document.addEventListener('DOMContentLoaded', () => {
         socket.on('memory_room_joined', (data) => {
             myPlayerNum = data.player_num || 1;
             mode = 'online';
+            joinedRoom = true;
+            if (myPlayerNum === 1) {
+                // Host: deal with the size chosen in the (still visible) setup panel.
+                // Emitting here (not on the Start press) guarantees we are already
+                // in the room — the old immediate emit raced the join and could hit
+                // 'Session not found'.
+                size = parseInt(ui.sizeSelect.value, 10) || 16;
+                setStatus('Dealing your ' + (size >= 36 ? '6×6' : '4×4') + ' board...');
+                socket.emit('memory_start_game', { room: roomId, size });
+                return;
+            }
+            ui.sizeSelect.disabled = true;
+            ui.startBtn.textContent = 'Waiting for Host…';
+            ui.startBtn.disabled = true;
             setupBoard(data.cards || [], { online: true, labels: data.labels || labels });
             currentPlayer = data.turn || 1;
             player1Score = Number((data.scores || {})['1'] || 0);
@@ -96,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
             markMatched(data.matched || []);
             updateScoreUI();
             updateTurnUI();
-            setStatus(data.partner_connected ? 'Partner connected.' : 'Waiting for partner...');
+            setStatus(data.partner_connected ? 'Partner connected.' : 'Waiting for host to deal...');
         });
 
         socket.on('memory_partner_update', (data) => {
@@ -160,12 +188,23 @@ document.addEventListener('DOMContentLoaded', () => {
         mode = ui.modeSelect.value;
         size = parseInt(ui.sizeSelect.value, 10);
         if (mode === 'online') {
-            initSocket();
-            if (socket && roomId && myPlayerNum === 1) {
-                socket.emit('memory_start_game', { room: roomId, size });
-            } else {
-                setStatus('Waiting for host to restart the board.');
+            // Already in a room: host re-deals with the panel's size, guest waits.
+            if (socket && joinedRoom) {
+                if (myPlayerNum === 1) {
+                    size = parseInt(ui.sizeSelect.value, 10) || 16;
+                    socket.emit('memory_start_game', { room: roomId, size });
+                } else {
+                    setStatus('Waiting for host to deal…');
+                }
+                return;
             }
+            // Fresh join only. The host's deal goes out from the
+            // memory_room_joined handler with the size chosen above.
+            ui.sizeSelect.disabled = false;
+            initSocket();
+            ui.startBtn.disabled = true;
+            setStatus('Joining room...');
+            setTimeout(() => { if (!joinedRoom) ui.startBtn.disabled = false; }, 4000);
             return;
         }
         setupBoard(generateCards(size), { online: false, labels });
@@ -325,6 +364,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 : `Player ${winner} Wins`;
         }
         ui.statsText.textContent = `Score: ${player1Score} - ${player2Score}`;
+        if (mode === 'online' && myPlayerNum === 1) {
+            // Host can change board size before the next deal.
+            ui.sizeSelect.disabled = false;
+            ui.setupPanel.style.display = 'block';
+            ui.startBtn.textContent = 'Deal New Board';
+            ui.startBtn.disabled = false;
+        }
     }
 
     function hideGameOver() {
@@ -334,9 +380,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function resetGame() {
         hideGameOver();
         if (mode === 'online' && socket && roomId && myPlayerNum === 1) {
+            size = parseInt(ui.sizeSelect.value, 10) || 16;
             socket.emit('memory_start_game', { room: roomId, size });
             return;
         }
+        if (mode === 'online') {
+            ui.setupPanel.style.display = 'block';
+            ui.startBtn.textContent = 'Waiting for Host…';
+            ui.startBtn.disabled = true;
+            setStatus('Waiting for host to deal a new board.');
+            return;
+        }
+        ui.startBtn.textContent = 'Start Game';
+        ui.startBtn.disabled = false;
+        ui.sizeSelect.disabled = false;
         ui.setupPanel.style.display = 'block';
         ui.gameInfo.style.display = 'none';
         ui.gridContainer.style.display = 'none';

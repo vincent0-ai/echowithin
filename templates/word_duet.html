@@ -106,6 +106,6 @@
   </div>
 </div>
 
-<script nonce="{{ csp_nonce }}" src="/socket.io/socket.io.js"></script>
+<script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='socket.io.min.js') }}?v=4.7.2"></script>
 <script nonce="{{ csp_nonce }}" src="/static/word_duet.js"></script>
 {% endblock %}

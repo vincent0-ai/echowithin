@@ -190,6 +190,6 @@
     </div>
 </div>
 
-<script src="/socket.io/socket.io.js" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='socket.io.min.js') }}?v=4.7.2" nonce="{{ csp_nonce }}"></script>
 <script src="/static/this_or_that.js" nonce="{{ csp_nonce }}"></script>
 {% endblock %}

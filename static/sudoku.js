@@ -62,10 +62,10 @@
   function localFallback(seed) {
     var rng = seed ? function () { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; } : Math.random;
     var g = Array.from({ length: 9 }, () => new Array(9).fill(0));
-    function valid(r, c, v) {
-      for (var i = 0; i < 9; i++) { if (g[r][i] === v || g[i][c] === v) return false; }
+    function valid(bd, r, c, v) {
+      for (var i = 0; i < 9; i++) { if (bd[r][i] === v || bd[i][c] === v) return false; }
       var br = 3 * Math.floor(r / 3), bc = 3 * Math.floor(c / 3);
-      for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) if (g[br + i][bc + j] === v) return false;
+      for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) if (bd[br + i][bc + j] === v) return false;
       return true;
     }
     function fill(p) {
@@ -73,15 +73,45 @@
       var r = Math.floor(p / 9), c = p % 9;
       var nums = [1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => rng() - 0.5);
       for (var k = 0; k < 9; k++) {
-        if (valid(r, c, nums[k])) { g[r][c] = nums[k]; if (fill(p + 1)) return true; g[r][c] = 0; }
+        if (valid(g, r, c, nums[k])) { g[r][c] = nums[k]; if (fill(p + 1)) return true; g[r][c] = 0; }
       }
       return false;
     }
+    // Count completions, stopping early at 2. Operates on a copy.
+    function countSolutions(board) {
+      var bd = board.map(function (row) { return row.slice(); });
+      var count = 0;
+      function solve(pos) {
+        if (count >= 2) return;
+        while (pos < 81 && bd[Math.floor(pos / 9)][pos % 9]) pos++;
+        if (pos === 81) { count++; return; }
+        var r = Math.floor(pos / 9), c = pos % 9;
+        for (var n = 1; n <= 9; n++) {
+          if (valid(bd, r, c, n)) {
+            bd[r][c] = n; solve(pos + 1); bd[r][c] = 0;
+            if (count >= 2) return;
+          }
+        }
+      }
+      solve(0);
+      return count;
+    }
     fill(0);
-    var holes = state.difficulty === 'easy' ? 36 : (state.difficulty === 'hard' ? 50 : 44);
+    // Greedy dig with a time budget: keep a hole only while the board stays
+    // uniquely solvable. Fewer holes just means an easier (but always fair) board.
+    var target = state.difficulty === 'easy' ? 36 : (state.difficulty === 'hard' ? 50 : 44);
+    var deadline = Date.now() + 1500;
     var order = Array.from({ length: 81 }, (_, i) => i).sort(() => rng() - 0.5);
     var puzzle = g.map(r => r.slice());
-    order.slice(0, holes).forEach(function (i) { puzzle[Math.floor(i / 9)][i % 9] = 0; });
+    var holes = 0;
+    for (var q = 0; q < order.length && holes < target; q++) {
+      if (Date.now() > deadline) break;
+      var i = order[q], rr = Math.floor(i / 9), cc = i % 9;
+      var backup = puzzle[rr][cc];
+      puzzle[rr][cc] = 0;
+      if (countSolutions(puzzle) === 1) holes++;
+      else puzzle[rr][cc] = backup;
+    }
     return { puzzle: puzzle, solution: g, difficulty: state.difficulty };
   }
 
@@ -98,9 +128,14 @@
       data = { puzzle: fb.puzzle, solution: fb.solution, difficulty: fb.difficulty, source: 'local' };
     }
     applyPuzzle(data);
+    // Co-op: offer my board as the room's shared puzzle (server keeps the first).
+    if (state.mode === 'coop' && socket && state.roomId && state.puzzle && state.solution) {
+      socket.emit('sudoku_puzzle_share', { room_id: state.roomId, puzzle: state.puzzle,
+        solution: state.solution, difficulty: state.difficulty });
+    }
   }
 
-  function applyPuzzle(data) {
+  function applyPuzzle(data, fromShare) {
     state.puzzle = data.puzzle; state.solution = data.solution;
     state.difficulty = (data.difficulty || state.difficulty).toLowerCase();
     state.source = data.source || '';
@@ -116,7 +151,7 @@
     document.getElementById('sudoku-mistakes').textContent = '0';
     document.getElementById('sudoku-diff-badge').textContent = state.difficulty.charAt(0).toUpperCase() + state.difficulty.slice(1);
     hideResult(); render(); startTimer();
-    setStatus(state.mode === 'coop' ? 'Shared puzzle ready.' : 'Fresh puzzle ready.');
+    setStatus(fromShare ? 'Synced shared board.' : (state.mode === 'coop' ? 'Shared puzzle ready.' : 'Fresh puzzle ready.'));
   }
 
   function render() {
@@ -257,12 +292,13 @@
   document.getElementById('tab-solo').addEventListener('click', function () { setMode('solo'); });
   document.getElementById('tab-coop').addEventListener('click', function () { setMode('coop'); });
   document.getElementById('sudoku-new-btn').addEventListener('click', function () {
+    // Co-op: only the restart initiator loads — the relay tells us if that's us.
     if (state.mode === 'coop' && socket && state.roomId) socket.emit('sudoku_restart', { room_id: state.roomId });
-    loadPuzzle();
+    else loadPuzzle();
   });
   document.getElementById('sudoku-again-btn').addEventListener('click', function () {
     if (state.mode === 'coop' && socket && state.roomId) socket.emit('sudoku_restart', { room_id: state.roomId });
-    loadPuzzle();
+    else loadPuzzle();
   });
   document.getElementById('sudoku-erase-btn').addEventListener('click', function () {
     state.pendingValue = 0; paintPad(); enterNumber(0);
@@ -284,7 +320,13 @@
       if (d.partner_name) {
         document.getElementById('sudoku-partner-name').textContent = d.partner_name;
         setStatus('Partner joined. Solving together.');
+      } else if (d.has_puzzle) {
+        setStatus('Syncing shared board…');
       }
+    });
+    socket.on('sudoku_puzzle', function (d) {
+      if (!d || !d.puzzle || !d.solution) return;
+      applyPuzzle(d, true);
     });
     socket.on('sudoku_cell_update', function (d) {
       var idx = d.r * 9 + d.c;
@@ -293,7 +335,13 @@
     socket.on('sudoku_cursor_move', function (d) {
       state.partnerCursor = d.r * 9 + d.c; render();
     });
-    socket.on('sudoku_restarted', function () { loadPuzzle(); });
+    socket.on('sudoku_restarted', function (d) {
+      // Only the restart initiator loads a fresh board (then shares it);
+      // the partner waits for the shared board instead of loading a different one.
+      var amRestarter = !d || !d.restarter || (socket && d.restarter === socket.id);
+      if (amRestarter) loadPuzzle();
+      else setStatus('Partner started a new puzzle…');
+    });
     socket.on('sudoku_solved', function () {
       if (!state.over) submitSolve();
       state.over = true; clearInterval(state.timerId);

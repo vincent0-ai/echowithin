@@ -3948,22 +3948,63 @@ def handle_join_sudoku_room(data=None, *args, **kwargs):
     if not room_info:
         room_info = {
             'host_sid': sid, 'host_name': user_name, 'guest_sid': None, 'guest_name': None,
-            'grid': [0] * 81,
+            'grid': [0] * 81, 'puzzle': None, 'restarter_sid': None,
             'created_at': datetime.datetime.now(datetime.timezone.utc),
         }
         active_sudoku_rooms[room_id] = room_info
         emit('sudoku_room_joined', {'room_id': room_id, 'is_host': True, 'grid': room_info['grid'],
-                                    'partner_name': None}, room=sid)
+                                    'partner_name': None, 'has_puzzle': False}, room=sid)
     else:
         if sid != room_info.get('host_sid'):
             room_info['guest_sid'] = sid
             room_info['guest_name'] = user_name
         emit('sudoku_room_joined', {'room_id': room_id, 'is_host': sid == room_info.get('host_sid'),
-                                    'grid': room_info['grid'],
+                                    'grid': room_info['grid'], 'has_puzzle': bool(room_info.get('puzzle')),
                                     'partner_name': room_info['host_name'] if sid != room_info.get('host_sid') else room_info.get('guest_name')}, room=sid)
         if room_info.get('host_sid') and sid != room_info.get('host_sid'):
             emit('sudoku_room_joined', {'room_id': room_id, 'is_host': True, 'grid': room_info['grid'],
+                                        'has_puzzle': bool(room_info.get('puzzle')),
                                         'partner_name': user_name}, room=room_info['host_sid'])
+        # Late joiner sync: hand them the room's shared puzzle directly.
+        if room_info.get('puzzle'):
+            emit('sudoku_puzzle', room_info['puzzle'], room=sid)
+
+@socketio.on('sudoku_puzzle_share')
+def handle_sudoku_puzzle_share(data=None, *args, **kwargs):
+    """First share wins: one shared puzzle per room so partners never diverge."""
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    room_info = active_sudoku_rooms.get(room_id)
+    if not room_info:
+        return
+    sid = request.sid
+    if sid != room_info.get('host_sid') and sid != room_info.get('guest_sid'):
+        return
+    try:
+        puzzle = data.get('puzzle')
+        solution = data.get('solution')
+        if (not isinstance(puzzle, list) or len(puzzle) != 9
+                or not isinstance(solution, list) or len(solution) != 9):
+            return
+        flat_p = [int(x) for row in puzzle for x in (row if isinstance(row, list) else [])]
+        flat_s = [int(x) for row in solution for x in (row if isinstance(row, list) else [])]
+        if len(flat_p) != 81 or len(flat_s) != 81:
+            return
+        if any(not (0 <= v <= 9) for v in flat_p + flat_s):
+            return
+    except (ValueError, TypeError):
+        return
+    if room_info.get('puzzle') is not None and sid != room_info.get('restarter_sid'):
+        return
+    room_info['puzzle'] = {
+        'puzzle': [flat_p[i * 9:(i + 1) * 9] for i in range(9)],
+        'solution': [flat_s[i * 9:(i + 1) * 9] for i in range(9)],
+        'difficulty': str(data.get('difficulty') or 'medium')[:16],
+        'source': 'partner',
+    }
+    room_info['grid'] = [0] * 81
+    emit('sudoku_puzzle', room_info['puzzle'], room=room_id, include_self=False)
 
 @socketio.on('sudoku_cell_update')
 def handle_sudoku_cell_update(data=None, *args, **kwargs):
@@ -4003,7 +4044,9 @@ def handle_sudoku_restart(data=None, *args, **kwargs):
     if room_info.get('guest_sid') and room_info.get('host_sid') != request.sid:
         return
     room_info['grid'] = [0] * 81
-    emit('sudoku_restarted', {}, room=data.get('room_id'))
+    room_info['puzzle'] = None
+    room_info['restarter_sid'] = request.sid
+    emit('sudoku_restarted', {'restarter': request.sid}, room=data.get('room_id'))
 
 @socketio.on('sudoku_solved')
 def handle_sudoku_solved(data=None, *args, **kwargs):

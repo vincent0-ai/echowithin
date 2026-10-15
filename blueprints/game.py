@@ -304,8 +304,47 @@ _SUDOKU_CACHE = {}
 _SUDOKU_CACHE_TTL = 600
 
 
-def _sudoku_fallback_board(seed=None):
-    """Local seeded 9x9 generator (backtracking + hole dig). No external deps."""
+def _sudoku_count_solutions(grid, cap=2):
+    """Count completions of a partial grid, stopping early at cap."""
+    target = cap
+
+    def _valid(g, r, c, n):
+        if any(g[r][i] == n for i in range(9)):
+            return False
+        if any(g[i][c] == n for i in range(9)):
+            return False
+        br, bc = 3 * (r // 3), 3 * (c // 3)
+        return all(g[br + i][bc + j] != n for i in range(3) for j in range(3))
+
+    count = 0
+
+    def _solve(pos=0):
+        nonlocal count
+        if count >= target:
+            return
+        while pos < 81 and grid[pos // 9][pos % 9]:
+            pos += 1
+        if pos == 81:
+            count += 1
+            return
+        r, c = divmod(pos, 9)
+        for n in range(1, 10):
+            if _valid(grid, r, c, n):
+                grid[r][c] = n
+                _solve(pos + 1)
+                grid[r][c] = 0
+                if count >= target:
+                    return
+
+    _solve()
+    return count
+
+
+def _sudoku_fallback_board(seed=None, difficulty='medium'):
+    """Local seeded 9x9 generator: full backtracking grid, then greedy dig that
+    keeps a hole only while the puzzle still solves uniquely. A returned board
+    always has exactly one solution, so solution-checking can never punish a
+    logically valid deduction. Fewer holes than requested just means easier."""
     import random
     rng = random.Random(seed)
     grid = [[0] * 9 for _ in range(9)]
@@ -336,12 +375,21 @@ def _sudoku_fallback_board(seed=None):
 
     _fill(grid)
     solution = [row[:] for row in grid]
-    holes = {'easy': 36, 'medium': 44, 'hard': 50}.get('medium', 44)
+    target_holes = {'easy': 36, 'medium': 44, 'hard': 50}.get(difficulty, 44)
     cells = [(r, c) for r in range(9) for c in range(9)]
     rng.shuffle(cells)
-    for r, c in cells[:holes]:
+    holes = 0
+    for r, c in cells:
+        if holes >= target_holes:
+            break
+        backup = grid[r][c]
         grid[r][c] = 0
-    return {'puzzle': grid, 'solution': solution, 'difficulty': 'medium'}
+        trial = [row[:] for row in grid]
+        if _sudoku_count_solutions(trial) == 1:
+            holes += 1
+        else:
+            grid[r][c] = backup
+    return {'puzzle': grid, 'solution': solution, 'difficulty': difficulty}
 
 
 @bp.route('/api/games/sudoku/new', methods=['GET'])
@@ -369,8 +417,7 @@ def api_sudoku_new():
         board = {'puzzle': grid['value'], 'solution': grid['solution'],
                  'difficulty': str(grid.get('difficulty') or difficulty).lower()}
     except Exception:
-        board = _sudoku_fallback_board(seed=int(now_ts))
-        board = dict(board, difficulty=difficulty)
+        board = _sudoku_fallback_board(seed=int(now_ts), difficulty=difficulty)
         return jsonify({'success': True, 'source': 'local', **board})
     _SUDOKU_CACHE[difficulty] = (now_ts, board)
     return jsonify({'success': True, 'source': 'api', **board})

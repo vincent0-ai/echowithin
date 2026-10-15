@@ -150,6 +150,8 @@
     paintPad();
     document.getElementById('sudoku-mistakes').textContent = '0';
     document.getElementById('sudoku-diff-badge').textContent = state.difficulty.charAt(0).toUpperCase() + state.difficulty.slice(1);
+    var diffSel = document.getElementById('sudoku-diff-select');
+    if (diffSel) diffSel.value = state.difficulty;
     hideResult(); render(); startTimer();
     setStatus('Ready.');
   }
@@ -319,6 +321,12 @@
   });
   document.getElementById('sudoku-erase-btn').addEventListener('click', function () {
     state.pendingValue = 0; paintPad(); enterNumber(0);
+  });
+  var diffSelect = document.getElementById('sudoku-diff-select');
+  if (diffSelect) diffSelect.addEventListener('change', function () {
+    state.difficulty = diffSelect.value;
+    if (state.mode === 'coop' && socket && state.roomId) socket.emit('sudoku_restart', { room_id: state.roomId });
+    else loadPuzzle();
   });
   document.getElementById('join-room-btn').addEventListener('click', function () {
     var v = (document.getElementById('room-code-input').value || '').trim();

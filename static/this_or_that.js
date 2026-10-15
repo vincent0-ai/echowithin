@@ -4,17 +4,89 @@ const fallbackPairs = [
     ['Sunrise', 'Sunset'],
     ['Beach vacation', 'Mountain cabin'],
     ['Text goodnight', 'Call goodnight'],
+    ['Big wedding', 'Small elopement'],
+    ['City life', 'Country life'],
+    ['Stay up late', 'Wake up early'],
+    ['Share dessert', 'Get own desserts'],
     ['Road trip', 'Fly to destination'],
     ['Handwritten letter', 'Surprise gift'],
     ['Cuddle in silence', 'Deep conversations'],
+    ['Home cooked meal', 'Fancy restaurant'],
     ['Plan everything', 'Be spontaneous'],
+    ['Talk it out', 'Need space first'],
+    ['Sweet', 'Savory'],
+    ['Summer', 'Winter'],
+    ['Books', 'Movies'],
+    ['Window seat', 'Aisle seat'],
+    ['Logic', 'Emotion'],
     ['Coffee', 'Tea'],
     ['Comedy', 'Drama'],
+    ['Time travel to past', 'Time travel to future'],
+    ['Invisibility', 'Flying'],
+    ['Teleportation', 'Super strength'],
+    ['Unlimited money', 'Unlimited time'],
+    ['Pizza', 'Burgers'],
+    ['Tacos', 'Sushi'],
     ['Pancakes', 'Waffles'],
+    ['Spicy', 'Mild'],
     ['Camping', 'Glamping'],
+    ['Packed schedule', 'Relaxing schedule'],
     ['Photos', 'Videos'],
-    ['Board games', 'Video games']
+    ['Netflix', 'YouTube'],
+    ['Board games', 'Video games'],
+    ['Live concert', 'Music festival'],
+    ['Slow dance', 'Karaoke night'],
+    ['Puppies', 'Kittens'],
+    ['Picnic in the park', 'Rooftop dinner'],
+    ['Museum day', 'Amusement park'],
+    ['Matching outfits', 'Opposite styles'],
+    ['Early morning hike', 'Midnight drive'],
+    ['Garden together', 'DIY project'],
+    ['Save for travel', 'Save for a house'],
+    ['Front-row seats', 'Back-row cuddles'],
+    ['Hot chocolate', 'Mulled wine'],
+    ['Rainy day in', 'Sunny day out'],
+    ['Journal together', 'Vlog together'],
+    ['Learn a language', 'Learn an instrument'],
+    ['Puzzle night', 'Trivia night'],
+    ['Thrift shopping', 'Mall shopping'],
+    ['Sunrise coffee', 'Midnight snacks'],
+    ['Hold hands', 'Arm around shoulder'],
+    ['Long texts', 'Voice notes'],
+    ['Anniversary trip', 'Anniversary party'],
+    ['Dance in the rain', 'Sing in the car'],
+    ['Charades', 'Pictionary'],
+    ['Stargaze', 'Cloud-watch'],
+    ['Breakfast in bed', 'Midnight feast'],
+    ['Apologize first', 'Forgive first']
 ];
+
+const TOT_SEEN_KEY = 'ew_tot_seen_pairs';
+const TOT_SEEN_KEEP = 50;
+
+function pairId(pair) { return pair[0] + '||' + pair[1]; }
+
+function loadSeenPairs() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(TOT_SEEN_KEY) || '[]');
+        return Array.isArray(raw) ? raw : [];
+    } catch (e) { return []; }
+}
+
+function saveSeenPairs(ids) {
+    try { localStorage.setItem(TOT_SEEN_KEY, JSON.stringify(ids.slice(-TOT_SEEN_KEEP))); } catch (e) {}
+}
+
+// Shuffle-bag that avoids recently seen pairs across games.
+function pickFreshPairs(count) {
+    const seen = new Set(loadSeenPairs());
+    let pool = fallbackPairs.filter(p => !seen.has(pairId(p)));
+    if (pool.length < count) pool = fallbackPairs.slice();
+    const picked = shuffle(pool.slice()).slice(0, count);
+    while (picked.length < count) picked.push(...shuffle(fallbackPairs.slice()).slice(0, count - picked.length));
+    saveSeenPairs(loadSeenPairs().concat(picked.map(pairId)));
+    return picked.slice(0, count);
+}
 
 let mode = null;
 let socket = null;
@@ -111,7 +183,7 @@ function initOnline() {
 
     socket.on('tot_room_joined', (data) => {
         myPlayerNum = data.player_num || 1;
-        gamePairs = Array.isArray(data.pairs) && data.pairs.length ? data.pairs : shuffle([...fallbackPairs]).slice(0, 10);
+        gamePairs = Array.isArray(data.pairs) && data.pairs.length ? data.pairs : pickFreshPairs(totalRounds);
         setOnlineStatus(data.partner_connected ? 'Partner connected.' : 'Waiting for partner...');
         startGame('online', true);
     });
@@ -152,7 +224,7 @@ function startGame(selectedMode, fromOnlineJoin = false) {
     localCurrentPlayer = 1;
 
     if (mode !== 'online' || !fromOnlineJoin) {
-        gamePairs = shuffle([...fallbackPairs]).slice(0, 10);
+        gamePairs = pickFreshPairs(totalRounds);
     }
 
     setupScreen.classList.add('hidden');

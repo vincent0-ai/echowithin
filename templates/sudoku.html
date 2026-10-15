@@ -45,6 +45,11 @@
     <button type="button" id="tab-solo" class="ew-btn ew-btn--sm mode-tab" style="cursor: pointer;">Solo</button>
     <button type="button" id="tab-coop" class="ew-btn--outline ew-btn--sm mode-tab" style="cursor: pointer;">Co-op Solve</button>
     <span class="ew-badge" id="sudoku-diff-badge">Medium</span>
+    <select id="sudoku-diff-select" class="form-input" style="padding: 0.3rem 0.5rem; font-size: 0.8rem; width: auto; cursor: pointer;">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+    </select>
     <button type="button" id="sudoku-new-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">New Puzzle</button>
     <button type="button" id="sudoku-erase-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">Erase</button>
   </div>
@@ -102,7 +107,7 @@
 </div>
 
 <script src="{{ url_for('static', filename='socket.io.min.js') }}?v=4.7.2" nonce="{{ csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='sudoku.js') }}?v=1.4" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='sudoku.js') }}?v=1.5" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   (function () {
     var LB_URL = '/api/games/leaderboard?game=sudoku&category=ranked_score&period=weekly&limit=5';

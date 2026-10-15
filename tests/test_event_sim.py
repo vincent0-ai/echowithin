@@ -212,9 +212,9 @@ class TestPongTwoClientSim:
         finally:
             _restore_rooms(m, saved)
 
-    def test_repeated_winner_emits_record_repeated_matches(self):
-        """OBSERVED: every relayed winner inserts another match doc (no
-        idempotency on room_id) -> ELO farming via re-emit."""
+    def test_repeated_winner_emits_record_once_restart_reopens(self):
+        """FIXED (BUG-002): one match doc per room; a member restart starts a
+        new recordable match."""
         import main as m
         saved = _save_rooms(m, *PONG_ROOMS)
         try:
@@ -224,7 +224,11 @@ class TestPongTwoClientSim:
                 for _ in range(3):
                     _as_sid(m, 'sid_host', h['handle_pong_score_update'],
                             {'room_id': rid, 'scores': [5, 0], 'winner': 1})
-                assert mock_rec.call_count == 3
+                assert mock_rec.call_count == 1
+                _as_sid(m, 'sid_host', h['handle_pong_restart'], {'room_id': rid})
+                _as_sid(m, 'sid_host', h['handle_pong_score_update'],
+                        {'room_id': rid, 'scores': [5, 0], 'winner': 1})
+                assert mock_rec.call_count == 2
         finally:
             _restore_rooms(m, saved)
 
@@ -289,7 +293,21 @@ class TestSlimeTwoClientSim:
         finally:
             _restore_rooms(m, saved)
 
-    def test_match_end_guest_report_dropped(self):
+    def test_match_end_garbage_winner_dropped(self):
+        """FIXED (part of BUG-005): winner outside host/guest records nothing
+        (previously recorded a draw with ELO effect)."""
+        import main as m
+        saved = _save_rooms(m, *SLIME_ROOMS)
+        try:
+            h = _handlers()
+            rid = _slime_room(h, m)
+            with patch.object(m, 'record_match_result') as mock_rec:
+                for bad in ('draw', '', None, 'HOST', 0):
+                    _as_sid(m, 'sid_host', h['handle_slime_match_end'],
+                            {'room_id': rid, 'winner': bad})
+                assert mock_rec.call_count == 0
+        finally:
+            _restore_rooms(m, saved)
         """GOOD: only the host sid may report the match result."""
         import main as m
         saved = _save_rooms(m, *SLIME_ROOMS)
@@ -368,20 +386,21 @@ class TestAirTwoClientSim:
         finally:
             _restore_rooms(m, saved)
 
-    def test_tied_forged_scoreline_awards_guest(self):
-        """OBSERVED: [7,7] at target 7 emits air_result winner=1 (guest);
-        ties resolve to guest, not draw/void."""
+    def test_tied_scoreline_voided_no_ranked_record(self):
+        """FIXED (BUG-006): [7,7] at target 7 emits air_result winner None
+        and records nothing (no ELO change)."""
         import main as m
         saved = _save_rooms(m, *AIR_ROOMS)
         try:
             h = _handlers()
             rid = _air_room(h, m)
-            with patch.object(m, 'record_match_result'):
+            with patch.object(m, 'record_match_result') as mock_rec:
                 mock_emit = _as_sid(m, 'sid_host', h['handle_air_score'],
                                     {'room_id': rid, 'scores': [7, 7]})
+                assert mock_rec.call_count == 0
             results = _emits_to(mock_emit, 'air_result', room=rid)
             assert len(results) == 1
-            assert results[0][0][1]['winner'] == 1
+            assert results[0][0][1]['winner'] is None
         finally:
             _restore_rooms(m, saved)
 
@@ -586,8 +605,11 @@ class TestTurnGameMoveValidation:
                         {'room_id': 'sim_wh', 'score': 5000})
             assert _emits_to(e, 'whack_state', room='sim_wh') == []
             _as_sid(m, 'sid_host', h['handle_whack_score'],
+                    {'room_id': 'sim_wh', 'score': 42})
+            assert m.active_whack_rooms['sim_wh']['scores'][0] == 42
+            _as_sid(m, 'sid_host', h['handle_whack_score'],
                     {'room_id': 'sim_wh', 'score': 99999999})
-            assert m.active_whack_rooms['sim_wh']['scores'][0] == 10000
+            assert m.active_whack_rooms['sim_wh']['scores'][0] == 42
         finally:
             _restore_rooms(m, saved)
 

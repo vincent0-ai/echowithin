@@ -2699,10 +2699,12 @@ def handle_slime_match_end(data=None, *args, **kwargs):
     if request.sid != room_info.get('host_sid'):
         return
     winner_side = data.get('winner')  # 'host' or 'guest'
+    if winner_side not in ('host', 'guest'):
+        return
     host_uid = room_info.get('host_user_id')
     guest_uid = room_info.get('guest_user_id')
     if host_uid and guest_uid:
-        winner_id = host_uid if winner_side == 'host' else (guest_uid if winner_side == 'guest' else None)
+        winner_id = host_uid if winner_side == 'host' else guest_uid
         record_match_result(
             game='slime_volleyball', room_id=room_id,
             players=[
@@ -2965,8 +2967,9 @@ def handle_pong_score_update(data=None, *args, **kwargs):
     # match self-resolves in a runaway loop. See commit.md.
     emit('pong_score_update', data, room=room_id, include_self=False)
 
-    # Record match when a validated winner is relayed
-    if data.get('winner') in (1, 2) and room_info:
+    # Record match when a validated winner is relayed (once per room: rooms
+    # void on leave and restart clears the flag, so re-emits can't farm ELO).
+    if data.get('winner') in (1, 2) and room_info and not room_info.get('result_recorded'):
         w = data['winner']
         host_uid = room_info.get('host_user_id')
         guest_uid = room_info.get('guest_user_id')
@@ -2983,6 +2986,7 @@ def handle_pong_score_update(data=None, *args, **kwargs):
                 metadata={'mode': 'online', 'target': room_info.get('target')},
                 bond_id=room_info.get('bond_id')
             )
+            room_info['result_recorded'] = True
 
 @socketio.on('pong_restart')
 def handle_pong_restart(data=None, *args, **kwargs):
@@ -2997,6 +3001,7 @@ def handle_pong_restart(data=None, *args, **kwargs):
     serving_player = secrets.choice([0, 1])
     room_info['scores'] = [0, 0]
     room_info['serving_player'] = serving_player
+    room_info['result_recorded'] = False
     emit('pong_restart', {'serving_player': serving_player}, room=room_id)
 
 @socketio.on('pong_target_update')
@@ -3889,6 +3894,9 @@ def handle_cancel_gomoku_matchmaking(data=None, *args, **kwargs):
 
 
 # --- Whack-'Em-All Score-Duel Handlers (same-seed rounds, scores only) ---
+# Plausibility ceiling for a 30s round (~16 taps/s, generous). Anything above
+# is forged; legit play never reaches it. Confirm the number on real devices.
+WHACK_MAX_ROUND_SCORE = 500
 active_whack_rooms = {}
 whack_matchmaking_queue = []
 
@@ -3969,9 +3977,8 @@ def handle_whack_score(data=None, *args, **kwargs):
     if not room_info:
         return
     sid = request.sid
-    try:
-        score = max(0, min(int(data.get('score', 0)), 10000))
-    except (ValueError, TypeError):
+    score = _safe_int(data.get('score', 0), default=None, lo=0, hi=WHACK_MAX_ROUND_SCORE)
+    if score is None:
         return
     if sid == room_info.get('host_sid'):
         room_info['scores'][0] = score
@@ -3990,9 +3997,8 @@ def handle_whack_finish(data=None, *args, **kwargs):
     if not room_info:
         return
     sid = request.sid
-    try:
-        score = max(0, min(int(data.get('score', 0)), 10000))
-    except (ValueError, TypeError):
+    score = _safe_int(data.get('score', 0), default=None, lo=0, hi=WHACK_MAX_ROUND_SCORE)
+    if score is None:
         return
     idx = 0 if sid == room_info.get('host_sid') else (1 if sid == room_info.get('guest_sid') else None)
     if idx is None:
@@ -4333,6 +4339,10 @@ def handle_air_score(data=None, *args, **kwargs):
     room_info['scores'] = scores
     emit('air_score_update', {'scores': scores, 'target': room_info.get('target', AIR_TARGET)}, room=room_id)
     if max(scores) >= room_info.get('target', AIR_TARGET):
+        if scores[0] == scores[1]:
+            # Tied at target: void, never a guest win and never ranked.
+            emit('air_result', {'scores': scores, 'winner': None}, room=room_id)
+            return
         host_uid = room_info.get('host_user_id')
         guest_uid = room_info.get('guest_user_id')
         winner_id = None

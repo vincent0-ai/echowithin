@@ -200,6 +200,20 @@
     document.getElementById('air-status').textContent = t.length < 30 ? t.toUpperCase() : t;
   }
 
+  function isAuthed() {
+    return !!(document.body && document.body.dataset && document.body.dataset.userLoggedIn === 'true');
+  }
+
+  // Solo needs an account; local pass-and-play and invite duels stay open.
+  function applySoloGate() {
+    var locked = (state.mode === 'solo' && !isAuthed());
+    var gate = document.getElementById('solo-gate');
+    if (gate) gate.style.display = locked ? 'block' : 'none';
+    var stage = document.querySelector('.air-stage');
+    if (stage) stage.style.display = locked ? 'none' : '';
+    return locked;
+  }
+
   function aiControl() {
     var cfg = AI[state.difficulty] || AI.normal;
     var m = state.p2;
@@ -323,7 +337,8 @@
       var b = document.getElementById('tab-' + k);
       if (b) b.className = 'ew-btn' + (k === m ? '' : '--outline') + ' ew-btn--sm mode-tab';
     });
-    document.getElementById('solo-difficulty-panel').style.display = m === 'solo' ? 'flex' : 'none';
+    var locked = applySoloGate();
+    document.getElementById('solo-difficulty-panel').style.display = (m === 'solo' && !locked) ? 'flex' : 'none';
     document.getElementById('online-panel').style.display = m === 'online' ? 'block' : 'none';
     document.getElementById('score-label-p1').textContent = m === 'local' ? 'PLAYER 1' : 'YOU';
     document.getElementById('score-label-p2').textContent = m === 'local' ? 'PLAYER 2' : (m === 'online' ? 'OPPONENT' : 'CPU');
@@ -344,6 +359,8 @@
   document.getElementById('tab-solo').addEventListener('click', function () { setMode('solo'); });
   document.getElementById('tab-local').addEventListener('click', function () { setMode('local'); });
   document.getElementById('tab-online').addEventListener('click', function () { setMode('online'); });
+  var gateDuel = document.getElementById('solo-gate-duel');
+  if (gateDuel) gateDuel.addEventListener('click', function () { document.getElementById('tab-online').click(); });
   document.querySelectorAll('.air-diff-btn').forEach(function (b) {
     b.addEventListener('click', function () {
       state.difficulty = b.dataset.diff;

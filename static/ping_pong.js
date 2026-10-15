@@ -317,6 +317,8 @@
       if (res.status === 429) {
         _rateLimitedUntil = Date.now() + 30000;
         queueOfflineSubmission(payload);
+      } else if (res.status === 401) {
+        return;
       } else if (!res.ok) {
         queueOfflineSubmission(payload);
       }

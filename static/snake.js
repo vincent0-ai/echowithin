@@ -169,7 +169,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) queueOfflineSubmission(payload);
+      if (!res.ok && res.status !== 401) queueOfflineSubmission(payload);
     } catch (e) {
       queueOfflineSubmission(payload);
     }

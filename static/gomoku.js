@@ -122,6 +122,20 @@
     document.getElementById('gomoku-turn-text').textContent = t.length < 26 ? t.toUpperCase() : t;
   }
 
+  function isAuthed() {
+    return !!(document.body && document.body.dataset && document.body.dataset.userLoggedIn === 'true');
+  }
+
+  // Solo needs an account; local pass-and-play and invite duels stay open.
+  function applySoloGate() {
+    var locked = (state.mode === 'solo' && !isAuthed());
+    var gate = document.getElementById('solo-gate');
+    if (gate) gate.style.display = locked ? 'block' : 'none';
+    var stage = document.querySelector('.gomoku-stage');
+    if (stage) stage.style.display = locked ? 'none' : '';
+    return locked;
+  }
+
   function updateScores() {
     // Perspective-aware: online white (player 1) sees own wins under YOU.
     var mine, theirs;
@@ -244,7 +258,8 @@
       var b = document.getElementById('tab-' + k);
       if (b) b.className = 'ew-btn' + (k === m ? '' : '--outline') + ' ew-btn--sm mode-tab';
     });
-    document.getElementById('solo-difficulty-panel').style.display = m === 'solo' ? 'flex' : 'none';
+    var locked = applySoloGate();
+    document.getElementById('solo-difficulty-panel').style.display = (m === 'solo' && !locked) ? 'flex' : 'none';
     document.getElementById('online-panel').style.display = m === 'online' ? 'block' : 'none';
     document.getElementById('score-label-p1').textContent = m === 'local' ? 'PLAYER 1 (BLACK)' : 'YOU (BLACK)';
     document.getElementById('score-label-p2').textContent = m === 'local' ? 'PLAYER 2 (WHITE)' : (m === 'online' ? 'OPPONENT (WHITE)' : 'CPU (WHITE)');
@@ -283,6 +298,8 @@
   document.getElementById('tab-solo').addEventListener('click', function () { setMode('solo'); });
   document.getElementById('tab-local').addEventListener('click', function () { setMode('local'); });
   document.getElementById('tab-online').addEventListener('click', function () { setMode('online'); });
+  var gateDuel = document.getElementById('solo-gate-duel');
+  if (gateDuel) gateDuel.addEventListener('click', function () { document.getElementById('tab-online').click(); });
   document.querySelectorAll('.gomoku-diff-btn').forEach(function (b) {
     b.addEventListener('click', function () {
       state.difficulty = b.dataset.diff;

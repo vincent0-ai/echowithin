@@ -261,6 +261,20 @@
     if (el && state.mode === 'coop') el.textContent = t;
   }
 
+  function isAuthed() {
+    return !!(document.body && document.body.dataset && document.body.dataset.userLoggedIn === 'true');
+  }
+
+  // Solo needs an account; co-op invite play stays open to guests.
+  function applySoloGate() {
+    var locked = (state.mode === 'solo' && !isAuthed());
+    var gate = document.getElementById('solo-gate');
+    if (gate) gate.style.display = locked ? 'block' : 'none';
+    var stage = document.querySelector('.sudoku-stage');
+    if (stage) stage.style.display = locked ? 'none' : '';
+    return locked;
+  }
+
   function showResult(title, sub) {
     document.getElementById('sudoku-result-title').textContent = title;
     document.getElementById('sudoku-result-subtitle').textContent = sub;
@@ -279,6 +293,7 @@
       if (r) joinRoom(r.trim().slice(0, 32));
       else setStatus('Create or join a room.');
     }
+    if (applySoloGate()) return;
     loadPuzzle();
   }
 
@@ -291,6 +306,8 @@
 
   document.getElementById('tab-solo').addEventListener('click', function () { setMode('solo'); });
   document.getElementById('tab-coop').addEventListener('click', function () { setMode('coop'); });
+  var gateDuel = document.getElementById('solo-gate-duel');
+  if (gateDuel) gateDuel.addEventListener('click', function () { document.getElementById('tab-coop').click(); });
   document.getElementById('sudoku-new-btn').addEventListener('click', function () {
     // Co-op: only the restart initiator loads — the relay tells us if that's us.
     if (state.mode === 'coop' && socket && state.roomId) socket.emit('sudoku_restart', { room_id: state.roomId });

@@ -60,6 +60,15 @@
     <div id="room-status" style="margin-top: 0.6rem; font-size: 0.8rem; color: var(--text-secondary);">Share the room code to solve together.</div>
   </div>
 
+  <div id="solo-gate" class="ew-card" style="display: none; text-align: center; padding: 2rem 1.5rem; margin-bottom: 1rem;">
+    <h3 style="margin: 0 0 0.5rem 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Log in to play solo</h3>
+    <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary);">Solo scores save to your account.</p>
+    <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+      <a href="{{ url_for('auth.login') }}?next={{ request.path|urlencode }}" class="ew-btn ew-btn--sm" style="text-decoration: none;">Log in</a>
+      <button type="button" id="solo-gate-duel" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">Play with invite</button>
+    </div>
+  </div>
+
   <div class="sudoku-stage">
     <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; gap: 0.5rem; flex-wrap: wrap;">
       <div class="ew-badge" style="font-weight: 700;">Mistakes: <span id="sudoku-mistakes">0</span>/3</div>
@@ -93,7 +102,7 @@
 </div>
 
 <script src="{{ url_for('static', filename='socket.io.min.js') }}?v=4.7.2" nonce="{{ csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='sudoku.js') }}?v=1.3" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='sudoku.js') }}?v=1.4" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   (function () {
     var LB_URL = '/api/games/leaderboard?game=sudoku&category=ranked_score&period=weekly&limit=5';

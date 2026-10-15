@@ -80,6 +80,15 @@
     </div>
   </div>
 
+  <div id="solo-gate" class="ew-card" style="display: none; text-align: center; padding: 2rem 1.5rem; margin-bottom: 1rem;">
+    <h3 style="margin: 0 0 0.5rem 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Log in to play solo</h3>
+    <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary);">Solo scores save to your account.</p>
+    <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+      <a href="{{ url_for('auth.login') }}?next={{ request.path|urlencode }}" class="ew-btn ew-btn--sm" style="text-decoration: none;">Log in</a>
+      <button type="button" id="solo-gate-duel" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">Play with invite</button>
+    </div>
+  </div>
+
   <div class="gomoku-stage">
     <div class="gomoku-bar">
       <div id="gomoku-turn-badge" class="gomoku-turn"><span id="gomoku-turn-dot" style="display:inline-block; width:12px; height:12px; border-radius:50%; background:#3e2217;"></span><span id="gomoku-turn-text">YOUR TURN</span></div>
@@ -125,7 +134,7 @@
 </div>
 
 <script src="{{ url_for('static', filename='socket.io.min.js') }}?v=4.7.2" nonce="{{ csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='gomoku.js') }}?v=1.1" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='gomoku.js') }}?v=1.2" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   (function () {
     const LB_UNITS = { win_streak: 'streak', total_wins: 'wins', ranked_score: 'pts' };

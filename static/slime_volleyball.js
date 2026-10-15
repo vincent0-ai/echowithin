@@ -882,6 +882,9 @@
           window.__refreshSlimeLeaderboard();
         }
         return true;
+      } else if (res.status === 401) {
+        clearPendingSync('slime_volleyball', category, score);
+        return false;
       } else {
         queuePendingSync('slime_volleyball', category, score, metadata);
         return false;

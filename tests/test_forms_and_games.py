@@ -690,10 +690,10 @@ class TestSlimeDMGameInvite:
 class TestArcadeMatchmakingAndLeaderboards:
     """Tests for Arcade Leaderboards API and Socket Matchmaking."""
 
-    def test_leaderboard_submit_validation(self, client):
-        """API rejects invalid game, category, out-of-bound score, or missing guest token."""
+    def test_leaderboard_submit_validation(self, auth_client):
+        """API rejects invalid game, category, or out-of-bound score."""
         # Invalid game
-        res = client.post('/api/games/leaderboard/submit', json={
+        res = auth_client.post('/api/games/leaderboard/submit', json={
             'game': 'unknown_game',
             'category': 'campaign_stars',
             'score': 10,
@@ -703,7 +703,7 @@ class TestArcadeMatchmakingAndLeaderboards:
         assert 'Invalid game or category' in res.get_json()['error']
 
         # Invalid category
-        res = client.post('/api/games/leaderboard/submit', json={
+        res = auth_client.post('/api/games/leaderboard/submit', json={
             'game': 'floppy_bird',
             'category': 'invalid_cat',
             'score': 10,
@@ -713,7 +713,7 @@ class TestArcadeMatchmakingAndLeaderboards:
         assert 'Invalid game or category' in res.get_json()['error']
 
         # Score out of bounds (campaign stars > 42)
-        res = client.post('/api/games/leaderboard/submit', json={
+        res = auth_client.post('/api/games/leaderboard/submit', json={
             'game': 'floppy_bird',
             'category': 'campaign_stars',
             'score': 100,
@@ -722,14 +722,16 @@ class TestArcadeMatchmakingAndLeaderboards:
         assert res.status_code == 400
         assert 'Campaign stars must be between 0 and 42' in res.get_json()['error']
 
-        # Missing guest token for anonymous
+    def test_leaderboard_submit_guest_rejected(self, client):
+        """Unauthenticated submissions are rejected even with a valid payload."""
         res = client.post('/api/games/leaderboard/submit', json={
             'game': 'floppy_bird',
             'category': 'campaign_stars',
-            'score': 10
+            'score': 10,
+            'guest_token': 'g_12345'
         })
-        assert res.status_code == 400
-        assert 'Guest token required for unauthenticated submissions' in res.get_json()['error']
+        assert res.status_code == 401
+        assert 'Login required' in res.get_json()['error']
 
     def test_leaderboard_submit_and_get_flow(self, auth_client, app):
         """Authenticated score submission upserts partitions and GET returns formatted UTC Z entries."""
@@ -776,7 +778,7 @@ class TestArcadeMatchmakingAndLeaderboards:
             assert entry['score'] == 36
             assert entry['updated_at'].endswith('Z')
 
-    def test_leaderboard_submit_csrf_exemption(self, client, app):
+    def test_leaderboard_submit_csrf_exemption(self, auth_client, app):
         """Verify POST /api/games/leaderboard/submit is exempt from CSRF protection."""
         import main as m
         from unittest.mock import MagicMock
@@ -787,7 +789,7 @@ class TestArcadeMatchmakingAndLeaderboards:
             mock_col = MagicMock()
             mock_col.find_one.return_value = None
             with patch.object(m, 'arcade_leaderboards_conf', mock_col):
-                res = client.post('/api/games/leaderboard/submit', json={
+                res = auth_client.post('/api/games/leaderboard/submit', json={
                     'game': 'floppy_bird',
                     'category': 'campaign_stars',
                     'score': 15,
@@ -889,7 +891,7 @@ class TestArcadeMatchmakingAndLeaderboards:
         assert 'setDifficulty' in js_content
         assert 'getRoundsWon' in js_content
 
-    def test_slime_volleyball_volleys_returned_leaderboard(self, client, app):
+    def test_slime_volleyball_volleys_returned_leaderboard(self, auth_client, app):
         """Volleys returned is an accepted leaderboard category and ranks successful ball returns."""
         import main as m
         from blueprints.game import VALID_ARCADE_CATEGORIES
@@ -900,7 +902,7 @@ class TestArcadeMatchmakingAndLeaderboards:
         mock_lb.find_one.return_value = None
 
         with patch.object(m, 'arcade_leaderboards_conf', mock_lb):
-            res = client.post('/api/games/leaderboard/submit', json={
+            res = auth_client.post('/api/games/leaderboard/submit', json={
                 'game': 'slime_volleyball',
                 'category': 'volleys_returned',
                 'score': 35,
@@ -912,7 +914,7 @@ class TestArcadeMatchmakingAndLeaderboards:
             assert data.get('score') == 35
 
             # Invalid bounds check (> 1,000,000)
-            res_invalid = client.post('/api/games/leaderboard/submit', json={
+            res_invalid = auth_client.post('/api/games/leaderboard/submit', json={
                 'game': 'slime_volleyball',
                 'category': 'volleys_returned',
                 'score': 2000000,
@@ -987,7 +989,7 @@ class TestArcadeMatchmakingAndLeaderboards:
         assert 'id="ttt-champ"' in html
         assert 'id="c4-champ"' in html
 
-    def test_tic_tac_toe_and_connect_four_leaderboards(self, client, app):
+    def test_tic_tac_toe_and_connect_four_leaderboards(self, auth_client, app):
         """Verify leaderboard submissions and bounds checking for Tic-Tac-Toe and Connect Four."""
         import main as m
         from blueprints.game import VALID_ARCADE_CATEGORIES
@@ -1005,7 +1007,7 @@ class TestArcadeMatchmakingAndLeaderboards:
 
         with patch.object(m, 'arcade_leaderboards_conf', mock_lb):
             # Valid Tic-Tac-Toe streak
-            res_ttt = client.post('/api/games/leaderboard/submit', json={
+            res_ttt = auth_client.post('/api/games/leaderboard/submit', json={
                 'game': 'tic_tac_toe',
                 'category': 'win_streak',
                 'score': 7,
@@ -1015,7 +1017,7 @@ class TestArcadeMatchmakingAndLeaderboards:
             assert res_ttt.get_json()['score'] == 7
 
             # Valid Connect Four total wins
-            res_c4 = client.post('/api/games/leaderboard/submit', json={
+            res_c4 = auth_client.post('/api/games/leaderboard/submit', json={
                 'game': 'connect_four',
                 'category': 'total_wins',
                 'score': 25,
@@ -1025,7 +1027,7 @@ class TestArcadeMatchmakingAndLeaderboards:
             assert res_c4.get_json()['score'] == 25
 
             # Invalid bounds check (> 500 for streak)
-            res_invalid = client.post('/api/games/leaderboard/submit', json={
+            res_invalid = auth_client.post('/api/games/leaderboard/submit', json={
                 'game': 'connect_four',
                 'category': 'win_streak',
                 'score': 9999,
@@ -1165,7 +1167,7 @@ class TestArcadeMatchmakingAndLeaderboards:
         assert 'data-diff="normal"' in html
         assert 'data-diff="hard"' in html
 
-    def test_dots_and_boxes_leaderboard(self, client, app):
+    def test_dots_and_boxes_leaderboard(self, auth_client, app):
         """Verify leaderboard submissions and bounds checking for Dots and Boxes."""
         import main as m
         from blueprints.game import VALID_ARCADE_CATEGORIES
@@ -1178,7 +1180,7 @@ class TestArcadeMatchmakingAndLeaderboards:
         mock_lb.find_one.return_value = None
 
         with patch.object(m, 'arcade_leaderboards_conf', mock_lb):
-            res = client.post('/api/games/leaderboard/submit', json={
+            res = auth_client.post('/api/games/leaderboard/submit', json={
                 'game': 'dots_and_boxes',
                 'category': 'win_streak',
                 'score': 12,
@@ -1223,7 +1225,7 @@ class TestArcadeMatchmakingAndLeaderboards:
                 leave_handler({'room_id': room_id})
                 assert room_id not in m.active_dnb_rooms
 
-    def test_fair_scoring_and_difficulty_ranking(self, client):
+    def test_fair_scoring_and_difficulty_ranking(self, client, auth_client):
         """Test ranked_score category, difficulty metadata, local mode rejection, and difficulty filtering."""
         from blueprints.game import VALID_ARCADE_CATEGORIES
         import main as m
@@ -1237,7 +1239,7 @@ class TestArcadeMatchmakingAndLeaderboards:
 
         with patch.object(m, 'arcade_leaderboards_conf', mock_lb):
             # 2. Local mode rejection
-            res_local = client.post('/api/games/leaderboard/submit', json={
+            res_local = auth_client.post('/api/games/leaderboard/submit', json={
                 'game': 'tic_tac_toe',
                 'category': 'ranked_score',
                 'score': 250,
@@ -1248,7 +1250,7 @@ class TestArcadeMatchmakingAndLeaderboards:
             assert 'Local two-player' in res_local.get_json()['error']
 
             # 3. Valid submission with difficulty metadata
-            res_valid = client.post('/api/games/leaderboard/submit', json={
+            res_valid = auth_client.post('/api/games/leaderboard/submit', json={
                 'game': 'tic_tac_toe',
                 'category': 'ranked_score',
                 'score': 500,
@@ -1259,7 +1261,7 @@ class TestArcadeMatchmakingAndLeaderboards:
             assert res_valid.get_json()['score'] == 500
 
             # 4. Out-of-bounds ranked_score (> 10,000,000)
-            res_oob = client.post('/api/games/leaderboard/submit', json={
+            res_oob = auth_client.post('/api/games/leaderboard/submit', json={
                 'game': 'tic_tac_toe',
                 'category': 'ranked_score',
                 'score': 99999999,
@@ -1319,7 +1321,7 @@ class TestArcadeMatchmakingAndLeaderboards:
         assert '🐍' not in html_snake
         assert '🍎' not in html_snake
 
-    def test_ping_pong_and_snake_leaderboards(self, client):
+    def test_ping_pong_and_snake_leaderboards(self, auth_client):
         """Verify leaderboard submissions, bounds checking, and mode isolation for Ping Pong and Snake."""
         import main as m
         mock_lb = MagicMock()
@@ -1327,7 +1329,7 @@ class TestArcadeMatchmakingAndLeaderboards:
         mock_lb.update_one.return_value = MagicMock()
         with patch.object(m, 'arcade_leaderboards_conf', mock_lb):
             # 1. Ping Pong valid ranked_score submission
-            res_pong = client.post('/api/games/leaderboard/submit', json={
+            res_pong = auth_client.post('/api/games/leaderboard/submit', json={
                 'game': 'ping_pong',
                 'category': 'ranked_score',
                 'score': 850,
@@ -1338,7 +1340,7 @@ class TestArcadeMatchmakingAndLeaderboards:
             assert res_pong.get_json()['score'] == 850
 
             # 2. Ping Pong local mode rejection (anti-farming)
-            res_local = client.post('/api/games/leaderboard/submit', json={
+            res_local = auth_client.post('/api/games/leaderboard/submit', json={
                 'game': 'ping_pong',
                 'category': 'ranked_score',
                 'score': 500,
@@ -1348,7 +1350,7 @@ class TestArcadeMatchmakingAndLeaderboards:
             assert res_local.status_code == 400
 
             # 3. Snake valid submissions
-            res_snake_ranked = client.post('/api/games/leaderboard/submit', json={
+            res_snake_ranked = auth_client.post('/api/games/leaderboard/submit', json={
                 'game': 'snake',
                 'category': 'ranked_score',
                 'score': 450,
@@ -1357,7 +1359,7 @@ class TestArcadeMatchmakingAndLeaderboards:
             })
             assert res_snake_ranked.status_code == 200
 
-            res_snake_food = client.post('/api/games/leaderboard/submit', json={
+            res_snake_food = auth_client.post('/api/games/leaderboard/submit', json={
                 'game': 'snake',
                 'category': 'food_eaten',
                 'score': 42,
@@ -1366,7 +1368,7 @@ class TestArcadeMatchmakingAndLeaderboards:
             assert res_snake_food.status_code == 200
 
             # 4. Out of bounds checking
-            res_oob = client.post('/api/games/leaderboard/submit', json={
+            res_oob = auth_client.post('/api/games/leaderboard/submit', json={
                 'game': 'snake',
                 'category': 'food_eaten',
                 'score': 9999999,

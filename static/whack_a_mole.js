@@ -41,6 +41,20 @@
     if (el) el.textContent = t;
   }
 
+  function isAuthed() {
+    return !!(document.body && document.body.dataset && document.body.dataset.userLoggedIn === 'true');
+  }
+
+  // Solo needs an account; invite/duel play stays open to guests.
+  function applySoloGate() {
+    var locked = (state.mode === 'solo' && !isAuthed());
+    var gate = document.getElementById('solo-gate');
+    if (gate) gate.style.display = locked ? 'block' : 'none';
+    var stage = document.querySelector('.whack-stage');
+    if (stage) stage.style.display = locked ? 'none' : '';
+    return locked;
+  }
+
   function hideMole() {
     if (state.upIdx >= 0) cells[state.upIdx].classList.remove('up');
     state.upIdx = -1;
@@ -154,6 +168,7 @@
     document.getElementById('tab-duel').className = 'ew-btn' + (m === 'duel' ? '' : '--outline') + ' ew-btn--sm mode-tab';
     document.getElementById('online-panel').style.display = m === 'duel' ? 'block' : 'none';
     document.getElementById('whack-opp').style.display = m === 'duel' ? 'inline-flex' : 'none';
+    applySoloGate();
     if (m === 'duel') {
       var r = new URLSearchParams(window.location.search).get('room');
       if (r) joinRoom(r.trim().slice(0, 32));
@@ -170,6 +185,8 @@
 
   document.getElementById('tab-solo').addEventListener('click', function () { setMode('solo'); });
   document.getElementById('tab-duel').addEventListener('click', function () { setMode('duel'); });
+  var gateDuel = document.getElementById('solo-gate-duel');
+  if (gateDuel) gateDuel.addEventListener('click', function () { document.getElementById('tab-duel').click(); });
   document.getElementById('round-len-btn').addEventListener('click', function () {
     state.roundSecs = state.roundSecs === 30 ? 60 : 30;
     this.textContent = 'Round: ' + state.roundSecs + 's';

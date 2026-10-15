@@ -1887,6 +1887,10 @@ def api_leaderboard_submit():
     if not data or not isinstance(data, dict):
         return jsonify({'error': 'Invalid payload'}), 400
 
+    # Solo records need an account; invite-room play stays open to guests.
+    if not current_user.is_authenticated:
+        return jsonify({'error': 'Login required to save scores'}), 401
+
     game = (data.get('game') or '').strip()
     category = (data.get('category') or '').strip()
     if game not in VALID_ARCADE_CATEGORIES or category not in VALID_ARCADE_CATEGORIES[game]:

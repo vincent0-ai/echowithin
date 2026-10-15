@@ -231,6 +231,9 @@
           window.fetchLeaderboard();
         }
         return true;
+      } else if (res.status === 401) {
+        clearPendingSync(category, score);
+        return false;
       } else if (res.status === 429) {
         _rateLimitedUntil = Date.now() + 30000;
         if (!isFlushing) queuePendingSync(category, score, metadata);

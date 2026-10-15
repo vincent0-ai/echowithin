@@ -292,6 +292,9 @@ async function submitLeaderboard(category, score) {
         window.__refreshFloppyLeaderboard(category);
       }
       return true;
+    } else if (res.status === 401) {
+      clearPendingSync('floppy_bird', category, score);
+      return false;
     } else {
       queuePendingSync('floppy_bird', category, score);
       return false;

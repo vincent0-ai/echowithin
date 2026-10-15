@@ -121,7 +121,14 @@
   </div>
 
   <!-- Game Arena Card -->
-  <div class="ew-card snake-stage-card">
+  <div id="solo-gate" class="ew-card" style="text-align: center; padding: 2rem 1.5rem; margin-bottom: 1rem;{% if current_user.is_authenticated %} display: none;{% endif %}">
+    <h3 style="margin: 0 0 0.5rem 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Log in to play solo</h3>
+    <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary);">Solo scores save to your account.</p>
+    <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+      <a href="{{ url_for('auth.login') }}?next={{ request.path|urlencode }}" class="ew-btn ew-btn--sm" style="text-decoration: none;">Log in</a>
+    </div>
+  </div>
+  <div class="ew-card snake-stage-card"{% if not current_user.is_authenticated %} style="display: none;"{% endif %}>
     <div class="snake-canvas-wrap">
       <canvas id="snake-canvas" width="600" height="600"></canvas>
 
@@ -183,7 +190,7 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='snake.js') }}?v=1.1" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='snake.js') }}?v=1.2" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   document.addEventListener('DOMContentLoaded', () => {
     const muteBtn = document.getElementById('mute-toggle-btn');

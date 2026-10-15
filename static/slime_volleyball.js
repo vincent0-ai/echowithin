@@ -1739,11 +1739,28 @@
     init();
   }
 
+  function isAuthed() {
+    return !!(document.body && document.body.dataset && document.body.dataset.userLoggedIn === 'true');
+  }
+
+  // Solo needs an account; local pass-and-play and invite duels stay open.
+  function applySlimeSoloGate() {
+    var locked = (GameState.mode === 'solo' && !isAuthed());
+    var gate = document.getElementById('solo-gate');
+    if (gate) gate.style.display = locked ? 'block' : 'none';
+    var stage = document.getElementById('slime-stage-container');
+    if (stage) stage.style.display = locked ? 'none' : '';
+    var adp = document.getElementById('ai-difficulty-panel');
+    if (adp && locked) adp.style.display = 'none';
+    return locked;
+  }
+
   // Public API for templates
   window.__slime = {
     setMode(mode, roomId = null) {
       if (GameState.isFindingMatch) cancelMatchmaking();
       GameState.mode = mode;
+      applySlimeSoloGate();
       GameState.gameOver = false;
       GameState.p1.score = 0;
       GameState.p2.score = 0;
@@ -1767,6 +1784,7 @@
       }
       resetServe(-1);
     },
+    applySoloGate: applySlimeSoloGate,
     setDifficulty(diff) {
       applyDifficulty(diff);
       return GameState.difficulty;

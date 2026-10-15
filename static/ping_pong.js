@@ -1506,10 +1506,27 @@
     }
   }
 
+  function isAuthed() {
+    return !!(document.body && document.body.dataset && document.body.dataset.userLoggedIn === 'true');
+  }
+
+  // Solo needs an account; local pass-and-play and invite duels stay open.
+  function applyPongSoloGate() {
+    var locked = (state.mode === 'ai' && !isAuthed());
+    var gate = document.getElementById('solo-gate');
+    if (gate) gate.style.display = locked ? 'block' : 'none';
+    var stage = document.querySelector('.pong-stage-card');
+    if (stage) stage.style.display = locked ? 'none' : '';
+    var adp = document.getElementById('ai-difficulty-panel');
+    if (adp && locked) adp.style.display = 'none';
+    return locked;
+  }
+
   // Public API
   window.__pong = {
     setMode: (mode) => {
       state.mode = mode;
+      applyPongSoloGate();
       if (mode === 'online') initSocket();
       clearNoContestTimer();
       setRematchVisible(true);
@@ -1525,6 +1542,7 @@
       }
       updateStatsUI();
     },
+    applySoloGate: applyPongSoloGate,
     setDifficulty: (diff) => {
       state.difficulty = diff;
       localStorage.setItem('ew_pong_difficulty', diff);

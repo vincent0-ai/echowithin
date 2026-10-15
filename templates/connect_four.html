@@ -223,6 +223,15 @@
   </div>
 
   <!-- Stage Card -->
+  <div id="solo-gate" class="ew-card" style="display: none; text-align: center; padding: 2rem 1.5rem; margin-bottom: 1rem;">
+    <h3 style="margin: 0 0 0.5rem 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Log in to play solo</h3>
+    <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary);">Solo scores save to your account.</p>
+    <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+      <a href="{{ url_for('auth.login') }}?next={{ request.path|urlencode }}" class="ew-btn ew-btn--sm" style="text-decoration: none;">Log in</a>
+      <button type="button" id="solo-gate-duel" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">Play with invite</button>
+    </div>
+  </div>
+
   <div class="c4-stage-card">
     <!-- Turn & Restart Bar -->
     <div class="c4-header-bar">
@@ -325,7 +334,7 @@
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" nonce="{{ csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='connect_four.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='connect_four.js') }}?v=1.1" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   (function () {
     let currentCat = 'win_streak';

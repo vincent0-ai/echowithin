@@ -316,6 +316,14 @@
   </div>
 
   <!-- Game Arena Card -->
+  <div id="solo-gate" class="ew-card" style="display: none; text-align: center; padding: 2rem 1.5rem; margin-bottom: 1rem;">
+    <h3 style="margin: 0 0 0.5rem 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Log in to play solo</h3>
+    <p style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary);">Solo scores save to your account.</p>
+    <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+      <a href="{{ url_for('auth.login') }}?next={{ request.path|urlencode }}" class="ew-btn ew-btn--sm" style="text-decoration: none;">Log in</a>
+      <button type="button" id="solo-gate-duel" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">Play with invite</button>
+    </div>
+  </div>
   <div class="ew-card slime-stage-card" id="slime-stage-container">
     <button type="button" id="exit-landscape-btn" class="slime-exit-landscape-btn">✕ Exit Fullscreen</button>
     <div class="slime-canvas-wrap">
@@ -389,7 +397,7 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='slime_volleyball.js') }}?v=1.8" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='slime_volleyball.js') }}?v=1.9" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   document.addEventListener('DOMContentLoaded', () => {
     // Explicitly remove reload fab if present
@@ -498,7 +506,11 @@
       onlinePanel.style.display = 'block';
       roomInput.value = roomParam;
       if (window.__slime) window.__slime.setMode('online', roomParam);
+    } else if (window.__slime && typeof window.__slime.applySoloGate === 'function') {
+      window.__slime.applySoloGate();
     }
+    const gateDuel = document.getElementById('solo-gate-duel');
+    if (gateDuel && tabOnline) gateDuel.addEventListener('click', () => tabOnline.click());
 
     // Leaderboard logic
     let currentSlimeCat = 'win_streak';

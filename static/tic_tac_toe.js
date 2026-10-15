@@ -347,9 +347,26 @@
     });
   }
 
+  function isAuthed() {
+    return !!(document.body && document.body.dataset && document.body.dataset.userLoggedIn === 'true');
+  }
+
+  // Solo needs an account; local pass-and-play and invite duels stay open.
+  function applySoloGate(mode) {
+    var locked = (mode === 'solo' && !isAuthed());
+    var gate = document.getElementById('solo-gate');
+    if (gate) gate.style.display = locked ? 'block' : 'none';
+    var stage = document.querySelector('.ttt-stage-card');
+    if (stage) stage.style.display = locked ? 'none' : '';
+    ['solo-difficulty-panel', 'solo-settings-panel', 'ai-difficulty-panel'].forEach(function (id) {
+      var p = document.getElementById(id);
+      if (p && locked) p.style.display = 'none';
+    });
+    return locked;
+  }
+
   function setMode(mode) {
-    state.mode = mode;
-    [els.tabSolo, els.tabLocal, els.tabOnline].forEach(btn => {
+    state.mode = mode;    [els.tabSolo, els.tabLocal, els.tabOnline].forEach(btn => {
       if (btn) {
         btn.classList.remove('ew-btn');
         btn.classList.add('ew-btn--outline');
@@ -381,6 +398,7 @@
     }
     state.starter = 'x';
     resetGame('x');
+    applySoloGate(mode);
   }
 
   // --- Core Game Logic ---
@@ -864,6 +882,8 @@
     if (els.tabSolo) els.tabSolo.addEventListener('click', () => setMode('solo'));
     if (els.tabLocal) els.tabLocal.addEventListener('click', () => setMode('local'));
     if (els.tabOnline) els.tabOnline.addEventListener('click', () => setMode('online'));
+    const gateDuel = document.getElementById('solo-gate-duel');
+    if (gateDuel) gateDuel.addEventListener('click', () => { if (els.tabOnline) els.tabOnline.click(); });
 
     // Mark Picker
     if (els.pickX) {

@@ -751,6 +751,24 @@
     updateTurnDisplay();
   }
 
+  function isAuthed() {
+    return !!(document.body && document.body.dataset && document.body.dataset.userLoggedIn === 'true');
+  }
+
+  // Solo needs an account; local pass-and-play and invite duels stay open.
+  function applySoloGate(mode) {
+    var locked = (mode === 'solo' && !isAuthed());
+    var gate = document.getElementById('solo-gate');
+    if (gate) gate.style.display = locked ? 'block' : 'none';
+    var stage = document.querySelector('.dnb-stage-card');
+    if (stage) stage.style.display = locked ? 'none' : '';
+    ['solo-difficulty-panel', 'solo-settings-panel', 'ai-difficulty-panel'].forEach(function (id) {
+      var p = document.getElementById(id);
+      if (p && locked) p.style.display = 'none';
+    });
+    return locked;
+  }
+
   function setMode(mode) {
     state.mode = mode;
     const tabSolo = document.getElementById('tab-solo');
@@ -786,6 +804,7 @@
       state.winStreak = getSavedStreak('online', 'online');
       initOnlineSocket();
     }
+    applySoloGate(mode);
     resetGame();
   }
 
@@ -1068,6 +1087,8 @@
     if (tabSolo) tabSolo.addEventListener('click', () => setMode('solo'));
     if (tabLocal) tabLocal.addEventListener('click', () => setMode('local'));
     if (tabOnline) tabOnline.addEventListener('click', () => setMode('online'));
+    const gateDuel = document.getElementById('solo-gate-duel');
+    if (gateDuel) gateDuel.addEventListener('click', () => { if (tabOnline) tabOnline.click(); });
 
     // Difficulties
     document.querySelectorAll('.dnb-diff-btn').forEach(btn => {

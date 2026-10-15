@@ -143,6 +143,7 @@
       }
     }
     document.addEventListener('DOMContentLoaded', fetchLeaderboard);
+    window.fetchLeaderboard = fetchLeaderboard;
     var socket = null;
     try { socket = io({ transports: ['websocket', 'polling'] }); } catch (e) { socket = null; }
     if (socket) {

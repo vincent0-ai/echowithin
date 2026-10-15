@@ -123,9 +123,13 @@
   }
 
   function updateScores() {
-    document.getElementById('score-val-p1').textContent = state.scores[0];
+    // Perspective-aware: online white (player 1) sees own wins under YOU.
+    var mine, theirs;
+    if (state.mode === 'online' && state.player === 1) { mine = state.scores[1]; theirs = state.scores[0]; }
+    else { mine = state.scores[0]; theirs = state.scores[1]; }
+    document.getElementById('score-val-p1').textContent = mine;
     document.getElementById('score-val-ties').textContent = state.scores[2];
-    document.getElementById('score-val-p2').textContent = state.scores[1];
+    document.getElementById('score-val-p2').textContent = theirs;
     var ls = document.getElementById('live-streak');
     if (ls) ls.textContent = state.streak;
   }
@@ -137,25 +141,53 @@
   }
   function hideResult() { document.getElementById('gomoku-result-overlay').style.display = 'none'; }
 
-  function submitScore(category, score, extra) {
-    var payload = { game: 'gomoku', category: category, score: score, metadata: extra || {} };
-    if (!document.cookie.includes('session')) {
+  function getGuestToken() {
+    try {
+      var t = localStorage.getItem('ew_guest_token');
+      if (!t) { t = 'g_' + Math.random().toString(36).slice(2, 14); localStorage.setItem('ew_guest_token', t); }
+      return t;
+    } catch (e) {
       if (!state.guestToken) state.guestToken = 'g_' + Math.random().toString(36).slice(2, 14);
-      payload.guest_token = state.guestToken;
-      payload.username = 'Guest';
+      return state.guestToken;
     }
-    fetch('/api/games/leaderboard/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(function () {});
+  }
+
+  function refreshBoard() {
+    try { if (typeof window.fetchLeaderboard === 'function') window.fetchLeaderboard(); } catch (e) {}
+  }
+
+  function careerWins() {
+    try {
+      var k = 'ew_career_gomoku';
+      var n = parseInt(localStorage.getItem(k) || '0', 10) || 0;
+      n += 1; localStorage.setItem(k, String(n));
+      return n;
+    } catch (e) { return 1; }
+  }
+
+  function submitScore(category, score, extra) {
+    score = Math.round(Number(score) || 0);
+    if (score <= 0) return;
+    var payload = { game: 'gomoku', category: category, score: score, metadata: extra || {}, guest_token: getGuestToken(), username: 'Guest' };
+    fetch('/api/games/leaderboard/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(refreshBoard).catch(function () {});
+  }
+
+  function recordWin() {
+    state.streak++;
+    submitScore('win_streak', state.streak, { mode: state.mode, difficulty: state.difficulty });
+    submitScore('total_wins', careerWins(), { mode: state.mode });
+    submitScore('ranked_score', 1000 + state.streak * 100, { mode: state.mode });
   }
 
   function endRound(winner, line, isDraw) {
     state.over = true; winLine = line || null; draw();
     if (winner === null && isDraw) {
-      state.scores[2]++; state.streak = 0; submitScore('win_streak', 1, { mode: state.mode });
+      state.scores[2]++; state.streak = 0;
       showResult("DRAW", 'Board is full.');
     } else if (winner !== null) {
       state.scores[winner]++;
       var meWon = (state.mode === 'online') ? (winner === state.player) : (winner === 0);
-      if (meWon) { state.streak++; submitScore('win_streak', state.streak, { mode: state.mode, difficulty: state.difficulty }); submitScore('total_wins', state.scores[winner], { mode: state.mode }); }
+      if (meWon) { recordWin(); }
       else state.streak = 0;
       showResult(meWon ? 'YOU WON!' : (state.mode === 'local' ? ('PLAYER ' + (winner + 1) + ' WON!') : 'YOU LOST'), 'Five in a row.');
     }
@@ -298,7 +330,7 @@
         state.over = true; winLine = d.win_line || null; draw();
         var meWon = w === state.player;
         if (w === null) { state.streak = 0; showResult('DRAW', 'Board is full.'); }
-        else { if (meWon) state.streak++; else state.streak = 0; showResult(meWon ? 'YOU WON!' : 'YOU LOST', 'Five in a row.'); }
+        else { if (meWon) { recordWin(); } else state.streak = 0; showResult(meWon ? 'YOU WON!' : 'YOU LOST', 'Five in a row.'); }
         updateScores();
       } else { winLine = null; draw(); setStatus(d.next_turn === state.player ? 'Your turn.' : 'Opponent thinking…'); }
     });

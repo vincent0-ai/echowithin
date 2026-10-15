@@ -149,13 +149,24 @@
     }
   }
 
-  function submitSolve() {
-    var payload = { game: 'sudoku', category: 'ranked_score', score: 1, metadata: { mode: state.mode, difficulty: state.difficulty } };
-    if (!document.cookie.includes('session')) {
+  function getGuestToken() {
+    try {
+      var t = localStorage.getItem('ew_guest_token');
+      if (!t) { t = 'g_' + Math.random().toString(36).slice(2, 14); localStorage.setItem('ew_guest_token', t); }
+      return t;
+    } catch (e) {
       if (!state.guestToken) state.guestToken = 'g_' + Math.random().toString(36).slice(2, 14);
-      payload.guest_token = state.guestToken;
-      payload.username = 'Guest';
+      return state.guestToken;
     }
+  }
+
+  function timeScore() {
+    var mult = state.difficulty === 'hard' ? 3 : (state.difficulty === 'easy' ? 1 : 2);
+    return Math.max(1, Math.min(10000000, (Math.max(1, 3600 - state.seconds)) * mult));
+  }
+
+  function submitSolve() {
+    var payload = { game: 'sudoku', category: 'ranked_score', score: timeScore(), metadata: { mode: state.mode, difficulty: state.difficulty }, guest_token: getGuestToken(), username: 'Guest' };
     fetch('/api/games/leaderboard/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(function () {});
   }
 
@@ -241,6 +252,7 @@
     });
     socket.on('sudoku_restarted', function () { loadPuzzle(); });
     socket.on('sudoku_solved', function () {
+      if (!state.over) submitSolve();
       state.over = true; clearInterval(state.timerId);
       showResult('SOLVED TOGETHER!', 'Partner completed the puzzle.');
     });

@@ -83,14 +83,31 @@
     socket.emit('whack_score', { room_id: state.roomId, score: state.score });
   }
 
-  function submitSolo() {
-    var payload = { game: 'whack_a_mole', category: 'high_score', score: state.score, metadata: { mode: 'solo', round: String(state.roundSecs) } };
-    if (!document.cookie.includes('session')) {
+  function getGuestToken() {
+    try {
+      var t = localStorage.getItem('ew_guest_token');
+      if (!t) { t = 'g_' + Math.random().toString(36).slice(2, 14); localStorage.setItem('ew_guest_token', t); }
+      return t;
+    } catch (e) {
       if (!state.guestToken) state.guestToken = 'g_' + Math.random().toString(36).slice(2, 14);
-      payload.guest_token = state.guestToken;
-      payload.username = 'Guest';
+      return state.guestToken;
     }
-    fetch('/api/games/leaderboard/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(function () {});
+  }
+
+  function refreshBoard() {
+    try { if (typeof window.fetchLeaderboard === 'function') window.fetchLeaderboard(); } catch (e) {}
+  }
+
+  function submitSolo() {
+    if (state.score <= 0) return;
+    var payload = { game: 'whack_a_mole', category: 'high_score', score: state.score, metadata: { mode: 'solo', round: String(state.roundSecs) }, guest_token: getGuestToken(), username: 'Guest' };
+    fetch('/api/games/leaderboard/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(refreshBoard).catch(function () {});
+  }
+
+  function submitDuel(score) {
+    if (score <= 0) return;
+    var payload = { game: 'whack_a_mole', category: 'ranked_score', score: score, metadata: { mode: 'duel', round: String(state.roundSecs) }, guest_token: getGuestToken(), username: 'Guest' };
+    fetch('/api/games/leaderboard/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(refreshBoard).catch(function () {});
   }
 
   function startRound() {
@@ -200,6 +217,7 @@
       var w = d.winner;
       showResult(w === null || w === undefined ? 'DRAW!' : (w === state.player ? 'YOU WIN!' : 'RIVAL WINS'),
         'You ' + mine + ' · Rival ' + theirs + '.');
+      submitDuel(mine);
     });
     socket.on('whack_player_left', function () { setStatus('Rival left.'); });
   }

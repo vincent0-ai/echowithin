@@ -123,26 +123,58 @@
   }
 
   function updateScores() {
-    document.getElementById('score-val-p1').textContent = state.scores[0];
-    document.getElementById('score-val-p2').textContent = state.scores[1];
+    // Perspective-aware: online guest (player 1) sees own score under YOU.
+    var mine, theirs;
+    if (state.mode === 'online' && state.player === 1) { mine = state.scores[1]; theirs = state.scores[0]; }
+    else { mine = state.scores[0]; theirs = state.scores[1]; }
+    document.getElementById('score-val-p1').textContent = mine;
+    document.getElementById('score-val-p2').textContent = theirs;
     var ls = document.getElementById('live-streak');
     if (ls) ls.textContent = state.streak;
   }
 
-  function submitScore(cat, score, extra) {
-    var payload = { game: 'air_hockey', category: cat, score: score, metadata: extra || {} };
-    if (!document.cookie.includes('session')) {
+  function getGuestToken() {
+    try {
+      var t = localStorage.getItem('ew_guest_token');
+      if (!t) { t = 'g_' + Math.random().toString(36).slice(2, 14); localStorage.setItem('ew_guest_token', t); }
+      return t;
+    } catch (e) {
       if (!state.guestToken) state.guestToken = 'g_' + Math.random().toString(36).slice(2, 14);
-      payload.guest_token = state.guestToken;
-      payload.username = 'Guest';
+      return state.guestToken;
     }
-    fetch('/api/games/leaderboard/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(function () {});
+  }
+
+  function refreshBoard() {
+    try { if (typeof window.fetchLeaderboard === 'function') window.fetchLeaderboard(); } catch (e) {}
+  }
+
+  function careerWins() {
+    try {
+      var k = 'ew_career_air_hockey';
+      var n = parseInt(localStorage.getItem(k) || '0', 10) || 0;
+      n += 1; localStorage.setItem(k, String(n));
+      return n;
+    } catch (e) { return 1; }
+  }
+
+  function submitScore(cat, score, extra) {
+    score = Math.round(Number(score) || 0);
+    if (score <= 0) return;
+    var payload = { game: 'air_hockey', category: cat, score: score, metadata: extra || {}, guest_token: getGuestToken(), username: 'Guest' };
+    fetch('/api/games/leaderboard/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(refreshBoard).catch(function () {});
+  }
+
+  function recordWin() {
+    state.streak++;
+    submitScore('win_streak', state.streak, { mode: state.mode });
+    submitScore('total_wins', careerWins(), { mode: state.mode });
+    submitScore('ranked_score', 1000 + state.streak * 100, { mode: state.mode });
   }
 
   function endMatch(winner) {
     state.over = true;
     var meWon = (state.mode === 'online') ? (winner === state.player) : (winner === 0);
-    if (meWon) { state.streak++; submitScore('win_streak', state.streak, { mode: state.mode }); submitScore('total_wins', state.scores[winner], { mode: state.mode }); }
+    if (meWon) { recordWin(); }
     else state.streak = 0;
     updateScores();
     document.getElementById('air-result-title').textContent = meWon ? 'YOU WON!' : (state.mode === 'local' ? ('PLAYER ' + (winner + 1) + ' WON!') : 'YOU LOST');
@@ -227,31 +259,48 @@
     var rect = canvas.getBoundingClientRect();
     return { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.width };
   }
+  function malletForPoint(n) {
+    if (state.mode === 'local') return (n.y > H / 2) ? state.p1 : state.p2;
+    if (state.mode === 'online' && !state.isHost) return state.p2;
+    return state.p1;
+  }
   canvas.addEventListener('pointerdown', function (e) {
     e.preventDefault();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
     var n = toNorm(e);
-    var m;
-    if (state.mode === 'local') m = (n.y > H / 2) ? state.p1 : state.p2;
-    else if (state.mode === 'online' && !state.isHost) m = state.p2;
-    else m = state.p1;
+    var m = malletForPoint(n);
     pointers[e.pointerId] = m;
+    canvas.classList.add('air-dragging');
     m.tx = Math.max(0.03, Math.min(W - 0.03, n.x));
     m.ty = Math.max(0.03, Math.min(H - 0.03, n.y));
     pushInput();
   });
   canvas.addEventListener('pointermove', function (e) {
     var m = pointers[e.pointerId];
-    if (!m) return;
-    e.preventDefault();
     var n = toNorm(e);
-    m.tx = Math.max(0.03, Math.min(W - 0.03, n.x));
-    m.ty = Math.max(0.03, Math.min(H - 0.03, n.y));
-    pushInput();
+    if (m) {
+      e.preventDefault();
+      m.tx = Math.max(0.03, Math.min(W - 0.03, n.x));
+      m.ty = Math.max(0.03, Math.min(H - 0.03, n.y));
+      pushInput();
+      return;
+    }
+    // Desktop hover-follow: move mallet with cursor, no click needed.
+    // Touch/pen still require drag; local 2P keeps click-to-grab (one mouse).
+    if (e.pointerType === 'mouse' && state.mode !== 'local' && !state.over) {
+      var h = malletForPoint(n);
+      h.tx = Math.max(0.03, Math.min(W - 0.03, n.x));
+      h.ty = Math.max(0.03, Math.min(H - 0.03, n.y));
+      pushInput();
+    }
   });
-  function endPointer(e) { delete pointers[e.pointerId]; }
+  function endPointer(e) {
+    delete pointers[e.pointerId];
+    if (Object.keys(pointers).length === 0) canvas.classList.remove('air-dragging');
+  }
   canvas.addEventListener('pointerup', endPointer);
   canvas.addEventListener('pointercancel', endPointer);
+  canvas.addEventListener('pointerleave', endPointer);
 
   function pushInput() {
     if (state.mode !== 'online' || state.isHost || !socket || !state.roomId) return;
@@ -346,9 +395,10 @@
     });
     socket.on('air_result', function (d) {
       if (!d) return;
+      if (d.scores) state.scores = d.scores;
       var w = d.winner;
       var meWon = w === state.player;
-      if (meWon) { state.streak++; }
+      if (meWon) { recordWin(); }
       else state.streak = 0;
       updateScores();
       document.getElementById('air-result-title').textContent = meWon ? 'YOU WON!' : 'YOU LOST';

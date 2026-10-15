@@ -975,6 +975,8 @@
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('room')) {
       setMode('online');
+    } else {
+      applySoloGate(state.mode);
     }
   });
 

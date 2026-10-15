@@ -2,11 +2,11 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v30';
-const STATIC_CACHE = 'echowithin-static-v30';
-const PAGES_CACHE = 'echowithin-pages-v30';
-const POSTS_CACHE = 'echowithin-posts-v30';
-const API_CACHE = 'echowithin-api-v30';
+const CACHE_NAME = 'echowithin-v31';
+const STATIC_CACHE = 'echowithin-static-v31';
+const PAGES_CACHE = 'echowithin-pages-v31';
+const POSTS_CACHE = 'echowithin-posts-v31';
+const API_CACHE = 'echowithin-api-v31';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -16,16 +16,21 @@ const STATIC_ASSETS = [
   '/static/logo-192.png',
   '/static/manifest.json',
   // MathJax for math/LaTeX rendering
-  'https://polyfill.io/v3/polyfill.min.js?features=es6',
   'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
   '/static/qrcode.min.js',
+  '/static/socket.io.min.js',
   '/static/floppy_bird.js',
   '/static/slime_volleyball.js',
   '/static/tic_tac_toe.js',
   '/static/connect_four.js',
   '/static/dots_and_boxes.js',
   '/static/word_duet.js',
-  '/static/team_crossword.js'
+  '/static/team_crossword.js',
+  '/static/sudoku.js',
+  '/static/whack_a_mole.js',
+  '/static/air_hockey.js',
+  '/static/gomoku.js',
+  '/static/memory_match.js'
 ];
 
 // Pages to cache for offline access

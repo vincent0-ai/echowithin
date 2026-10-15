@@ -368,17 +368,25 @@ def _ttt_room(h, m, room_id='sim_ttt'):
 
 
 class TestTttSeatHijack:
-    def test_third_joiner_steals_guest_seat(self):
+    def test_third_joiner_rejected_seats_intact(self):
+        """FIXED (BUG-007): full room rejects third socket; host/guest
+        rejoins refresh without disturbing seats."""
         import main as m
         saved = _save_rooms(m, *TTT)
         try:
             h = _handlers()
             rid = _ttt_room(h, m)
-            mock_emit = _as_sid(m, 'sid_hijacker', h['handle_join_ttt_room'],
-                                {'room_id': rid}, user=_authed('u_hij', 'Hijacker'))
-            assert m.active_ttt_rooms[rid]['guest_sid'] == 'sid_hijacker'
-            joined = [c for c in mock_emit.call_args_list if c[0][0] == 'ttt_room_joined']
-            assert joined and joined[0][0][1]['symbol'] == 'o'
+            hijack = _as_sid(m, 'sid_hijacker', h['handle_join_ttt_room'],
+                             {'room_id': rid}, user=_authed('u_hij', 'Hijacker'))
+            assert m.active_ttt_rooms[rid]['guest_sid'] == 'sid_guest'
+            errs = [c for c in hijack.call_args_list if c[0][0] == 'ttt_room_error']
+            assert len(errs) == 1
+            assert not [c for c in hijack.call_args_list if c[0][0] == 'ttt_room_joined']
+            host_re = _as_sid(m, 'sid_host', h['handle_join_ttt_room'],
+                              {'room_id': rid}, user=_authed('u_host', 'Host'))
+            joined = [c for c in host_re.call_args_list if c[0][0] == 'ttt_room_joined']
+            assert joined and joined[0][0][1]['is_host'] is True
+            assert m.active_ttt_rooms[rid]['guest_sid'] == 'sid_guest'
         finally:
             _restore_rooms(m, saved)
 
@@ -573,25 +581,24 @@ class TestTurnGameMoveValidation:
 
 
 COOP_JOINS = {
-    'handle_join_ttt_room': ('active_ttt_rooms', {'room_id': 'sim_cj'}),
-    'handle_memory_join_room': ('active_memory_rooms', {'room': 'sim_cj'}),
-    'handle_join_sudoku_room': ('active_sudoku_rooms', {'room_id': 'sim_cj'}),
-    'handle_tot_join_room': ('active_tot_rooms', {'room': 'sim_cj'}),
-    'handle_join_duet_room': ('active_duet_rooms', {'room_id': 'sim_cj'}),
-    'handle_chain_join_room': ('active_chain_rooms', {'room': 'sim_cj'}),
-    'handle_emoji_join_room': ('active_emoji_rooms', {'room_id': 'sim_cj'}),
-    'handle_join_crossword_room': ('active_crossword_rooms', {'room_id': 'sim_cj', 'puzzle_idx': 0}),
+    'handle_join_ttt_room': ('active_ttt_rooms', {'room_id': 'sim_cj'}, 'ttt_room_error'),
+    'handle_memory_join_room': ('active_memory_rooms', {'room': 'sim_cj'}, 'memory_error'),
+    'handle_join_sudoku_room': ('active_sudoku_rooms', {'room_id': 'sim_cj'}, 'sudoku_room_error'),
+    'handle_tot_join_room': ('active_tot_rooms', {'room': 'sim_cj'}, 'tot_error'),
+    'handle_join_duet_room': ('active_duet_rooms', {'room_id': 'sim_cj'}, 'duet_room_error'),
+    'handle_chain_join_room': ('active_chain_rooms', {'room': 'sim_cj'}, 'chain_error'),
+    'handle_emoji_join_room': ('active_emoji_rooms', {'room_id': 'sim_cj'}, 'emoji_room_error'),
+    'handle_join_crossword_room': ('active_crossword_rooms', {'room_id': 'sim_cj', 'puzzle_idx': 0}, 'crossword_room_error'),
 }
 
 
 class TestCoopSeatSteal:
-    def test_third_joiner_steals_guest_seat_all_coop(self):
-        """OBSERVED: none of the coop/ttt joins reject a third socket; the
-        guest seat is silently overwritten mid-session (only pong/slime/air/
-        c4/gomoku/whack/dnb guard)."""
+    def test_third_joiner_rejected_all_coop(self):
+        """FIXED (BUG-007): every coop/ttt join rejects a third socket and
+        keeps seats; host + guest rejoins refresh cleanly."""
         import main as m
         h = _handlers()
-        for join_name, (dict_name, payload) in COOP_JOINS.items():
+        for join_name, (dict_name, payload, err_event) in COOP_JOINS.items():
             rooms = getattr(m, dict_name)
             rid = payload.get('room_id') or payload.get('room')
             rooms.pop(rid, None)
@@ -600,14 +607,42 @@ class TestCoopSeatSteal:
                         user=_authed('u_host', 'Host'))
                 _as_sid(m, 'sid_guest', h[join_name], dict(payload),
                         user=_authed('u_guest', 'Guest'))
-                _as_sid(m, 'sid_hijacker', h[join_name], dict(payload),
-                        user=_authed('u_hij', 'Hijacker'))
-                assert rooms[rid]['guest_sid'] == 'sid_hijacker', join_name
+                hijack = _as_sid(m, 'sid_hijacker', h[join_name], dict(payload),
+                                 user=_authed('u_hij', 'Hijacker'))
+                assert rooms[rid]['guest_sid'] == 'sid_guest', join_name
+                assert rooms[rid]['host_sid'] == 'sid_host', join_name
+                assert any(c[0][0] == err_event for c in hijack.call_args_list), join_name
+                rejoin = _as_sid(m, 'sid_guest', h[join_name], dict(payload),
+                                 user=_authed('u_guest', 'Guest'))
+                assert rooms[rid]['guest_sid'] == 'sid_guest', join_name
+                assert not any(c[0][0] == err_event for c in rejoin.call_args_list), join_name
             finally:
                 rooms.pop(rid, None)
 
 
-class TestDuetRelayRobustness:
+    def test_user_reclaim_on_fresh_transport(self):
+        """G2: same seated user on a new sid reclaims the seat (sid
+        refreshed); a different user on a new sid is rejected."""
+        import main as m
+        h = _handlers()
+        rooms = m.active_duet_rooms
+        rooms.pop('sim_reclaim', None)
+        try:
+            _as_sid(m, 'sid_host', h['handle_join_duet_room'], {'room_id': 'sim_reclaim'},
+                    user=_authed('u_host', 'Host'))
+            _as_sid(m, 'sid_guest', h['handle_join_duet_room'], {'room_id': 'sim_reclaim'},
+                    user=_authed('u_guest', 'Guest'))
+            re = _as_sid(m, 'sid_guest_fresh', h['handle_join_duet_room'],
+                         {'room_id': 'sim_reclaim'}, user=_authed('u_guest', 'Guest'))
+            assert rooms['sim_reclaim']['guest_sid'] == 'sid_guest_fresh'
+            joined = [c for c in re.call_args_list if c[0][0] == 'duet_room_joined']
+            assert joined and joined[0][0][1]['is_host'] is False
+            hijack = _as_sid(m, 'sid_hij', h['handle_join_duet_room'],
+                             {'room_id': 'sim_reclaim'}, user=_authed('u_hij', 'Hijacker'))
+            assert any(c[0][0] == 'duet_room_error' for c in hijack.call_args_list)
+            assert rooms['sim_reclaim']['guest_sid'] == 'sid_guest_fresh'
+        finally:
+            rooms.pop('sim_reclaim', None)
     def test_non_numeric_int_fields_raise(self):
         """OBSERVED: duet clue/guess/restart int() casts are unguarded; a
         non-numeric count/card_idx/seed raises ValueError out of the handler."""

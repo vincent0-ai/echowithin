@@ -2227,6 +2227,28 @@ def _duel_member(room_info, sid):
     return bool(room_info) and sid in (room_info.get('host_sid'), room_info.get('guest_sid'))
 
 
+def _seat_status(room_info, sid, user_uid):
+    """Resolve a 2-player join to 'host' | 'guest' | 'full' | 'new_guest'.
+
+    Reconnect is the previously seated sid, or the same authenticated user
+    on a fresh transport (caller refreshes the stored sid). Any other sid
+    while the guest seat is taken is a third party -> 'full'.
+    """
+    if not room_info:
+        return 'new_guest'
+    if room_info.get('host_sid') == sid:
+        return 'host'
+    if room_info.get('guest_sid') == sid:
+        return 'guest'
+    if user_uid and user_uid == room_info.get('host_user_id'):
+        return 'host'
+    if user_uid and user_uid == room_info.get('guest_user_id'):
+        return 'guest'
+    if room_info.get('guest_sid') is not None:
+        return 'full'
+    return 'new_guest'
+
+
 @socketio.on('tot_join_room')
 def handle_tot_join_room(data=None, *args, **kwargs):
     if not isinstance(data, dict):
@@ -2238,6 +2260,7 @@ def handle_tot_join_room(data=None, *args, **kwargs):
 
     bond_id = str(data.get('bond_id') or '')
     pair_key = bond_id or room_id
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
     join_room(room_id)
 
     room_info = active_tot_rooms.get(room_id)
@@ -2247,7 +2270,9 @@ def handle_tot_join_room(data=None, *args, **kwargs):
         content = build_session_content('this_or_that', pair_key=pair_key)
         room_info = {
             'host_sid': request.sid,
+            'host_user_id': user_uid,
             'guest_sid': None,
+            'guest_user_id': None,
             'bond_id': bond_id,
             'content': content,
             'choices': {},
@@ -2255,12 +2280,26 @@ def handle_tot_join_room(data=None, *args, **kwargs):
         }
         active_tot_rooms[room_id] = room_info
         player_num = 1
-    elif room_info.get('host_sid') == request.sid:
-        player_num = 1
     else:
-        room_info['guest_sid'] = request.sid
-        active_tot_rooms[room_id] = room_info
-        player_num = 2
+        seat = _seat_status(room_info, request.sid, user_uid)
+        if seat == 'host':
+            if room_info.get('host_sid') != request.sid:
+                room_info['host_sid'] = request.sid
+            player_num = 1
+        elif seat == 'guest':
+            if room_info.get('guest_sid') != request.sid:
+                room_info['guest_sid'] = request.sid
+            room_info['guest_user_id'] = user_uid
+            active_tot_rooms[room_id] = room_info
+            player_num = 2
+        elif seat == 'full':
+            emit('tot_error', {'message': 'Room is already full.'}, room=request.sid)
+            return
+        else:
+            room_info['guest_sid'] = request.sid
+            room_info['guest_user_id'] = user_uid
+            active_tot_rooms[room_id] = room_info
+            player_num = 2
 
     emit('tot_room_joined', {
         'room': room_id,
@@ -2334,6 +2373,7 @@ def handle_memory_join_room(data=None, *args, **kwargs):
         return
     bond_id = str(data.get('bond_id') or '')
     pair_key = bond_id or room_id
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
     join_room(room_id)
 
     room_info = active_memory_rooms.get(room_id)
@@ -2342,7 +2382,9 @@ def handle_memory_join_room(data=None, *args, **kwargs):
     if not room_info:
         room_info = {
             'host_sid': request.sid,
+            'host_user_id': user_uid,
             'guest_sid': None,
+            'guest_user_id': None,
             'host_name': _socket_user_name(),
             'guest_name': None,
             'content': build_session_content('memory_match', pair_key=pair_key, size=16),
@@ -2355,13 +2397,28 @@ def handle_memory_join_room(data=None, *args, **kwargs):
         }
         active_memory_rooms[room_id] = room_info
         player_num = 1
-    elif room_info.get('host_sid') == request.sid:
-        player_num = 1
     else:
-        room_info['guest_sid'] = request.sid
-        room_info['guest_name'] = _socket_user_name()
-        active_memory_rooms[room_id] = room_info
-        player_num = 2
+        seat = _seat_status(room_info, request.sid, user_uid)
+        if seat == 'host':
+            if room_info.get('host_sid') != request.sid:
+                room_info['host_sid'] = request.sid
+            player_num = 1
+        elif seat == 'guest':
+            if room_info.get('guest_sid') != request.sid:
+                room_info['guest_sid'] = request.sid
+            room_info['guest_user_id'] = user_uid
+            room_info['guest_name'] = _socket_user_name()
+            active_memory_rooms[room_id] = room_info
+            player_num = 2
+        elif seat == 'full':
+            emit('memory_error', {'message': 'Room is already full.'}, room=request.sid)
+            return
+        else:
+            room_info['guest_sid'] = request.sid
+            room_info['guest_user_id'] = user_uid
+            room_info['guest_name'] = _socket_user_name()
+            active_memory_rooms[room_id] = room_info
+            player_num = 2
 
     emit('memory_room_joined', _memory_payload(room_id, room_info, player_num), room=request.sid)
     emit('memory_partner_update', {
@@ -3077,6 +3134,31 @@ def handle_join_ttt_room(data=None, *args, **kwargs):
             'symbol': 'x',
             'turn': 'x'
         }, room=sid)
+    seat = _seat_status(room_info, sid, user_uid)
+    if seat == 'host':
+        if room_info.get('host_sid') != sid:
+            room_info['host_sid'] = sid
+        emit('ttt_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': room_info['host_name'],
+            'guest_name': room_info.get('guest_name'),
+            'symbol': 'x',
+            'turn': room_info.get('turn', 'x')
+        }, room=sid)
+    elif seat == 'guest':
+        if room_info.get('guest_sid') != sid:
+            room_info['guest_sid'] = sid
+        emit('ttt_room_joined', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': room_info['host_name'],
+            'guest_name': room_info.get('guest_name'),
+            'symbol': 'o',
+            'turn': room_info.get('turn', 'x')
+        }, room=sid)
+    elif seat == 'full':
+        emit('ttt_room_error', {'message': 'Room is already full.'}, room=sid)
     else:
         starter = secrets.choice(['x', 'o'])
         room_info['guest_sid'] = sid
@@ -3974,12 +4056,27 @@ def handle_join_sudoku_room(data=None, *args, **kwargs):
         active_sudoku_rooms[room_id] = room_info
         emit('sudoku_room_joined', {'room_id': room_id, 'is_host': True, 'grid': room_info['grid'],
                                     'partner_name': None, 'has_puzzle': False}, room=sid)
+    elif room_info.get('guest_sid') == sid:
+        emit('sudoku_room_joined', {'room_id': room_id, 'is_host': False,
+                                    'grid': room_info['grid'], 'has_puzzle': bool(room_info.get('puzzle')),
+                                    'partner_name': room_info.get('host_name')}, room=sid)
+        if room_info.get('puzzle'):
+            emit('sudoku_puzzle', room_info['puzzle'], room=sid)
+    elif room_info.get('guest_sid') is not None:
+        emit('sudoku_room_error', {'message': 'Room is already full.'}, room=sid)
     else:
-        if sid != room_info.get('host_sid'):
-            room_info['guest_sid'] = sid
-            room_info['guest_name'] = user_name
-            room_info['guest_user_id'] = user_uid
-        emit('sudoku_room_joined', {'room_id': room_id, 'is_host': sid == room_info.get('host_sid'),
+        seat = _seat_status(room_info, sid, user_uid)
+        if seat == 'full':
+            emit('sudoku_room_error', {'message': 'Room is already full.'}, room=sid)
+            return
+        if seat == 'host' and room_info.get('host_sid') != sid:
+            room_info['host_sid'] = sid
+        if seat in ('guest', 'new_guest'):
+            if seat == 'new_guest' or room_info.get('guest_sid') != sid:
+                room_info['guest_sid'] = sid
+                room_info['guest_name'] = user_name
+                room_info['guest_user_id'] = user_uid
+        emit('sudoku_room_joined', {'room_id': room_id, 'is_host': seat == 'host',
                                     'grid': room_info['grid'], 'has_puzzle': bool(room_info.get('puzzle')),
                                     'partner_name': room_info['host_name'] if sid != room_info.get('host_sid') else room_info.get('guest_name')}, room=sid)
         if room_info.get('host_sid') and sid != room_info.get('host_sid'):
@@ -4610,6 +4707,7 @@ def handle_chain_join_room(data=None, *args, **kwargs):
         return
     bond_id = str(data.get('bond_id') or '')
     pair_key = bond_id or room_id
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
     join_room(room_id)
 
     room_info = active_chain_rooms.get(room_id)
@@ -4620,7 +4718,9 @@ def handle_chain_join_room(data=None, *args, **kwargs):
         starter = content.get('starter', 'coffee').lower()
         room_info = {
             'host_sid': request.sid,
+            'host_user_id': user_uid,
             'guest_sid': None,
+            'guest_user_id': None,
             'bond_id': bond_id,
             'chain': [starter],
             'used': {starter},
@@ -4630,12 +4730,26 @@ def handle_chain_join_room(data=None, *args, **kwargs):
         }
         active_chain_rooms[room_id] = room_info
         player_num = 1
-    elif room_info.get('host_sid') == request.sid:
-        player_num = 1
     else:
-        room_info['guest_sid'] = request.sid
-        active_chain_rooms[room_id] = room_info
-        player_num = 2
+        seat = _seat_status(room_info, request.sid, user_uid)
+        if seat == 'host':
+            if room_info.get('host_sid') != request.sid:
+                room_info['host_sid'] = request.sid
+            player_num = 1
+        elif seat == 'guest':
+            if room_info.get('guest_sid') != request.sid:
+                room_info['guest_sid'] = request.sid
+            room_info['guest_user_id'] = user_uid
+            active_chain_rooms[room_id] = room_info
+            player_num = 2
+        elif seat == 'full':
+            emit('chain_error', {'message': 'Room is already full.'}, room=request.sid)
+            return
+        else:
+            room_info['guest_sid'] = request.sid
+            room_info['guest_user_id'] = user_uid
+            active_chain_rooms[room_id] = room_info
+            player_num = 2
 
     emit('chain_room_joined', {
         'room_id': room_id,
@@ -4713,6 +4827,7 @@ def handle_join_duet_room(data=None, *args, **kwargs):
         return
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Partner'
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
     join_room(room_id)
 
     room_info = active_duet_rooms.get(room_id)
@@ -4721,8 +4836,10 @@ def handle_join_duet_room(data=None, *args, **kwargs):
     if not room_info:
         room_info = {
             'host_sid': sid,
+            'host_user_id': user_uid,
             'host_name': user_name,
             'guest_sid': None,
+            'guest_user_id': None,
             'guest_name': None,
             'seed': secrets.randbelow(1000000),
             'created_at': datetime.datetime.now(datetime.timezone.utc)
@@ -4735,9 +4852,38 @@ def handle_join_duet_room(data=None, *args, **kwargs):
             'seed': room_info['seed'],
             'partner_name': None
         }, room=sid)
+    seat = _seat_status(room_info, sid, user_uid)
+    if seat == 'host':
+        if room_info.get('host_sid') != sid:
+            room_info['host_sid'] = sid
+        emit('duet_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'side': 'A',
+            'seed': room_info['seed'],
+            'active_giver': room_info.get('active_giver'),
+            'partner_name': room_info.get('guest_name')
+        }, room=sid)
+    elif seat == 'guest':
+        if room_info.get('guest_sid') != sid:
+            room_info['guest_sid'] = sid
+        room_info['guest_user_id'] = user_uid
+        room_info['guest_name'] = user_name
+        active_duet_rooms[room_id] = room_info
+        emit('duet_room_joined', {
+            'room_id': room_id,
+            'is_host': False,
+            'side': 'B',
+            'seed': room_info['seed'],
+            'active_giver': room_info.get('active_giver'),
+            'partner_name': room_info.get('host_name')
+        }, room=sid)
+    elif seat == 'full':
+        emit('duet_room_error', {'message': 'Room is already full.'}, room=sid)
     else:
         active_giver = secrets.choice(['A', 'B'])
         room_info['guest_sid'] = sid
+        room_info['guest_user_id'] = user_uid
         room_info['guest_name'] = user_name
         room_info['active_giver'] = active_giver
         active_duet_rooms[room_id] = room_info
@@ -4829,6 +4975,7 @@ def handle_emoji_join_room(data=None, *args, **kwargs):
     room_id = str(room_id).strip()[:32]
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Partner'
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
     join_room(room_id)
 
     room_info = active_emoji_rooms.get(room_id)
@@ -4837,8 +4984,10 @@ def handle_emoji_join_room(data=None, *args, **kwargs):
     if not room_info:
         room_info = {
             'host_sid': sid,
+            'host_user_id': user_uid,
             'host_name': user_name,
             'guest_sid': None,
+            'guest_user_id': None,
             'guest_name': None,
             'round': 1,
             'score': 0,
@@ -4852,15 +5001,41 @@ def handle_emoji_join_room(data=None, *args, **kwargs):
             'player_count': 1,
             'partner_name': None
         }, room=sid)
-    elif room_info.get('host_sid') == sid:
+        return
+    seat = _seat_status(room_info, sid, user_uid)
+    if seat == 'host':
+        if room_info.get('host_sid') != sid:
+            room_info['host_sid'] = sid
         emit('emoji_room_joined', {
             'room_id': room_id,
             'is_creator': True,
             'player_count': 2 if room_info.get('guest_sid') else 1,
             'partner_name': room_info.get('guest_name')
         }, room=sid)
+    elif seat == 'guest':
+        if room_info.get('guest_sid') != sid:
+            room_info['guest_sid'] = sid
+        room_info['guest_user_id'] = user_uid
+        room_info['guest_name'] = user_name
+        active_emoji_rooms[room_id] = room_info
+        emit('emoji_room_joined', {
+            'room_id': room_id,
+            'is_creator': False,
+            'player_count': 2,
+            'partner_name': room_info['host_name']
+        }, room=sid)
+        if room_info.get('host_sid'):
+            emit('emoji_room_joined', {
+                'room_id': room_id,
+                'is_creator': True,
+                'player_count': 2,
+                'partner_name': user_name
+            }, room=room_info['host_sid'])
+    elif seat == 'full':
+        emit('emoji_room_error', {'message': 'Room is already full.'}, room=sid)
     else:
         room_info['guest_sid'] = sid
+        room_info['guest_user_id'] = user_uid
         room_info['guest_name'] = user_name
         active_emoji_rooms[room_id] = room_info
         emit('emoji_room_joined', {
@@ -4963,6 +5138,7 @@ def handle_join_crossword_room(data=None, *args, **kwargs):
     puzzle_idx = int(data.get('puzzle_idx', 0))
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Partner'
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
     join_room(room_id)
 
     room_info = active_crossword_rooms.get(room_id)
@@ -4971,8 +5147,10 @@ def handle_join_crossword_room(data=None, *args, **kwargs):
     if not room_info:
         room_info = {
             'host_sid': sid,
+            'host_user_id': user_uid,
             'host_name': user_name,
             'guest_sid': None,
+            'guest_user_id': None,
             'guest_name': None,
             'puzzle_idx': puzzle_idx,
             'grid': [''] * 25,
@@ -4986,8 +5164,36 @@ def handle_join_crossword_room(data=None, *args, **kwargs):
             'grid': room_info['grid'],
             'partner_name': None
         }, room=sid)
+        return
+    seat = _seat_status(room_info, sid, user_uid)
+    if seat == 'host':
+        if room_info.get('host_sid') != sid:
+            room_info['host_sid'] = sid
+        emit('crossword_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'puzzle_idx': room_info['puzzle_idx'],
+            'grid': room_info['grid'],
+            'partner_name': room_info.get('guest_name')
+        }, room=sid)
+    elif seat == 'guest':
+        if room_info.get('guest_sid') != sid:
+            room_info['guest_sid'] = sid
+        room_info['guest_user_id'] = user_uid
+        room_info['guest_name'] = user_name
+        active_crossword_rooms[room_id] = room_info
+        emit('crossword_room_joined', {
+            'room_id': room_id,
+            'is_host': False,
+            'puzzle_idx': room_info['puzzle_idx'],
+            'grid': room_info['grid'],
+            'partner_name': room_info.get('host_name')
+        }, room=sid)
+    elif seat == 'full':
+        emit('crossword_room_error', {'message': 'Room is already full.'}, room=sid)
     else:
         room_info['guest_sid'] = sid
+        room_info['guest_user_id'] = user_uid
         room_info['guest_name'] = user_name
         active_crossword_rooms[room_id] = room_info
         emit('crossword_room_joined', {

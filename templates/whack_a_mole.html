@@ -8,7 +8,7 @@
   .whack-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; width: 100%; max-width: 380px; }
   .whack-hole { aspect-ratio: 1; border-radius: 12px; background: #e4d5bd; border: 1px solid var(--border-color);
     display: flex; align-items: center; justify-content: center; font-size: 2.2rem; cursor: pointer; user-select: none; touch-action: manipulation; position: relative; overflow: hidden; }
-  .whack-hole .mole { transform: translateY(110%); transition: transform 0.12s ease; }
+  .whack-hole .mole { transform: translateY(220%); transition: transform 0.12s ease; line-height: 1; }
   .whack-hole.up .mole { transform: translateY(0); }
   .whack-hole.hit { outline: 2px solid #3f7e52; }
   @media (prefers-reduced-motion: reduce) { .whack-hole .mole { transition: none; } }
@@ -80,7 +80,7 @@
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" nonce="{{ csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='whack_a_mole.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='whack_a_mole.js') }}?v=1.1" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   (function () {
     async function fetchLeaderboard() {
@@ -88,7 +88,7 @@
       try {
         var res = await fetch('/api/games/leaderboard?game=whack_a_mole&category=high_score&period=weekly&limit=5');
         var data = await res.json();
-        var entries = data.entries || [];
+        var entries = (data.entries || []).filter(function (p) { return (p.score || 0) > 0; });
         if (!entries.length) {
           listEl.innerHTML = '<div style="text-align:center; color:var(--text-secondary); font-size:0.85rem; padding:0.75rem;">No scores yet. Be the first!</div>';
           return;

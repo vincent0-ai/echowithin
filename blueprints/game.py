@@ -1853,7 +1853,7 @@ def api_leaderboard_submit():
     # Bounds validation to prevent unrealistic / cheated submissions
     if category == 'campaign_stars' and not (0 <= score <= 42):
         return jsonify({'error': 'Campaign stars must be between 0 and 42'}), 400
-    if category in ('endless_score', 'high_score') and not (0 <= score <= 1000000):
+    if category in ('endless_score', 'high_score') and not (1 <= score <= 1000000):
         return jsonify({'error': 'Score out of valid bounds'}), 400
     if category == 'win_streak' and not (1 <= score <= 500):
         return jsonify({'error': 'Win streak out of valid bounds'}), 400

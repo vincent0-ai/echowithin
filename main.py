@@ -2216,6 +2216,12 @@ def _socket_user_id():
     return str(current_user.id) if current_user.is_authenticated else request.sid
 
 
+# --- Duel room anti-spam: anyone may JOIN a room, but only members may OPEN one.
+def _room_creation_allowed(room_info):
+    """True unless this call would open a brand-new room as a guest."""
+    return room_info is not None or current_user.is_authenticated
+
+
 @socketio.on('tot_join_room')
 def handle_tot_join_room(data=None, *args, **kwargs):
     if not isinstance(data, dict):
@@ -2230,6 +2236,8 @@ def handle_tot_join_room(data=None, *args, **kwargs):
     join_room(room_id)
 
     room_info = active_tot_rooms.get(room_id)
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         content = build_session_content('this_or_that', pair_key=pair_key)
         room_info = {
@@ -2338,6 +2346,8 @@ def handle_memory_join_room(data=None, *args, **kwargs):
     join_room(room_id)
 
     room_info = active_memory_rooms.get(room_id)
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         room_info = {
             'host_sid': request.sid,
@@ -2490,6 +2500,8 @@ def handle_join_slime_room(data=None, *args, **kwargs):
 
     room_info = active_slime_rooms.get(room_id)
     user_uid = str(current_user.id) if current_user.is_authenticated else None
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         # First player is Host
         room_info = {
@@ -2762,6 +2774,8 @@ def handle_join_pong_room(data=None, *args, **kwargs):
 
     room_info = active_pong_rooms.get(room_id)
     user_uid = str(current_user.id) if current_user.is_authenticated else None
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         room_info = {
             'host_sid': sid,
@@ -3044,6 +3058,8 @@ def handle_join_ttt_room(data=None, *args, **kwargs):
 
     room_info = active_ttt_rooms.get(room_id)
     user_uid = str(current_user.id) if current_user.is_authenticated else None
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         room_info = {
             'host_sid': sid,
@@ -3307,6 +3323,8 @@ def handle_join_c4_room(data=None, *args, **kwargs):
 
     room_info = active_c4_rooms.get(room_id)
     user_uid = str(current_user.id) if current_user.is_authenticated else None
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         room_info = {
             'host_sid': sid,
@@ -3620,6 +3638,8 @@ def handle_join_gomoku_room(data=None, *args, **kwargs):
     sid = request.sid
     user_uid = str(current_user.id) if current_user.is_authenticated else None
     room_info = active_gomoku_rooms.get(room_id)
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         room_info = _gomoku_new_room(sid, user_name, user_uid, payload.get('bond_id'))
         active_gomoku_rooms[room_id] = room_info
@@ -3778,6 +3798,8 @@ def handle_join_whack_room(data=None, *args, **kwargs):
     sid = request.sid
     user_uid = str(current_user.id) if current_user.is_authenticated else None
     room_info = active_whack_rooms.get(room_id)
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         try:
             seed = int(payload.get('seed', 0)) or secrets.randbelow(2 ** 31)
@@ -3945,6 +3967,8 @@ def handle_join_sudoku_room(data=None, *args, **kwargs):
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Partner'
     join_room(room_id)
     room_info = active_sudoku_rooms.get(room_id)
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         room_info = {
             'host_sid': sid, 'host_name': user_name, 'guest_sid': None, 'guest_name': None,
@@ -4100,6 +4124,8 @@ def handle_join_air_room(data=None, *args, **kwargs):
     sid = request.sid
     user_uid = str(current_user.id) if current_user.is_authenticated else None
     room_info = active_air_rooms.get(room_id)
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         room_info = _air_new_room(sid, user_name, user_uid, payload.get('bond_id'))
         active_air_rooms[room_id] = room_info
@@ -4269,6 +4295,8 @@ def handle_join_dnb_room(data=None, *args, **kwargs):
 
     room_info = active_dnb_rooms.get(room_id)
     user_uid = str(current_user.id) if current_user.is_authenticated else None
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         room_info = {
             'host_sid': sid,
@@ -4588,6 +4616,8 @@ def handle_chain_join_room(data=None, *args, **kwargs):
     join_room(room_id)
 
     room_info = active_chain_rooms.get(room_id)
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         content = build_session_content('word_duet', pair_key=pair_key)
         starter = content.get('starter', 'coffee').lower()
@@ -4689,6 +4719,8 @@ def handle_join_duet_room(data=None, *args, **kwargs):
     join_room(room_id)
 
     room_info = active_duet_rooms.get(room_id)
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         room_info = {
             'host_sid': sid,
@@ -4802,6 +4834,8 @@ def handle_emoji_join_room(data=None, *args, **kwargs):
     join_room(room_id)
 
     room_info = active_emoji_rooms.get(room_id)
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         room_info = {
             'host_sid': sid,
@@ -4934,6 +4968,8 @@ def handle_join_crossword_room(data=None, *args, **kwargs):
     join_room(room_id)
 
     room_info = active_crossword_rooms.get(room_id)
+    if not _room_creation_allowed(room_info):
+        return
     if not room_info:
         room_info = {
             'host_sid': sid,

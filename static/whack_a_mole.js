@@ -198,7 +198,8 @@
     var v = (document.getElementById('room-code-input').value || '').trim();
     if (v) joinRoom(v);
   });
-  document.getElementById('create-room-btn').addEventListener('click', function () {
+  var createBtn = document.getElementById('create-room-btn');
+  if (createBtn) createBtn.addEventListener('click', function () {
     state.seed = Math.floor(Math.random() * 2147483647) || 1;
     joinRoom('whack_' + Math.random().toString(36).slice(2, 8));
   });

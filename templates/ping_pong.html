@@ -141,7 +141,7 @@
         <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); margin: 0 0.25rem;">or Room Code:</span>
         <input type="text" id="room-code-input" placeholder="e.g. pong42" style="width: 130px; padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; background: var(--surface-bg); color: var(--text-dark-color);">
         <button type="button" id="join-room-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Join</button>
-        <button type="button" id="create-room-btn" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor: pointer;">Create Custom</button>
+        {% if current_user.is_authenticated %}<button type="button" id="create-room-btn" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor: pointer;">Create Custom</button>{% endif %}
       </div>
       <div id="online-status" style="font-size: 0.82rem; font-weight: 500; color: var(--text-secondary);">
         Not connected. Use "Find Match" or enter a room code.

@@ -1,5 +1,6 @@
 """Tests for Gomoku, Sudoku Together, Whack-'Em-All, and Air Hockey wiring."""
 import os
+from unittest.mock import MagicMock, patch
 
 import main as m
 from blueprints.game import VALID_ARCADE_CATEGORIES
@@ -97,3 +98,74 @@ class TestNewGameSocketHandlers:
         sol = board['solution']
         assert {sol[0][c] for c in range(9)} == set(range(1, 10))
         assert {sol[r][0] for r in range(9)} == set(range(1, 10))
+
+
+def _authed(uid='u-host', name='Host'):
+    stub = MagicMock()
+    stub.is_authenticated = True
+    stub.id = uid
+    stub.username = name
+    return stub
+
+
+def _guest():
+    stub = MagicMock()
+    stub.is_authenticated = False
+    return stub
+
+
+def _call_join(handler_name, room_id, sid, user):
+    handlers = {getattr(c.args[0], '__name__', ''): c.args[0]
+                for c in m.socketio.on.mock_calls if len(c.args) > 0 and callable(c.args[0])}
+    req = MagicMock()
+    req.sid = sid
+    data = {'room_id': room_id, 'room': room_id}
+    with patch.object(m, 'request', req), \
+            patch.object(m, 'current_user', user), \
+            patch.object(m, 'emit') as mock_emit, \
+            patch.object(m, 'join_room'):
+        handlers[handler_name](data)
+    return mock_emit
+
+
+# handler -> (room dict on main, joined event name)
+ROOM_JOIN_CASES = {
+    'handle_join_gomoku_room': ('active_gomoku_rooms', 'gomoku_room_joined'),
+    'handle_join_whack_room': ('active_whack_rooms', 'whack_room_joined'),
+    'handle_join_sudoku_room': ('active_sudoku_rooms', 'sudoku_room_joined'),
+    'handle_join_air_room': ('active_air_rooms', 'air_room_joined'),
+    'handle_join_ttt_room': ('active_ttt_rooms', 'ttt_room_joined'),
+    'handle_join_c4_room': ('active_c4_rooms', 'c4_room_joined'),
+    'handle_join_dnb_room': ('active_dnb_rooms', 'dnb_room_joined'),
+    'handle_join_pong_room': ('active_pong_rooms', 'pong_room_joined'),
+    'handle_join_slime_room': ('active_slime_rooms', 'slime_room_joined'),
+    'handle_join_duet_room': ('active_duet_rooms', 'duet_room_joined'),
+    'handle_join_crossword_room': ('active_crossword_rooms', 'crossword_room_joined'),
+    'handle_memory_join_room': ('active_memory_rooms', 'memory_room_joined'),
+    'handle_tot_join_room': ('active_tot_rooms', 'tot_room_joined'),
+    'handle_emoji_join_room': ('active_emoji_rooms', 'emoji_room_joined'),
+    'handle_chain_join_room': ('active_chain_rooms', 'chain_room_joined'),
+}
+
+
+class TestDuelRoomCreationGate:
+    def test_guest_cannot_open_rooms_but_can_join(self):
+        for handler_name, (dict_name, joined_event) in ROOM_JOIN_CASES.items():
+            rooms = getattr(m, dict_name)
+            room_id = 'gate_%s' % handler_name
+            rooms.pop(room_id, None)
+
+            # Guest creation attempt opens nothing and emits no join.
+            guest_emit = _call_join(handler_name, room_id, 'sid_guest', _guest())
+            assert room_id not in rooms, handler_name
+            assert not any(c[0][0] == joined_event for c in guest_emit.call_args_list), handler_name
+
+            # Member opens the room fine.
+            _call_join(handler_name, room_id, 'sid_host', _authed())
+            assert room_id in rooms, handler_name
+
+            # Guest joins the existing room fine.
+            join_emit = _call_join(handler_name, room_id, 'sid_guest2', _guest())
+            assert any(c[0][0] == joined_event for c in join_emit.call_args_list), handler_name
+
+            rooms.pop(room_id, None)

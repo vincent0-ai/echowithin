@@ -43,11 +43,21 @@ def _guest_user():
     return stub
 
 
+def _auth_user(uid='test-host', username='Host'):
+    stub = MagicMock()
+    stub.is_authenticated = True
+    stub.id = uid
+    stub.username = username
+    return stub
+
+
 def _as_sid(m, sid, fn, *args, **kwargs):
+    user = kwargs.pop('user', None)
     req = MagicMock()
     req.sid = sid
+    curr = user if user is not None else _guest_user()
     with patch.object(m, 'request', req), \
-            patch.object(m, 'current_user', _guest_user()), \
+            patch.object(m, 'current_user', curr), \
             patch.object(m, 'emit') as mock_emit, \
             patch.object(m, 'join_room') as mock_join, \
             patch.object(m, 'leave_room') as mock_leave:
@@ -97,7 +107,7 @@ class TestPongJoinRejoin:
     def test_full_room_rejects_stranger(self, pong_state):
         m = pong_state
         h = _handlers()['handle_join_pong_room']
-        _as_sid(m, 'A', h, {'room_id': 'duel1'})
+        _as_sid(m, 'A', h, {'room_id': 'duel1'}, user=_auth_user())
         _as_sid(m, 'B', h, {'room_id': 'duel1'})
         _, mock_emit, _, _ = _as_sid(m, 'C', h, {'room_id': 'duel1'})
         err = mock_emit.call_args[0]
@@ -106,7 +116,7 @@ class TestPongJoinRejoin:
     def test_joined_payload_carries_scores_and_target(self, pong_state):
         m = pong_state
         h = _handlers()['handle_join_pong_room']
-        _, mock_emit, _, _ = _as_sid(m, 'A', h, {'room_id': 'duel1'})
+        _, mock_emit, _, _ = _as_sid(m, 'A', h, {'room_id': 'duel1'}, user=_auth_user())
         payload = mock_emit.call_args[0][1]
         assert payload['scores'] == [0, 0]
         assert 'target' in payload
@@ -117,7 +127,7 @@ class TestPongJoinRejoin:
         handlers = _handlers()
         join = handlers['handle_join_pong_room']
         disc = handlers['handle_dm_disconnect']
-        _as_sid(m, 'A', join, {'room_id': 'duel1'})
+        _as_sid(m, 'A', join, {'room_id': 'duel1'}, user=_auth_user())
         _as_sid(m, 'B', join, {'room_id': 'duel1'})
 
         # Guest transport drops: room is immediately voided and deleted (no coming back).
@@ -130,7 +140,7 @@ class TestPongJoinRejoin:
         assert all(q['sid'] != 'B' for q in m.pong_matchmaking_queue)
 
         # Rejoin attempt cannot reclaim old room because old room is gone; starts fresh afresh
-        _, mock_emit2, _, _ = _as_sid(m, 'C', join, {'room_id': 'duel1'})
+        _, mock_emit2, _, _ = _as_sid(m, 'C', join, {'room_id': 'duel1'}, user=_auth_user())
         joined = [c for c in mock_emit2.call_args_list if c[0][0] == 'pong_room_joined'][0][0][1]
         assert joined['is_host'] is True  # C is fresh host of a new room
         assert joined['scores'] == [0, 0]
@@ -139,7 +149,7 @@ class TestPongJoinRejoin:
         m = pong_state
         handlers = _handlers()
         join = handlers['handle_join_pong_room']
-        _as_sid(m, 'A', join, {'room_id': 'duel1'})
+        _as_sid(m, 'A', join, {'room_id': 'duel1'}, user=_auth_user())
         m.active_pong_rooms['duel1']['created_at'] = (
             datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=2))
         m._prune_unattended_game_rooms()
@@ -148,7 +158,7 @@ class TestPongJoinRejoin:
     def test_explicit_leave_voids_match(self, pong_state):
         m = pong_state
         handlers = _handlers()
-        _as_sid(m, 'A', handlers['handle_join_pong_room'], {'room_id': 'duel1'})
+        _as_sid(m, 'A', handlers['handle_join_pong_room'], {'room_id': 'duel1'}, user=_auth_user())
         _as_sid(m, 'B', handlers['handle_join_pong_room'], {'room_id': 'duel1'})
         _, mock_emit, _, _ = _as_sid(
             m, 'A', handlers['handle_leave_pong_room'], {'room_id': 'duel1'})
@@ -359,7 +369,7 @@ class TestMultiplayerHostSettingsAndRandomFirstMover:
         # 1. Ping Pong join & restart
         h_pong_join = handlers['handle_join_pong_room']
         h_pong_restart = handlers['handle_pong_restart']
-        _as_sid(m, 'sid_h', h_pong_join, {'room_id': 'r_pong_rnd'})
+        _as_sid(m, 'sid_h', h_pong_join, {'room_id': 'r_pong_rnd'}, user=_auth_user())
         _, emit_join, _, _ = _as_sid(m, 'sid_g', h_pong_join, {'room_id': 'r_pong_rnd'})
         join_payload = [c[0][1] for c in emit_join.call_args_list if c[0][0] == 'pong_room_joined'][0]
         assert join_payload['serving_player'] in (0, 1)
@@ -371,7 +381,7 @@ class TestMultiplayerHostSettingsAndRandomFirstMover:
         # 2. Slime Volleyball join & restart
         h_slime_join = handlers['handle_join_slime_room']
         h_slime_restart = handlers['handle_slime_restart']
-        _as_sid(m, 'sid_sh', h_slime_join, {'room_id': 'r_slime_rnd'})
+        _as_sid(m, 'sid_sh', h_slime_join, {'room_id': 'r_slime_rnd'}, user=_auth_user())
         _, emit_slime_join, _, _ = _as_sid(m, 'sid_sg', h_slime_join, {'room_id': 'r_slime_rnd'})
         s_join_payload = [c[0][1] for c in emit_slime_join.call_args_list if c[0][0] == 'slime_room_joined'][0]
         assert s_join_payload['serving'] in (-1, 1)
@@ -382,28 +392,28 @@ class TestMultiplayerHostSettingsAndRandomFirstMover:
 
         # 3. Tic-Tac-Toe join
         h_ttt_join = handlers['handle_join_ttt_room']
-        _as_sid(m, 'sid_th', h_ttt_join, {'room_id': 'r_ttt_rnd'})
+        _as_sid(m, 'sid_th', h_ttt_join, {'room_id': 'r_ttt_rnd'}, user=_auth_user())
         _, emit_ttt_join, _, _ = _as_sid(m, 'sid_tg', h_ttt_join, {'room_id': 'r_ttt_rnd'})
         ttt_payload = [c[0][1] for c in emit_ttt_join.call_args_list if c[0][0] == 'ttt_room_joined'][0]
         assert ttt_payload['turn'] in ('x', 'o')
 
         # 4. Connect Four join
         h_c4_join = handlers['handle_join_c4_room']
-        _as_sid(m, 'sid_c4h', h_c4_join, {'room_id': 'r_c4_rnd'})
+        _as_sid(m, 'sid_c4h', h_c4_join, {'room_id': 'r_c4_rnd'}, user=_auth_user())
         _, emit_c4_join, _, _ = _as_sid(m, 'sid_c4g', h_c4_join, {'room_id': 'r_c4_rnd'})
         c4_payload = [c[0][1] for c in emit_c4_join.call_args_list if c[0][0] == 'c4_room_joined'][0]
         assert c4_payload['turn'] in (0, 1)
 
         # 5. Dots and Boxes join
         h_dnb_join = handlers['handle_join_dnb_room']
-        _as_sid(m, 'sid_dnbh', h_dnb_join, {'room_id': 'r_dnb_rnd'})
+        _as_sid(m, 'sid_dnbh', h_dnb_join, {'room_id': 'r_dnb_rnd'}, user=_auth_user())
         _, emit_dnb_join, _, _ = _as_sid(m, 'sid_dnbg', h_dnb_join, {'room_id': 'r_dnb_rnd'})
         dnb_payload = [c[0][1] for c in emit_dnb_join.call_args_list if c[0][0] == 'dnb_room_joined'][0]
         assert dnb_payload['turn'] in (0, 1)
 
         # 6. Word Duet join
         h_duet_join = handlers['handle_join_duet_room']
-        _as_sid(m, 'sid_dh', h_duet_join, {'room_id': 'r_duet_rnd'})
+        _as_sid(m, 'sid_dh', h_duet_join, {'room_id': 'r_duet_rnd'}, user=_auth_user())
         _, emit_duet_join, _, _ = _as_sid(m, 'sid_dg', h_duet_join, {'room_id': 'r_duet_rnd'})
         duet_payload = [c[0][1] for c in emit_duet_join.call_args_list if c[0][0] == 'duet_room_joined'][0]
         assert duet_payload['active_giver'] in ('A', 'B')

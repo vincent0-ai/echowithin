@@ -324,7 +324,8 @@
     var v = (document.getElementById('room-code-input').value || '').trim();
     if (v) joinRoom(v);
   });
-  document.getElementById('create-room-btn').addEventListener('click', function () {
+  var createBtn = document.getElementById('create-room-btn');
+  if (createBtn) createBtn.addEventListener('click', function () {
     joinRoom('sudoku_' + Math.random().toString(36).slice(2, 8));
   });
   document.getElementById('copy-link-btn').addEventListener('click', function () {

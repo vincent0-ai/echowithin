@@ -454,6 +454,7 @@ class TestSlimeVolleyball:
             with patch.object(m, 'request') as mock_req, \
                  patch.object(m, 'join_room') as mock_join, \
                  patch.object(m, 'leave_room') as mock_leave, \
+                 patch.object(m, 'current_user', MagicMock(is_authenticated=True, id='test-host', username='Host')), \
                  patch.object(m, 'emit') as mock_emit:
                 mock_req.sid = 'sid_host_123'
                 room_id = 'test_room_direct'
@@ -1075,6 +1076,7 @@ class TestArcadeMatchmakingAndLeaderboards:
         with app.test_request_context():
             with patch.object(m, 'request') as mock_req, \
                  patch.object(m, 'join_room') as mock_join, \
+                 patch.object(m, 'current_user', MagicMock(is_authenticated=True, id='test-host', username='Host')), \
                  patch.object(m, 'emit') as mock_emit:
 
                 room_id = 'test_ttt_room'
@@ -1123,6 +1125,7 @@ class TestArcadeMatchmakingAndLeaderboards:
         with app.test_request_context():
             with patch.object(m, 'request') as mock_req, \
                  patch.object(m, 'join_room') as mock_join, \
+                 patch.object(m, 'current_user', MagicMock(is_authenticated=True, id='test-host', username='Host')), \
                  patch.object(m, 'emit') as mock_emit:
 
                 room_id = 'test_c4_room'
@@ -1208,6 +1211,7 @@ class TestArcadeMatchmakingAndLeaderboards:
         with app.test_request_context():
             with patch.object(m, 'request') as mock_req, \
                  patch.object(m, 'join_room') as mock_join, \
+                 patch.object(m, 'current_user', MagicMock(is_authenticated=True, id='test-host', username='Host')), \
                  patch.object(m, 'emit') as mock_emit:
 
                 room_id = 'test_dnb_room'
@@ -1403,6 +1407,7 @@ class TestArcadeMatchmakingAndLeaderboards:
         with app.test_request_context():
             with patch.object(m, 'request') as mock_req, \
                  patch.object(m, 'emit') as mock_emit, \
+                 patch.object(m, 'current_user', MagicMock(is_authenticated=True, id='test-host', username='Host')), \
                  patch.object(m, 'join_room'):
                 mock_req.sid = 'sid_pong_host'
                 join_handler({'room_id': 'pong_test_1'})

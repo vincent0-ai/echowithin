@@ -129,14 +129,29 @@
 <script nonce="{{ csp_nonce }}">
   (function () {
     const LB_UNITS = { win_streak: 'streak', total_wins: 'wins', ranked_score: 'pts' };
+    const LB_TIMEOUT_MS = 12000;
+    function showRetry(listEl) {
+      if (!listEl) return;
+      listEl.innerHTML = '<div id="lb-retry" style="text-align:center; color:var(--text-secondary); font-size:0.85rem; padding:0.75rem; cursor:pointer;">Could not load scores. Tap to retry.</div>';
+      const rb = document.getElementById('lb-retry');
+      if (rb) rb.addEventListener('click', fetchLeaderboard);
+    }
     async function fetchLeaderboard() {
       const listEl = document.getElementById('leaderboard-list');
+      if (!listEl) return;
       const catEl = document.getElementById('leaderboard-cat');
       let cat = (catEl && catEl.value) || 'win_streak';
       if (!LB_UNITS[cat]) cat = 'win_streak';
       const unit = LB_UNITS[cat];
+      listEl.innerHTML = '<div style="text-align:center; color:var(--text-secondary); font-size:0.85rem; padding:0.75rem;">Loading…</div>';
+      let ctrl = null, timer = null;
       try {
-        const res = await fetch('/api/games/leaderboard?game=gomoku&category=' + encodeURIComponent(cat) + '&period=weekly&limit=5');
+        if (typeof AbortController !== 'undefined') {
+          ctrl = new AbortController();
+          timer = setTimeout(() => { try { ctrl.abort(); } catch (e) {} }, LB_TIMEOUT_MS);
+        }
+        const res = await fetch('/api/games/leaderboard?game=gomoku&category=' + encodeURIComponent(cat) + '&period=weekly&limit=5', ctrl ? { signal: ctrl.signal } : undefined);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
         const entries = (data.entries || []).filter((p) => (p.score || 0) > 0);
         if (!entries.length) {
@@ -149,7 +164,10 @@
             <span style="color:var(--text-secondary); font-size:0.75rem; margin-left:0.4rem;">${p.score || 0} ${unit}</span></div>
           </div>`).join('');
       } catch (e) {
-        if (listEl) listEl.innerHTML = '<div style="text-align:center; color:var(--text-secondary); font-size:0.85rem;">Could not load.</div>';
+        if (window.console && console.error) console.error('[gomoku] leaderboard failed:', e);
+        showRetry(listEl);
+      } finally {
+        if (timer) clearTimeout(timer);
       }
     }
     document.addEventListener('DOMContentLoaded', fetchLeaderboard);

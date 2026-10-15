@@ -5,7 +5,8 @@
     mode: 'solo', puzzle: null, solution: null, grid: new Array(81).fill(0),
     givens: new Array(81).fill(false), selected: -1, mistakes: 0, over: false,
     seconds: 0, timerId: null, difficulty: 'medium', source: '',
-    roomId: null, partnerCursor: -1, guestToken: null
+    roomId: null, partnerCursor: -1, guestToken: null,
+    pendingValue: 0, wrongIdx: -1, wrongVal: 0, wrongTimer: null
   };
   var gridEl = document.getElementById('sudoku-grid');
   var padEl = document.getElementById('sudoku-pad');
@@ -26,13 +27,34 @@
       gridEl.appendChild(d); cells.push(d);
     })(i);
   }
+  var padBtns = [];
   for (var n = 1; n <= 9; n++) {
     (function (v) {
       var b = document.createElement('button');
-      b.type = 'button'; b.textContent = v;
-      b.addEventListener('click', function () { enterNumber(v); });
-      padEl.appendChild(b);
+      b.type = 'button'; b.textContent = v; b.dataset.value = v;
+      b.addEventListener('click', function () { padTap(v); });
+      padEl.appendChild(b); padBtns.push(b);
     })(n);
+  }
+
+  function paintPad() {
+    for (var i = 0; i < padBtns.length; i++) {
+      var on = state.pendingValue === parseInt(padBtns[i].dataset.value, 10);
+      padBtns[i].classList.toggle('active', on);
+      padBtns[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
+
+  // Number pad: works with a selected cell AND standalone (number-first paint mode).
+  function padTap(v) {
+    if (state.over) return;
+    if (state.selected >= 0 && !state.givens[state.selected]) {
+      enterNumber(v);
+      state.pendingValue = v; paintPad();
+    } else {
+      state.pendingValue = (state.pendingValue === v) ? 0 : v;
+      paintPad();
+    }
   }
 
   function fmt(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
@@ -88,6 +110,9 @@
       state.grid.push(v); state.givens.push(v !== 0);
     }
     state.selected = -1; state.mistakes = 0; state.over = false; state.seconds = 0;
+    state.pendingValue = 0; state.wrongIdx = -1;
+    if (state.wrongTimer) { clearTimeout(state.wrongTimer); state.wrongTimer = null; }
+    paintPad();
     document.getElementById('sudoku-mistakes').textContent = '0';
     document.getElementById('sudoku-diff-badge').textContent = state.difficulty.charAt(0).toUpperCase() + state.difficulty.slice(1);
     hideResult(); render(); startTimer();
@@ -97,8 +122,9 @@
   function render() {
     for (var i = 0; i < 81; i++) {
       var el = cells[i], v = state.grid[i];
-      el.textContent = v === 0 ? '' : v;
-      el.className = 'sudoku-cell' + (state.givens[i] ? ' given' : (v === 0 ? '' : ' entry'));
+      var showWrong = (i === state.wrongIdx);
+      el.textContent = showWrong ? state.wrongVal : (v === 0 ? '' : v);
+      el.className = 'sudoku-cell' + (state.givens[i] ? ' given' : (showWrong ? ' error' : (v === 0 ? '' : ' entry')));
       if (i === state.selected) el.classList.add('selected');
       if (i === state.partnerCursor) el.classList.add('partner');
     }
@@ -114,7 +140,16 @@
 
   function select(idx) {
     if (state.over) return;
-    state.selected = idx; render();
+    state.selected = idx;
+    // Number-first paint mode: tapping a cell applies the armed digit.
+    if (state.pendingValue && !state.givens[idx]) {
+      enterNumber(state.pendingValue);
+      if (state.mode === 'coop' && socket && state.roomId) {
+        socket.emit('sudoku_cursor_move', { room_id: state.roomId, r: Math.floor(idx / 9), c: idx % 9 });
+      }
+      return;
+    }
+    render();
     if (state.mode === 'coop' && socket && state.roomId) {
       socket.emit('sudoku_cursor_move', { room_id: state.roomId, r: Math.floor(idx / 9), c: idx % 9 });
     }
@@ -129,14 +164,20 @@
     if (state.solution && v !== state.solution[Math.floor(idx / 9)][idx % 9]) {
       state.mistakes++;
       document.getElementById('sudoku-mistakes').textContent = state.mistakes;
-      cells[idx].classList.add('error');
-      setTimeout(render, 450);
-      if (state.mistakes >= 3) { state.over = true; showResult('OUT OF LIVES', 'Three mistakes. Try a new puzzle.'); }
+      // Show the rejected digit in red briefly so the tap is visibly answered.
+      state.wrongIdx = idx; state.wrongVal = v; render();
+      if (state.wrongTimer) clearTimeout(state.wrongTimer);
+      state.wrongTimer = setTimeout(function () {
+        state.wrongIdx = -1; state.wrongTimer = null;
+        if (!state.over) render();
+      }, 650);
+      if (state.mistakes >= 3) { state.over = true; state.pendingValue = 0; paintPad(); showResult('OUT OF LIVES', 'Three mistakes. Try a new puzzle.'); }
       return;
     }
     state.grid[idx] = v; render(); pushCell(idx, v);
     if (state.grid.every(function (x, i) { return x !== 0 && (!state.solution || x === state.solution[Math.floor(i / 9)][i % 9]); })) {
       state.over = true; clearInterval(state.timerId);
+      state.pendingValue = 0; paintPad();
       submitSolve();
       showResult(state.mode === 'coop' ? 'SOLVED TOGETHER!' : 'SOLVED!', 'Completed in ' + fmt(state.seconds) + '.');
       if (state.mode === 'coop' && socket && state.roomId) socket.emit('sudoku_solved', { room_id: state.roomId });
@@ -223,7 +264,9 @@
     if (state.mode === 'coop' && socket && state.roomId) socket.emit('sudoku_restart', { room_id: state.roomId });
     loadPuzzle();
   });
-  document.getElementById('sudoku-erase-btn').addEventListener('click', function () { enterNumber(0); });
+  document.getElementById('sudoku-erase-btn').addEventListener('click', function () {
+    state.pendingValue = 0; paintPad(); enterNumber(0);
+  });
   document.getElementById('join-room-btn').addEventListener('click', function () {
     var v = (document.getElementById('room-code-input').value || '').trim();
     if (v) joinRoom(v);

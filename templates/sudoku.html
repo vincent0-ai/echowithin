@@ -22,6 +22,7 @@
   .sudoku-pad { display: grid; grid-template-columns: repeat(9, 1fr); gap: 0.35rem; width: 100%; max-width: 440px; margin-top: 0.85rem; }
   .sudoku-pad button { padding: 0.55rem 0; border-radius: 8px; border: 1px solid var(--border-color); background: #fff;
     font-size: 1rem; font-weight: 700; color: var(--text-dark-color); cursor: pointer; }
+  .sudoku-pad button.active { background: #3e2217; color: #fff; border-color: #3e2217; }
   .sudoku-overlay { position: absolute; inset: 0; background: rgba(20,14,10,0.82); border-radius: 12px; display: none;
     flex-direction: column; justify-content: center; align-items: center; gap: 1rem; z-index: 20; padding: 1.5rem; text-align: center; }
 </style>
@@ -77,7 +78,7 @@
   {% include "partials/game_reaction_bar.html" %}
 
   <div style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">
-    Tap a cell, then a number. Three mistakes ends the round.
+    Tap a cell, then a number — or pick a number first and tap cells. Tap the number again to cancel. Three mistakes ends the round.
   </div>
 
   <div class="ew-card" style="margin-top: 2rem; padding: 1.25rem;">
@@ -92,14 +93,29 @@
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" nonce="{{ csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='sudoku.js') }}?v=1.1" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='sudoku.js') }}?v=1.2" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   (function () {
+    var LB_URL = '/api/games/leaderboard?game=sudoku&category=ranked_score&period=weekly&limit=5';
+    var LB_TIMEOUT_MS = 12000;
+    function showRetry(listEl, msg) {
+      if (!listEl) return;
+      listEl.innerHTML = '<div id="lb-retry" style="text-align:center; color:var(--text-secondary); font-size:0.85rem; padding:0.75rem; cursor:pointer;">' + (msg || 'Could not load scores. Tap to retry.') + '</div>';
+      var rb = document.getElementById('lb-retry');
+      if (rb) rb.addEventListener('click', fetchLeaderboard);
+    }
     async function fetchLeaderboard() {
       var listEl = document.getElementById('leaderboard-list');
       if (!listEl) return;
+      listEl.innerHTML = '<div style="text-align:center; color:var(--text-secondary); font-size:0.85rem; padding:0.75rem;">Loading…</div>';
+      var ctrl = null, timer = null;
       try {
-        var res = await fetch('/api/games/leaderboard?game=sudoku&category=ranked_score&period=weekly&limit=5');
+        if (typeof AbortController !== 'undefined') {
+          ctrl = new AbortController();
+          timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, LB_TIMEOUT_MS);
+        }
+        var res = await fetch(LB_URL, ctrl ? { signal: ctrl.signal } : undefined);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         var data = await res.json();
         var entries = (data.entries || []).filter(function (p) { return (p.score || 0) > 0; });
         if (!entries.length) {
@@ -112,7 +128,10 @@
             + '<span style="color:var(--text-secondary); font-size:0.75rem; margin-left:0.4rem;">' + (p.score || 0) + ' pts</span></div></div>';
         }).join('');
       } catch (e) {
-        if (listEl) listEl.innerHTML = '<div style="text-align:center; color:var(--text-secondary); font-size:0.85rem;">Could not load.</div>';
+        if (window.console && console.error) console.error('[sudoku] leaderboard failed:', e);
+        showRetry(listEl);
+      } finally {
+        if (timer) clearTimeout(timer);
       }
     }
     document.addEventListener('DOMContentLoaded', fetchLeaderboard);

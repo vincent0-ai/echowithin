@@ -108,6 +108,35 @@ class TestPongTwoClientSim:
         finally:
             _restore_rooms(m, saved)
 
+    def test_paddle_sync_side_checked(self):
+        """Host may only sync player 0, guest player 1; strangers dropped."""
+        import main as m
+        saved = _save_rooms(m, *PONG_ROOMS)
+        try:
+            h = _handlers()
+            rid = _pong_room(h, m)
+            bad = _as_sid(m, 'sid_host', h['handle_pong_paddle_sync'],
+                          {'room_id': rid, 'player': 1, 'y': 100, 'seq': 1})
+            assert _emits_to(bad, 'pong_paddle_sync', room=rid) == []
+            stranger = _as_sid(m, 'sid_stranger', h['handle_pong_paddle_sync'],
+                               {'room_id': rid, 'player': 1, 'y': 100, 'seq': 1})
+            assert _emits_to(stranger, 'pong_paddle_sync', room=rid) == []
+            ok = _as_sid(m, 'sid_guest', h['handle_pong_paddle_sync'],
+                         {'room_id': rid, 'player': 1, 'y': 100, 'seq': 1})
+            assert len(_emits_to(ok, 'pong_paddle_sync', room=rid)) == 1
+        finally:
+            _restore_rooms(m, saved)
+        import main as m
+        saved = _save_rooms(m, *PONG_ROOMS)
+        try:
+            h = _handlers()
+            rid = _pong_room(h, m)
+            mock_emit = _as_sid(m, 'sid_stranger', h['handle_join_pong_room'],
+                                {'room_id': rid}, user=_authed('u3', 'Third'))
+            assert _emits_to(mock_emit, 'pong_room_error')
+        finally:
+            _restore_rooms(m, saved)
+
     def test_full_room_rejects_third_client(self):
         import main as m
         saved = _save_rooms(m, *PONG_ROOMS)
@@ -120,36 +149,27 @@ class TestPongTwoClientSim:
         finally:
             _restore_rooms(m, saved)
 
-    def test_guest_score_claim_relayed_no_side_check(self):
-        """OBSERVED: either side's score claim is accepted + relayed + stored."""
+    def test_non_host_score_claims_dropped(self):
+        """FIXED (BUG-001): only the host sim's scores are accepted, stored
+        and relayed; guest/stranger claims are dropped silently."""
         import main as m
         saved = _save_rooms(m, *PONG_ROOMS)
         try:
             h = _handlers()
             rid = _pong_room(h, m)
             with patch.object(m, 'record_match_result'):
-                mock_emit = _as_sid(m, 'sid_guest', h['handle_pong_score_update'],
-                                    {'room_id': rid, 'scores': [0, 3]})
-            relayed = _emits_to(mock_emit, 'pong_score_update', room=rid)
-            assert len(relayed) == 1
-            assert relayed[0][0][1]['scores'] == [0, 3]
-            assert m.active_pong_rooms[rid]['scores'] == [0, 3]
-        finally:
-            _restore_rooms(m, saved)
-
-    def test_stranger_off_room_relays_into_match(self):
-        """OBSERVED: sender need not be a room member; any socket knowing the
-        room_id can inject score relays into a live match."""
-        import main as m
-        saved = _save_rooms(m, *PONG_ROOMS)
-        try:
-            h = _handlers()
-            rid = _pong_room(h, m)
-            with patch.object(m, 'record_match_result'):
-                mock_emit = _as_sid(m, 'sid_stranger', h['handle_pong_score_update'],
-                                    {'room_id': rid, 'scores': [9, 9]})
-            assert len(_emits_to(mock_emit, 'pong_score_update', room=rid)) == 1
-            assert m.active_pong_rooms[rid]['scores'] == [9, 9]
+                guest = _as_sid(m, 'sid_guest', h['handle_pong_score_update'],
+                                {'room_id': rid, 'scores': [0, 3]})
+                assert _emits_to(guest, 'pong_score_update', room=rid) == []
+                stranger = _as_sid(m, 'sid_stranger', h['handle_pong_score_update'],
+                                   {'room_id': rid, 'scores': [9, 9]})
+                assert _emits_to(stranger, 'pong_score_update', room=rid) == []
+                assert m.active_pong_rooms[rid]['scores'] == [0, 0]
+                host = _as_sid(m, 'sid_host', h['handle_pong_score_update'],
+                               {'room_id': rid, 'scores': [1, 0]})
+                relayed = _emits_to(host, 'pong_score_update', room=rid)
+                assert len(relayed) == 1 and relayed[0][0][1]['scores'] == [1, 0]
+                assert m.active_pong_rooms[rid]['scores'] == [1, 0]
         finally:
             _restore_rooms(m, saved)
 
@@ -173,9 +193,9 @@ class TestPongTwoClientSim:
         finally:
             _restore_rooms(m, saved)
 
-    def test_self_consistent_scoreline_records_ranked_win_for_either_side(self):
-        """OBSERVED: a self-consistent scoreline + winner from EITHER side is
-        recorded as a ranked match (ELO effect)."""
+    def test_only_host_scoreline_records_ranked_win(self):
+        """FIXED (BUG-001): a self-consistent scoreline + winner is recorded
+        only from the host sim; guest forgery is dropped with no record."""
         import main as m
         saved = _save_rooms(m, *PONG_ROOMS)
         try:
@@ -183,6 +203,9 @@ class TestPongTwoClientSim:
             rid = _pong_room(h, m, target=5)
             with patch.object(m, 'record_match_result') as mock_rec:
                 _as_sid(m, 'sid_guest', h['handle_pong_score_update'],
+                        {'room_id': rid, 'scores': [0, 5], 'winner': 2})
+                assert mock_rec.call_count == 0
+                _as_sid(m, 'sid_host', h['handle_pong_score_update'],
                         {'room_id': rid, 'scores': [0, 5], 'winner': 2})
                 assert mock_rec.call_count == 1
                 assert mock_rec.call_args[1]['winner_id'] == 'u_guest'
@@ -215,10 +238,9 @@ def _slime_room(h, m, room_id='sim_slime'):
 
 
 class TestSlimeTwoClientSim:
-    def test_host_sync_relayed_without_membership_or_side_check(self):
-        """OBSERVED: slime_host_sync is a pure relay; anyone (even a
-        non-member) can inject authoritative-looking state, forged scores
-        included."""
+    def test_host_sync_and_input_side_gated(self):
+        """FIXED (BUG-004): slime_host_sync accepts host only, slime_player_input
+        guest only; forged authoritative state from anyone else is dropped."""
         import main as m
         saved = _save_rooms(m, *SLIME_ROOMS)
         try:
@@ -227,12 +249,24 @@ class TestSlimeTwoClientSim:
             payload = {'room_id': rid, 'ball': {'x': 999, 'y': 999},
                        'scores': [7, 0], 'serveState': 'PLAYING',
                        'seq': 1, 'tSend': 1.0}
-            mock_emit = _as_sid(m, 'sid_stranger', h['handle_slime_host_sync'],
-                                dict(payload))
-            relayed = _emits_to(mock_emit, 'slime_host_sync', room=rid)
+            stranger = _as_sid(m, 'sid_stranger', h['handle_slime_host_sync'],
+                               dict(payload))
+            assert _emits_to(stranger, 'slime_host_sync', room=rid) == []
+            guest = _as_sid(m, 'sid_guest', h['handle_slime_host_sync'],
+                            dict(payload))
+            assert _emits_to(guest, 'slime_host_sync', room=rid) == []
+            host = _as_sid(m, 'sid_host', h['handle_slime_host_sync'],
+                           dict(payload))
+            relayed = _emits_to(host, 'slime_host_sync', room=rid)
             assert len(relayed) == 1
-            assert relayed[0][0][1]['scores'] == [7, 0]
             assert relayed[0][1].get('include_self') is False
+            inp = {'room_id': rid, 'p2': {'x': 1.0}, 'seq': 2}
+            host_inp = _as_sid(m, 'sid_host', h['handle_slime_player_input'],
+                               dict(inp))
+            assert _emits_to(host_inp, 'slime_player_input', room=rid) == []
+            guest_inp = _as_sid(m, 'sid_guest', h['handle_slime_player_input'],
+                                dict(inp))
+            assert len(_emits_to(guest_inp, 'slime_player_input', room=rid)) == 1
         finally:
             _restore_rooms(m, saved)
 
@@ -693,23 +727,64 @@ class TestCoopSeatSteal:
 
 
 class TestEmojiBondScoreForgery:
-    def test_any_authed_socket_credits_any_bond(self):
-        """OBSERVED: emoji_submit_guess writes arbitrary points to an
-        arbitrary bond's coop_score with no room-membership check."""
+    def test_non_member_forgery_dropped(self):
+        """FIXED (BUG-012): no room membership -> no emit and no bond write,
+        even for well-formed authed emits."""
         from bson import ObjectId
         import main as m
         h = _handlers()
         bond_id = str(ObjectId())
-        before = m.bonds_conf.update_one.call_count
-        mock_emit = _as_sid(m, 'sid_attacker', h['handle_emoji_submit_guess'],
-                            {'room_id': 'never_joined', 'correct': True,
-                             'points': 99999, 'attempts_left': 0, 'bond_id': bond_id},
-                            user=_authed('u_attacker', 'Attacker'))
-        assert len(_emits_to(mock_emit, 'emoji_guess_result', room='never_joined')) == 1
-        assert m.bonds_conf.update_one.call_count == before + 1
-        args = m.bonds_conf.update_one.call_args[0]
-        assert args[0] == {'_id': ObjectId(bond_id)}
-        assert args[1] == {'$inc': {'stats.games_played': 1, 'stats.coop_score': 99999}}
+        with patch.object(m, 'bonds_conf') as mock_bonds:
+            mock_emit = _as_sid(m, 'sid_attacker', h['handle_emoji_submit_guess'],
+                                {'room_id': 'never_joined', 'correct': True,
+                                 'points': 99999, 'attempts_left': 0, 'bond_id': bond_id},
+                                user=_authed('u_attacker', 'Attacker'))
+            assert _emits_to(mock_emit, 'emoji_guess_result', room='never_joined') == []
+            assert mock_bonds.update_one.call_count == 0
+            assert mock_bonds.find_one.call_count == 0
+
+    def test_member_own_bond_credited_capped(self):
+        """FIXED (BUG-012): seated member crediting their own bond works, but
+        points clamp to the client formula max (100); others' bonds untouched."""
+        from bson import ObjectId
+        import main as m
+        h = _handlers()
+        rooms = m.active_emoji_rooms
+        own_bond = str(ObjectId())
+        other_bond = str(ObjectId())
+        rooms.pop('sim_emoji_fix', None)
+        try:
+            _as_sid(m, 'sid_host', h['handle_emoji_join_room'], {'room_id': 'sim_emoji_fix'},
+                    user=_authed('u_host', 'Host'))
+            _as_sid(m, 'sid_guest', h['handle_emoji_join_room'],
+                    {'room_id': 'sim_emoji_fix'},
+                    user=_authed('u_guest', 'Guest'))
+
+            def fake_find_one(query):
+                qid = query.get('_id')
+                if qid == ObjectId(own_bond):
+                    return {'_id': qid, 'user_a_id': 'u_host', 'user_b_id': 'u_guest'}
+                return {'_id': qid, 'user_a_id': 'alice', 'user_b_id': 'bob'}
+
+            with patch.object(m, 'bonds_conf') as mock_bonds:
+                mock_bonds.find_one.side_effect = fake_find_one
+                mock_emit = _as_sid(m, 'sid_guest', h['handle_emoji_submit_guess'],
+                                    {'room_id': 'sim_emoji_fix', 'correct': True,
+                                     'points': 99999, 'attempts_left': 0, 'bond_id': own_bond},
+                                    user=_authed('u_guest', 'Guest'))
+                assert len(_emits_to(mock_emit, 'emoji_guess_result', room='sim_emoji_fix')) == 1
+                assert mock_bonds.update_one.call_count == 1
+                args = mock_bonds.update_one.call_args[0]
+                assert args[0] == {'_id': ObjectId(own_bond)}
+                assert args[1] == {'$inc': {'stats.games_played': 1, 'stats.coop_score': 100}}
+                mock_bonds.update_one.reset_mock()
+                _as_sid(m, 'sid_guest', h['handle_emoji_submit_guess'],
+                        {'room_id': 'sim_emoji_fix', 'correct': True,
+                         'points': 50, 'attempts_left': 0, 'bond_id': other_bond},
+                        user=_authed('u_guest', 'Guest'))
+                assert mock_bonds.update_one.call_count == 0
+        finally:
+            rooms.pop('sim_emoji_fix', None)
 
 
 class TestSudokuCoopPaths:

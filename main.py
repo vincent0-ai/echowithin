@@ -2227,6 +2227,23 @@ def _duel_member(room_info, sid):
     return bool(room_info) and sid in (room_info.get('host_sid'), room_info.get('guest_sid'))
 
 
+def _safe_int(value, default=None, lo=None, hi=None):
+    """Coerce client-supplied data to int; return default on failure.
+
+    Used for every int()/float() cast of socket payload data so a malformed
+    event is dropped instead of raising out of the handler.
+    """
+    try:
+        number = int(value)
+    except (ValueError, TypeError):
+        return default
+    if lo is not None and number < lo:
+        return default
+    if hi is not None and number > hi:
+        return default
+    return number
+
+
 def _seat_status(room_info, sid, user_uid):
     """Resolve a 2-player join to 'host' | 'guest' | 'full' | 'new_guest'.
 
@@ -2636,6 +2653,9 @@ def handle_slime_host_sync(data=None, *args, **kwargs):
     room_id = data.get('room_id')
     if not room_id:
         return
+    room_info = active_slime_rooms.get(room_id)
+    if not room_info or request.sid != room_info.get('host_sid'):
+        return
     emit('slime_host_sync', data, room=room_id, include_self=False)
 
 @socketio.on('slime_player_input')
@@ -2644,6 +2664,9 @@ def handle_slime_player_input(data=None, *args, **kwargs):
         return
     room_id = data.get('room_id')
     if not room_id:
+        return
+    room_info = active_slime_rooms.get(room_id)
+    if not room_info or request.sid != room_info.get('guest_sid'):
         return
     emit('slime_player_input', data, room=room_id, include_self=False)
 
@@ -2884,6 +2907,14 @@ def handle_pong_paddle_sync(data=None, *args, **kwargs):
     room_id = data.get('room_id')
     if not room_id:
         return
+    room_info = active_pong_rooms.get(room_id)
+    if not room_info:
+        return
+    # Each side may only sync its own paddle: host -> 0, guest -> 1.
+    expected = 0 if request.sid == room_info.get('host_sid') else (
+        1 if request.sid == room_info.get('guest_sid') else None)
+    if expected is None or data.get('player') != expected:
+        return
     emit('pong_paddle_sync', data, room=room_id, include_self=False)
 
 @socketio.on('pong_ball_sync')
@@ -2892,6 +2923,9 @@ def handle_pong_ball_sync(data=None, *args, **kwargs):
         return
     room_id = data.get('room_id')
     if not room_id:
+        return
+    room_info = active_pong_rooms.get(room_id)
+    if not room_info or request.sid != room_info.get('host_sid'):
         return
     emit('pong_ball_sync', data, room=room_id, include_self=False)
 
@@ -2903,7 +2937,9 @@ def handle_pong_score_update(data=None, *args, **kwargs):
     if not room_id:
         return
     room_info = active_pong_rooms.get(room_id)
-    if room_info and 'scores' in data:
+    if not room_info or request.sid != room_info.get('host_sid'):
+        return
+    if 'scores' in data:
         try:
             room_info['scores'] = [max(0, int(data['scores'][0])), max(0, int(data['scores'][1]))]
         except Exception:
@@ -5084,14 +5120,23 @@ def handle_emoji_submit_clue(data=None, *args, **kwargs):
     if room_id and clue:
         emit('emoji_clue_submitted', {'clue': clue}, room=room_id)
 
+# Server-side per-guess ceiling mirrors the client formula
+# (calculatePoints: base 100, min 10) so forged emits cannot inflate bonds.
+EMOJI_MAX_POINTS_PER_GUESS = 100
+
+
 @socketio.on('emoji_submit_guess')
 def handle_emoji_submit_guess(data=None, *args, **kwargs):
     if not isinstance(data, dict):
         return
     room_id = data.get('room') or data.get('room_id')
+    room_info = active_emoji_rooms.get(room_id)
+    if not _duel_member(room_info, request.sid):
+        return
     correct = bool(data.get('correct', False))
-    points = int(data.get('points', 0))
-    attempts_left = int(data.get('attempts_left', 0))
+    raw_points = _safe_int(data.get('points', 0), default=0, lo=0)
+    points = min(raw_points, EMOJI_MAX_POINTS_PER_GUESS)
+    attempts_left = _safe_int(data.get('attempts_left', 0), default=0)
     if room_id:
         emit('emoji_guess_result', {
             'correct': correct,
@@ -5101,12 +5146,18 @@ def handle_emoji_submit_guess(data=None, *args, **kwargs):
         bond_id = data.get('bond_id')
         if correct and bond_id and current_user.is_authenticated:
             try:
-                bonds_conf.update_one(
-                    {'_id': ObjectId(bond_id)},
-                    {'$inc': {'stats.games_played': 1, 'stats.coop_score': points}}
-                )
+                bond = bonds_conf.find_one({'_id': ObjectId(bond_id)})
             except Exception:
-                pass
+                bond = None
+            if bond and str(current_user.id) in (
+                    str(bond.get('user_a_id')), str(bond.get('user_b_id'))):
+                try:
+                    bonds_conf.update_one(
+                        {'_id': ObjectId(bond_id)},
+                        {'$inc': {'stats.games_played': 1, 'stats.coop_score': points}}
+                    )
+                except Exception:
+                    pass
 
 @socketio.on('leave_emoji_room')
 def handle_leave_emoji_room(data=None, *args, **kwargs):

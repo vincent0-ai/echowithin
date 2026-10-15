@@ -2303,20 +2303,6 @@ def handle_tot_choice(data=None, *args, **kwargs):
     emit('tot_choice_update', payload, room=room_id)
 
 
-@socketio.on('broadcast_to_room')
-def handle_broadcast_to_room(data=None, *args, **kwargs):
-    """Compatibility relay for older lightweight game clients."""
-    if not isinstance(data, dict):
-        return
-    room_id = _clean_room_id(data.get('room') or data.get('room_id'))
-    if not room_id:
-        return
-    emit('broadcast_to_room', {
-        'event': data.get('event'),
-        'data': data.get('data') or {}
-    }, room=room_id, include_self=False)
-
-
 def _memory_payload(room_id, room_info, player_num):
     content = room_info.get('content') or {}
     return {

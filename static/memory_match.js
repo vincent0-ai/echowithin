@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.startBtn.textContent = urlRoom ? 'Join Room' : 'Create Room';
             setStatus(urlRoom
                 ? 'Room ' + urlRoom + ' — pick a board size, then Join Room.'
-                : 'Pick a board size, then Create Room to invite a partner.');
+                : 'Pick a board size, then Create Room.');
         } else {
             disconnectSocket();
         }
@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (urlRoom) {
         ui.modeSelect.value = 'online';
         ui.startBtn.textContent = 'Join Room';
-        setStatus('Room ' + urlRoom + ' — pick a board size, then Join Room. The host deals.');
+        setStatus('Room ' + urlRoom + ' — pick a board size, then Join Room.');
     }
 
     function setStatus(message, isError = false) {
@@ -388,7 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.setupPanel.style.display = 'block';
             ui.startBtn.textContent = 'Waiting for Host…';
             ui.startBtn.disabled = true;
-            setStatus('Waiting for host to deal a new board.');
+            setStatus('Waiting for host…');
             return;
         }
         ui.startBtn.textContent = 'Start Game';

@@ -116,7 +116,7 @@
   }
 
   async function loadPuzzle() {
-    setStatus('Loading a fresh puzzle…');
+    setStatus('Loading…');
     var data = null;
     try {
       var res = await fetch('/api/games/sudoku/new?difficulty=' + encodeURIComponent(state.difficulty));
@@ -151,7 +151,7 @@
     document.getElementById('sudoku-mistakes').textContent = '0';
     document.getElementById('sudoku-diff-badge').textContent = state.difficulty.charAt(0).toUpperCase() + state.difficulty.slice(1);
     hideResult(); render(); startTimer();
-    setStatus(fromShare ? 'Synced shared board.' : (state.mode === 'coop' ? 'Shared puzzle ready.' : 'Fresh puzzle ready.'));
+    setStatus('Ready.');
   }
 
   function render() {
@@ -277,7 +277,7 @@
     if (m === 'coop') {
       var r = new URLSearchParams(window.location.search).get('room');
       if (r) joinRoom(r.trim().slice(0, 32));
-      else setStatus('Create or join a room to solve together.');
+      else setStatus('Create or join a room.');
     }
     loadPuzzle();
   }
@@ -319,9 +319,9 @@
     socket.on('sudoku_room_joined', function (d) {
       if (d.partner_name) {
         document.getElementById('sudoku-partner-name').textContent = d.partner_name;
-        setStatus('Partner joined. Solving together.');
+        setStatus('Partner joined.');
       } else if (d.has_puzzle) {
-        setStatus('Syncing shared board…');
+        setStatus('Loading…');
       }
     });
     socket.on('sudoku_puzzle', function (d) {
@@ -340,7 +340,7 @@
       // the partner waits for the shared board instead of loading a different one.
       var amRestarter = !d || !d.restarter || (socket && d.restarter === socket.id);
       if (amRestarter) loadPuzzle();
-      else setStatus('Partner started a new puzzle…');
+      else setStatus('New puzzle…');
     });
     socket.on('sudoku_solved', function () {
       if (!state.over) submitSolve();

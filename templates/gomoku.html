@@ -107,9 +107,14 @@
 
   <div class="ew-card" style="margin-top: 2rem; padding: 1.25rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-      <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Gomoku Best Streaks</h3>
-      <div style="display: flex; gap: 0.4rem; align-items: center;">
-        <span style="font-size: 0.85rem; color: var(--text-secondary);">Current Streak:</span>
+      <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Gomoku Leaderboard</h3>
+      <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
+        <select id="leaderboard-cat" class="form-input" style="padding: 0.3rem 0.5rem; font-size: 0.8rem; width: auto; cursor: pointer;">
+          <option value="win_streak">Best streaks</option>
+          <option value="total_wins">Career wins</option>
+          <option value="ranked_score">Top rated</option>
+        </select>
+        <span style="font-size: 0.85rem; color: var(--text-secondary);">Streak:</span>
         <span id="live-streak" class="ew-badge" style="font-weight: 700;">0</span>
       </div>
     </div>
@@ -123,26 +128,35 @@
 <script src="{{ url_for('static', filename='gomoku.js') }}?v=1.1" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   (function () {
+    const LB_UNITS = { win_streak: 'streak', total_wins: 'wins', ranked_score: 'pts' };
     async function fetchLeaderboard() {
       const listEl = document.getElementById('leaderboard-list');
+      const catEl = document.getElementById('leaderboard-cat');
+      let cat = (catEl && catEl.value) || 'win_streak';
+      if (!LB_UNITS[cat]) cat = 'win_streak';
+      const unit = LB_UNITS[cat];
       try {
-        const res = await fetch('/api/games/leaderboard?game=gomoku&category=win_streak&period=weekly&limit=5');
+        const res = await fetch('/api/games/leaderboard?game=gomoku&category=' + encodeURIComponent(cat) + '&period=weekly&limit=5');
         const data = await res.json();
         const entries = (data.entries || []).filter((p) => (p.score || 0) > 0);
         if (!entries.length) {
-          listEl.innerHTML = '<div style="text-align:center; color:var(--text-secondary); font-size:0.85rem; padding:0.75rem;">No streaks yet. Be the first!</div>';
+          listEl.innerHTML = '<div style="text-align:center; color:var(--text-secondary); font-size:0.85rem; padding:0.75rem;">No scores yet. Be the first!</div>';
           return;
         }
         listEl.innerHTML = entries.map((p, i) => `
           <div style="display:flex; justify-content:space-between; align-items:center; padding:0.45rem 0.75rem; background:var(--surface-bg); border:1px solid var(--border-color); border-radius:6px; font-size:0.82rem;">
             <div><strong style="color:var(--text-dark-color);">#${i + 1} ${p.username || 'Player'}</strong>
-            <span style="color:var(--text-secondary); font-size:0.75rem; margin-left:0.4rem;">${p.score || 0} streak</span></div>
+            <span style="color:var(--text-secondary); font-size:0.75rem; margin-left:0.4rem;">${p.score || 0} ${unit}</span></div>
           </div>`).join('');
       } catch (e) {
         if (listEl) listEl.innerHTML = '<div style="text-align:center; color:var(--text-secondary); font-size:0.85rem;">Could not load.</div>';
       }
     }
     document.addEventListener('DOMContentLoaded', fetchLeaderboard);
+    document.addEventListener('DOMContentLoaded', () => {
+      const catEl = document.getElementById('leaderboard-cat');
+      if (catEl) catEl.addEventListener('change', fetchLeaderboard);
+    });
     window.fetchLeaderboard = fetchLeaderboard;
     var socket = null;
     try { socket = io({ transports: ['websocket', 'polling'] }); } catch (e) { socket = null; }

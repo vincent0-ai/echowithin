@@ -72,7 +72,13 @@
   </div>
 
   <div class="ew-card" style="margin-top: 2rem; padding: 1.25rem;">
-    <h3 style="margin: 0 0 1rem 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Top Whack Scores</h3>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+      <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Top Whack Scores</h3>
+      <select id="leaderboard-cat" class="form-input" style="padding: 0.3rem 0.5rem; font-size: 0.8rem; width: auto; cursor: pointer;">
+        <option value="high_score">Best scores</option>
+        <option value="ranked_score">Duel scores</option>
+      </select>
+    </div>
     <div id="leaderboard-list" style="display: flex; flex-direction: column; gap: 0.5rem;">
       <div style="text-align: center; color: var(--text-secondary); font-size: 0.85rem; padding: 0.75rem;">Loading…</div>
     </div>
@@ -85,8 +91,11 @@
   (function () {
     async function fetchLeaderboard() {
       var listEl = document.getElementById('leaderboard-list');
+      var catEl = document.getElementById('leaderboard-cat');
+      var cat = (catEl && catEl.value) || 'high_score';
+      if (cat !== 'high_score' && cat !== 'ranked_score') cat = 'high_score';
       try {
-        var res = await fetch('/api/games/leaderboard?game=whack_a_mole&category=high_score&period=weekly&limit=5');
+        var res = await fetch('/api/games/leaderboard?game=whack_a_mole&category=' + encodeURIComponent(cat) + '&period=weekly&limit=5');
         var data = await res.json();
         var entries = (data.entries || []).filter(function (p) { return (p.score || 0) > 0; });
         if (!entries.length) {
@@ -103,6 +112,10 @@
       }
     }
     document.addEventListener('DOMContentLoaded', fetchLeaderboard);
+    document.addEventListener('DOMContentLoaded', function () {
+      var catEl = document.getElementById('leaderboard-cat');
+      if (catEl) catEl.addEventListener('change', fetchLeaderboard);
+    });
     window.fetchLeaderboard = fetchLeaderboard;
   })();
 </script>

@@ -3965,14 +3965,17 @@ def handle_join_sudoku_room(data=None, *args, **kwargs):
         return
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Partner'
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
     join_room(room_id)
     room_info = active_sudoku_rooms.get(room_id)
     if not _room_creation_allowed(room_info):
         return
     if not room_info:
         room_info = {
-            'host_sid': sid, 'host_name': user_name, 'guest_sid': None, 'guest_name': None,
+            'host_sid': sid, 'host_name': user_name, 'host_user_id': user_uid,
+            'guest_sid': None, 'guest_name': None, 'guest_user_id': None,
             'grid': [0] * 81, 'puzzle': None, 'restarter_sid': None,
+            'bond_id': data.get('bond_id'),
             'created_at': datetime.datetime.now(datetime.timezone.utc),
         }
         active_sudoku_rooms[room_id] = room_info
@@ -3982,6 +3985,7 @@ def handle_join_sudoku_room(data=None, *args, **kwargs):
         if sid != room_info.get('host_sid'):
             room_info['guest_sid'] = sid
             room_info['guest_name'] = user_name
+            room_info['guest_user_id'] = user_uid
         emit('sudoku_room_joined', {'room_id': room_id, 'is_host': sid == room_info.get('host_sid'),
                                     'grid': room_info['grid'], 'has_puzzle': bool(room_info.get('puzzle')),
                                     'partner_name': room_info['host_name'] if sid != room_info.get('host_sid') else room_info.get('guest_name')}, room=sid)

@@ -99,6 +99,24 @@ class TestNewGameSocketHandlers:
         assert {sol[0][c] for c in range(9)} == set(range(1, 10))
         assert {sol[r][0] for r in range(9)} == set(range(1, 10))
 
+    def test_sudoku_cursor_move_relayed_without_echo(self):
+        """Partner taps relay to the room (not back to sender) with cell coords."""
+        h = self._handlers()['handle_sudoku_cursor_move']
+        req = MagicMock()
+        req.sid = 'sid_a'
+        guest = MagicMock()
+        guest.is_authenticated = False
+        with patch.object(m, 'request', req), \
+                patch.object(m, 'current_user', guest), \
+                patch.object(m, 'emit') as mock_emit:
+            h({'room_id': 'r1', 'r': 8, 'c': 0})
+        assert mock_emit.call_count == 1
+        args, kwargs = mock_emit.call_args
+        assert args[0] == 'sudoku_cursor_move'
+        assert args[1] == {'r': 8, 'c': 0}
+        assert kwargs.get('include_self') is False
+        assert kwargs.get('room') == 'r1'
+
 
 def _authed(uid='u-host', name='Host'):
     stub = MagicMock()
@@ -169,3 +187,26 @@ class TestDuelRoomCreationGate:
             assert any(c[0][0] == joined_event for c in join_emit.call_args_list), handler_name
 
             rooms.pop(room_id, None)
+
+    def test_sudoku_join_stores_bond_id_for_challenge_reuse(self):
+        """Bond challenges land both partners in one room: bond_id must stick."""
+        from blueprints.bonds import _find_open_bond_room
+        import datetime
+        handlers = {getattr(c.args[0], '__name__', ''): c.args[0]
+                    for c in m.socketio.on.mock_calls if len(c.args) > 0 and callable(c.args[0])}
+        room_id = 'bond_sudo_reuse'
+        m.active_sudoku_rooms.pop(room_id, None)
+        req = MagicMock()
+        req.sid = 'sid_challenger'
+        data = {'room_id': room_id, 'room': room_id, 'bond_id': 'bond_1'}
+        with patch.object(m, 'request', req), \
+                patch.object(m, 'current_user', _authed('u1', 'A')), \
+                patch.object(m, 'emit'), \
+                patch.object(m, 'join_room'):
+            handlers['handle_join_sudoku_room'](data)
+        assert m.active_sudoku_rooms[room_id].get('bond_id') == 'bond_1'
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        found, waiter_is_partner = _find_open_bond_room(m, 'sudoku', 'bond_1', 'u2', 'u1', now_utc)
+        assert found == room_id
+        assert waiter_is_partner is True
+        m.active_sudoku_rooms.pop(room_id, None)

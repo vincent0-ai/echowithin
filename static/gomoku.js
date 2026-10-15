@@ -273,7 +273,7 @@
 
   function joinRoom(id) {
     state.roomId = id;
-    if (socket) socket.emit('join_gomoku_room', { room_id: id });
+    if (socket) socket.emit('join_gomoku_room', { room_id: id, bond_id: new URLSearchParams(window.location.search).get('bond_id') || undefined });
     setStatus('Joined room ' + id + '. Waiting for opponent…');
     var input = document.getElementById('room-code-input');
     if (input) input.value = id;

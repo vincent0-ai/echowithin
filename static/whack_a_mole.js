@@ -179,7 +179,7 @@
   function joinRoom(id) {
     state.roomId = id;
     document.getElementById('room-code-input').value = id;
-    if (socket) socket.emit('join_whack_room', { room_id: id, seed: (state.seed % 2147483647) || 0 });
+    if (socket) socket.emit('join_whack_room', { room_id: id, seed: (state.seed % 2147483647) || 0, bond_id: new URLSearchParams(window.location.search).get('bond_id') || undefined });
     setStatus('Joined room ' + id + '. Press Start together.');
   }
 

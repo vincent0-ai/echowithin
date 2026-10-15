@@ -352,7 +352,7 @@
   function joinRoom(id) {
     state.roomId = id;
     document.getElementById('room-code-input').value = id;
-    if (socket) socket.emit('join_air_room', { room_id: id });
+    if (socket) socket.emit('join_air_room', { room_id: id, bond_id: new URLSearchParams(window.location.search).get('bond_id') || undefined });
     setStatus('Joined room ' + id + '. Waiting…');
   }
 

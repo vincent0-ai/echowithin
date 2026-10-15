@@ -145,7 +145,7 @@
       state.grid.push(v); state.givens.push(v !== 0);
     }
     state.selected = -1; state.mistakes = 0; state.over = false; state.seconds = 0;
-    state.pendingValue = 0; state.wrongIdx = -1;
+    state.pendingValue = 0; state.wrongIdx = -1; state.partnerCursor = -1;
     if (state.wrongTimer) { clearTimeout(state.wrongTimer); state.wrongTimer = null; }
     paintPad();
     document.getElementById('sudoku-mistakes').textContent = '0';
@@ -300,7 +300,7 @@
   function joinRoom(id) {
     state.roomId = id;
     document.getElementById('room-code-input').value = id;
-    if (socket) socket.emit('join_sudoku_room', { room_id: id });
+    if (socket) socket.emit('join_sudoku_room', { room_id: id, bond_id: new URLSearchParams(window.location.search).get('bond_id') || undefined });
     setStatus('Joined room ' + id + '.');
   }
 
@@ -365,7 +365,11 @@
       state.over = true; clearInterval(state.timerId);
       showResult('SOLVED TOGETHER!', 'Partner completed the puzzle.');
     });
-    socket.on('sudoku_partner_left', function () { setStatus('Partner left.'); });
+    socket.on('sudoku_partner_left', function () {
+      state.partnerCursor = -1;
+      document.getElementById('sudoku-partner-name').textContent = '–';
+      render(); setStatus('Partner left.');
+    });
   }
 
   window.__sudoku = {

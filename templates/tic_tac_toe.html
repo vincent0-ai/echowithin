@@ -364,7 +364,7 @@
   <div class="ew-card" style="margin-top: 2rem; padding: 1.25rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
       <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">
-        Tic-Tac-Toe Best Streaks
+        Tic-Tac-Toe Leaderboard
       </h3>
       <div style="display: flex; gap: 0.4rem; align-items: center;">
         <span style="font-size: 0.85rem; color: var(--text-secondary);">Current Streak:</span>
@@ -372,8 +372,11 @@
       </div>
     </div>
 
-    <!-- Period Tabs Header -->
+    <!-- Category + Period Tabs Header -->
     <div style="display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.75rem;">
+      <button type="button" class="ew-btn--sm cat-tab ew-btn" data-cat="win_streak" style="cursor: pointer; font-size: 0.75rem; padding: 0.2rem 0.6rem;">Streaks</button>
+      <button type="button" class="ew-btn--sm cat-tab ew-btn--outline" data-cat="ranked_score" style="cursor: pointer; font-size: 0.75rem; padding: 0.2rem 0.6rem;">Top Rated</button>
+      <button type="button" class="ew-btn--sm cat-tab ew-btn--outline" data-cat="total_wins" style="cursor: pointer; font-size: 0.75rem; padding: 0.2rem 0.6rem;">Total Wins</button>
       <button type="button" class="ew-btn--sm period-tab ew-btn" data-period="all_time" style="cursor: pointer; font-size: 0.75rem; padding: 0.2rem 0.6rem;">All-Time</button>
       <button type="button" class="ew-btn--sm period-tab ew-btn--outline" data-period="weekly" style="cursor: pointer; font-size: 0.75rem; padding: 0.2rem 0.6rem;">This Week</button>
     </div>
@@ -385,7 +388,7 @@
           <tr style="border-bottom: 1px solid var(--border-color); text-align: left; color: var(--text-secondary);">
             <th style="padding: 0.5rem 0.75rem;">Rank</th>
             <th style="padding: 0.5rem 0.75rem;">Player</th>
-            <th style="padding: 0.5rem 0.75rem; text-align: right;">Streak</th>
+            <th style="padding: 0.5rem 0.75rem; text-align: right;">Score</th>
             <th style="padding: 0.5rem 0.75rem; text-align: right;">Date</th>
           </tr>
         </thead>
@@ -399,12 +402,13 @@
   </div>
 </div>
 
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='socket.io.min.js') }}?v=4.7.2" nonce="{{ csp_nonce }}"></script>
 <script src="{{ url_for('static', filename='tic_tac_toe.js') }}?v=1.2" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   (function () {
     let currentCat = 'win_streak';
     let currentPeriod = 'all_time';
+    const LB_UNITS = { win_streak: 'streak', ranked_score: 'pts', total_wins: 'wins' };
 
     async function fetchLeaderboard() {
       const tbody = document.getElementById('leaderboard-body');
@@ -418,7 +422,7 @@
         }
         tbody.innerHTML = data.entries.map((entry, idx) => {
           const dateStr = entry.updated_at ? new Date(entry.updated_at).toLocaleDateString() : '—';
-          const scoreLabel = `${entry.score} streak`;
+          const scoreLabel = `${entry.score} ${LB_UNITS[currentCat] || 'pts'}`;
 
           return `
             <tr style="border-bottom: 1px solid rgba(0,0,0,0.04);">
@@ -436,6 +440,19 @@
       }
     }
     window.fetchLeaderboard = fetchLeaderboard;
+
+    document.querySelectorAll('.cat-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.cat-tab').forEach(b => {
+          b.classList.remove('ew-btn');
+          b.classList.add('ew-btn--outline');
+        });
+        btn.classList.remove('ew-btn--outline');
+        btn.classList.add('ew-btn');
+        currentCat = btn.getAttribute('data-cat');
+        fetchLeaderboard();
+      });
+    });
 
     document.querySelectorAll('.period-tab').forEach(btn => {
       btn.addEventListener('click', () => {

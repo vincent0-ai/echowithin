@@ -164,11 +164,23 @@
     fetch('/api/games/leaderboard/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(refreshBoard).catch(function () {});
   }
 
+  // Lifetime ranked points: base by difficulty + streak bonus, accumulated
+  // across wins like the older arcade games (backend keeps the peak).
+  var RANK_BASE = { easy: 100, normal: 200, hard: 300, online: 200, local: 100 };
+  function addRanked(earned) {
+    var k = 'ew_air_ranked_score', cur = 0;
+    try { cur = parseInt(localStorage.getItem(k) || '0', 10) || 0; } catch (e) {}
+    cur += earned;
+    try { localStorage.setItem(k, String(cur)); } catch (e) {}
+    return cur;
+  }
+
   function recordWin() {
     state.streak++;
+    var base = RANK_BASE[state.difficulty] || RANK_BASE[state.mode] || 100;
     submitScore('win_streak', state.streak, { mode: state.mode });
     submitScore('total_wins', careerWins(), { mode: state.mode });
-    submitScore('ranked_score', 1000 + state.streak * 100, { mode: state.mode });
+    submitScore('ranked_score', addRanked(base + 25 * state.streak), { mode: state.mode, difficulty: state.difficulty });
   }
 
   function endMatch(winner) {

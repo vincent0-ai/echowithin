@@ -120,7 +120,12 @@
 
   function submitDuel(score) {
     if (score <= 0) return;
-    var payload = { game: 'whack_a_mole', category: 'ranked_score', score: score, metadata: { mode: 'duel', round: String(state.roundSecs) }, guest_token: getGuestToken(), username: 'Guest' };
+    // Lifetime duel points, accumulated like the older arcade games.
+    var k = 'ew_whack_ranked_score', total = 0;
+    try { total = parseInt(localStorage.getItem(k) || '0', 10) || 0; } catch (e) {}
+    total += score;
+    try { localStorage.setItem(k, String(total)); } catch (e) {}
+    var payload = { game: 'whack_a_mole', category: 'ranked_score', score: total, metadata: { mode: 'duel', round: String(state.roundSecs) }, guest_token: getGuestToken(), username: 'Guest' };
     fetch('/api/games/leaderboard/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(refreshBoard).catch(function () {});
   }
 

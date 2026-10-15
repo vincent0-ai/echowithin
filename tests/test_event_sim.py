@@ -153,18 +153,23 @@ class TestPongTwoClientSim:
         finally:
             _restore_rooms(m, saved)
 
-    def test_guest_restart_zeroes_live_match(self):
-        """OBSERVED: pong_restart has no host gate; guest resets scores."""
+    def test_member_restart_works_stranger_restart_dropped(self):
+        """FIXED (BUG-003): pong_restart requires room membership; stranger
+        drops silently, member (either side) rematch still works."""
         import main as m
         saved = _save_rooms(m, *PONG_ROOMS)
         try:
             h = _handlers()
             rid = _pong_room(h, m)
             m.active_pong_rooms[rid]['scores'] = [4, 2]
-            mock_emit = _as_sid(m, 'sid_guest', h['handle_pong_restart'],
-                                {'room_id': rid})
+            stranger = _as_sid(m, 'sid_stranger', h['handle_pong_restart'],
+                               {'room_id': rid})
+            assert _emits_to(stranger, 'pong_restart', room=rid) == []
+            assert m.active_pong_rooms[rid]['scores'] == [4, 2]
+            member = _as_sid(m, 'sid_guest', h['handle_pong_restart'],
+                             {'room_id': rid})
             assert m.active_pong_rooms[rid]['scores'] == [0, 0]
-            assert len(_emits_to(mock_emit, 'pong_restart', room=rid)) == 1
+            assert len(_emits_to(member, 'pong_restart', room=rid)) == 1
         finally:
             _restore_rooms(m, saved)
 
@@ -231,19 +236,22 @@ class TestSlimeTwoClientSim:
         finally:
             _restore_rooms(m, saved)
 
-    def test_restart_by_non_member_resets_serving(self):
-        """OBSERVED: slime_restart has no host/member gate."""
+    def test_restart_requires_membership(self):
+        """FIXED (BUG-003): slime_restart drops non-members; host rematch works."""
         import main as m
         saved = _save_rooms(m, *SLIME_ROOMS)
         try:
             h = _handlers()
             rid = _slime_room(h, m)
             before = m.active_slime_rooms[rid].get('serving')
-            mock_emit = _as_sid(m, 'sid_stranger', h['handle_slime_restart'],
-                                {'room_id': rid})
-            assert len(_emits_to(mock_emit, 'slime_restart', room=rid)) == 1
+            stranger = _as_sid(m, 'sid_stranger', h['handle_slime_restart'],
+                               {'room_id': rid})
+            assert _emits_to(stranger, 'slime_restart', room=rid) == []
+            assert m.active_slime_rooms[rid].get('serving') == before
+            host = _as_sid(m, 'sid_host', h['handle_slime_restart'],
+                           {'room_id': rid})
+            assert len(_emits_to(host, 'slime_restart', room=rid)) == 1
             assert m.active_slime_rooms[rid].get('serving') in (-1, 1)
-            assert before is not None
         finally:
             _restore_rooms(m, saved)
 
@@ -307,18 +315,22 @@ class TestAirTwoClientSim:
         finally:
             _restore_rooms(m, saved)
 
-    def test_restart_by_guest_zeroes_live_match(self):
-        """OBSERVED: air_restart has no sid gate; guest zeroes scores."""
+    def test_restart_requires_membership(self):
+        """FIXED (BUG-003): air_restart drops strangers; member rematch works."""
         import main as m
         saved = _save_rooms(m, *AIR_ROOMS)
         try:
             h = _handlers()
             rid = _air_room(h, m)
             m.active_air_rooms[rid]['scores'] = [6, 5]
-            mock_emit = _as_sid(m, 'sid_guest', h['handle_air_restart'],
-                                {'room_id': rid})
+            stranger = _as_sid(m, 'sid_stranger', h['handle_air_restart'],
+                               {'room_id': rid})
+            assert _emits_to(stranger, 'air_restarted', room=rid) == []
+            assert m.active_air_rooms[rid]['scores'] == [6, 5]
+            member = _as_sid(m, 'sid_guest', h['handle_air_restart'],
+                             {'room_id': rid})
             assert m.active_air_rooms[rid]['scores'] == [0, 0]
-            assert len(_emits_to(mock_emit, 'air_restarted', room=rid)) == 1
+            assert len(_emits_to(member, 'air_restarted', room=rid)) == 1
         finally:
             _restore_rooms(m, saved)
 
@@ -429,7 +441,8 @@ class TestTttSeatHijack:
 
 
 class TestUngatedRestarts:
-    def test_stranger_restarts_wipe_live_boards(self):
+    def test_stranger_restarts_dropped_member_restart_works(self):
+        """FIXED (BUG-003): ttt/c4/gomoku/dnb restarts require membership."""
         import main as m
         h = _handlers()
         cases = [
@@ -447,8 +460,10 @@ class TestUngatedRestarts:
                         user=_authed('u_host', 'Host'))
                 _as_sid(m, 'sid_guest', h[join_name], {'room_id': rid},
                         user=_authed('u_guest', 'Guest'))
-                mock_emit = _as_sid(m, 'sid_stranger', h[restart_name], {'room_id': rid})
-                assert len(_emits_to(mock_emit, event, room=rid)) == 1, dict_name
+                stranger = _as_sid(m, 'sid_stranger', h[restart_name], {'room_id': rid})
+                assert _emits_to(stranger, event, room=rid) == [], dict_name
+                host = _as_sid(m, 'sid_host', h[restart_name], {'room_id': rid})
+                assert len(_emits_to(host, event, room=rid)) == 1, dict_name
             finally:
                 rooms.pop(rid, None)
 
@@ -616,9 +631,9 @@ class TestDuetRelayRobustness:
         finally:
             rooms.pop('sim_duet_int', None)
 
-    def test_restart_from_non_room_resets_seed_and_broadcasts(self):
-        """OBSERVED: duet_restart needs neither membership nor existence; any
-        socket resets any room's seed, and emits into arbitrary room names."""
+    def test_restart_requires_membership_no_ghost_broadcast(self):
+        """FIXED (BUG-011): duet_restart drops non-members and unknown rooms;
+        host rematch still rotates seed + giver."""
         import main as m
         h = _handlers()
         rooms = m.active_duet_rooms
@@ -627,14 +642,17 @@ class TestDuetRelayRobustness:
             _as_sid(m, 'sid_host', h['handle_join_duet_room'], {'room_id': 'sim_duet_rst'},
                     user=_authed('u_host', 'Host'))
             old_seed = rooms['sim_duet_rst']['seed']
-            mock_emit = _as_sid(m, 'sid_stranger', h['handle_duet_restart'],
-                                {'room_id': 'sim_duet_rst', 'seed': 123})
-            assert rooms['sim_duet_rst']['seed'] == 123
-            assert rooms['sim_duet_rst']['seed'] != old_seed or old_seed == 123
-            assert len(_emits_to(mock_emit, 'duet_restarted', room='sim_duet_rst')) == 1
+            stranger = _as_sid(m, 'sid_stranger', h['handle_duet_restart'],
+                               {'room_id': 'sim_duet_rst', 'seed': 123})
+            assert _emits_to(stranger, 'duet_restarted', room='sim_duet_rst') == []
+            assert rooms['sim_duet_rst']['seed'] == old_seed
             ghost = _as_sid(m, 'sid_stranger', h['handle_duet_restart'],
                             {'room_id': 'ghost_room_xyz', 'seed': 1})
-            assert len(_emits_to(ghost, 'duet_restarted', room='ghost_room_xyz')) == 1
+            assert _emits_to(ghost, 'duet_restarted', room='ghost_room_xyz') == []
+            host = _as_sid(m, 'sid_host', h['handle_duet_restart'],
+                           {'room_id': 'sim_duet_rst', 'seed': 123})
+            assert rooms['sim_duet_rst']['seed'] == 123
+            assert len(_emits_to(host, 'duet_restarted', room='sim_duet_rst')) == 1
         finally:
             rooms.pop('sim_duet_rst', None)
 

@@ -2222,6 +2222,11 @@ def _room_creation_allowed(room_info):
     return room_info is not None or current_user.is_authenticated
 
 
+def _duel_member(room_info, sid):
+    """True if sid is the seated host or guest of a duel/co-op room."""
+    return bool(room_info) and sid in (room_info.get('host_sid'), room_info.get('guest_sid'))
+
+
 @socketio.on('tot_join_room')
 def handle_tot_join_room(data=None, *args, **kwargs):
     if not isinstance(data, dict):
@@ -2593,9 +2598,10 @@ def handle_slime_restart(data=None, *args, **kwargs):
     if not room_id:
         return
     room_info = active_slime_rooms.get(room_id)
+    if not _duel_member(room_info, request.sid):
+        return
     serving = secrets.choice([-1, 1])
-    if room_info:
-        room_info['serving'] = serving
+    room_info['serving'] = serving
     emit('slime_restart', {'serving': serving}, room=room_id, include_self=False)
 
 @socketio.on('slime_match_end')
@@ -2893,10 +2899,11 @@ def handle_pong_restart(data=None, *args, **kwargs):
     if not room_id:
         return
     room_info = active_pong_rooms.get(room_id)
+    if not _duel_member(room_info, request.sid):
+        return
     serving_player = secrets.choice([0, 1])
-    if room_info:
-        room_info['scores'] = [0, 0]
-        room_info['serving_player'] = serving_player
+    room_info['scores'] = [0, 0]
+    room_info['serving_player'] = serving_player
     emit('pong_restart', {'serving_player': serving_player}, room=room_id)
 
 @socketio.on('pong_target_update')
@@ -3192,7 +3199,7 @@ def handle_ttt_restart(data=None, *args, **kwargs):
         return
     room_id = data.get('room_id')
     room_info = active_ttt_rooms.get(room_id)
-    if not room_info:
+    if not _duel_member(room_info, request.sid):
         return
     room_info['board'] = [''] * 9
     next_starter = secrets.choice(['x', 'o'])
@@ -3479,7 +3486,7 @@ def handle_c4_restart(data=None, *args, **kwargs):
         return
     room_id = data.get('room_id')
     room_info = active_c4_rooms.get(room_id)
-    if not room_info:
+    if not _duel_member(room_info, request.sid):
         return
     room_info['board'] = [[-1] * C4_COLS for _ in range(C4_ROWS)]
     next_starter = secrets.choice([0, 1])
@@ -3715,7 +3722,7 @@ def handle_gomoku_restart(data=None, *args, **kwargs):
     if not isinstance(data, dict):
         return
     room_info = active_gomoku_rooms.get(data.get('room_id'))
-    if not room_info:
+    if not _duel_member(room_info, request.sid):
         return
     room_info['board'] = [-1] * GOMOKU_CELLS
     room_info['moves'] = 0
@@ -4211,7 +4218,7 @@ def handle_air_restart(data=None, *args, **kwargs):
     if not isinstance(data, dict):
         return
     room_info = active_air_rooms.get(data.get('room_id'))
-    if not room_info:
+    if not _duel_member(room_info, request.sid):
         return
     room_info['scores'] = [0, 0]
     emit('air_restarted', {'target': room_info.get('target', AIR_TARGET)}, room=data.get('room_id'))
@@ -4497,7 +4504,7 @@ def handle_dnb_restart(data=None, *args, **kwargs):
         return
     room_id = data.get('room_id')
     room_info = active_dnb_rooms.get(room_id)
-    if not room_info:
+    if not _duel_member(room_info, request.sid):
         return
     room_info['h_edges'] = [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS)]
     room_info['v_edges'] = [[None] * DNB_COLS for _ in range(DNB_ROWS - 1)]
@@ -4784,13 +4791,14 @@ def handle_duet_restart(data=None, *args, **kwargs):
     if not isinstance(data, dict):
         return
     room_id = data.get('room_id')
+    room_info = active_duet_rooms.get(room_id)
+    if not _duel_member(room_info, request.sid):
+        return
     seed = int(data.get('seed', secrets.randbelow(1000000)))
     active_giver = secrets.choice(['A', 'B'])
-    if room_id in active_duet_rooms:
-        active_duet_rooms[room_id]['seed'] = seed
-        active_duet_rooms[room_id]['active_giver'] = active_giver
-    if room_id:
-        emit('duet_restarted', {'seed': seed, 'active_giver': active_giver}, room=room_id)
+    room_info['seed'] = seed
+    room_info['active_giver'] = active_giver
+    emit('duet_restarted', {'seed': seed, 'active_giver': active_giver}, room=room_id)
 
 @socketio.on('leave_duet_room')
 def handle_leave_duet_room(data=None, *args, **kwargs):

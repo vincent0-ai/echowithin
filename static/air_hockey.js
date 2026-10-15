@@ -202,15 +202,18 @@
 
   function aiControl() {
     var cfg = AI[state.difficulty] || AI.normal;
-    state.aiTick++;
-    if (state.aiTick % cfg.react !== 0) return;
-    var p = state.puck, tx = 0.5, ty = 0.22;
-    if (p.vy < 0 || p.y < H / 2) {
-      tx = p.x + (p.vx * 0.25) + (Math.random() - 0.5) * cfg.jitter * 2;
-      ty = Math.min(0.42, Math.max(0.12, p.y - 0.06));
-    }
     var m = state.p2;
-    var dx = tx - m.x, dy = ty - m.y, d = Math.hypot(dx, dy) || 1;
+    state.aiTick++;
+    // Decide target a few times per second; move every frame so motion is smooth.
+    if (state.aiTick % cfg.react === 0) {
+      var p = state.puck, tx = 0.5, ty = 0.22;
+      if (p.vy < 0 || p.y < H / 2) {
+        tx = p.x + (p.vx * 0.25) + (Math.random() - 0.5) * cfg.jitter * 2;
+        ty = Math.min(0.42, Math.max(0.12, p.y - 0.06));
+      }
+      m.tx = tx; m.ty = ty;
+    }
+    var dx = m.tx - m.x, dy = m.ty - m.y, d = Math.hypot(dx, dy) || 1;
     var step = Math.min(d, cfg.speed / 60);
     m.vx = dx / d * step * 60; m.vy = dy / d * step * 60;
     m.x += dx / d * step; m.y += dy / d * step;
@@ -225,7 +228,10 @@
     var sim = (state.mode !== 'online') || state.isHost;
     if (sim) {
       if (state.mode === 'solo') aiControl();
-      moveToward(state.p1); moveToward(state.p2);
+      moveToward(state.p1);
+      // Solo: p2 is fully AI-driven (aiControl owns tx/ty and position).
+      // Running moveToward on it too pulls it back to a stale target → vibration.
+      if (state.mode !== 'solo') moveToward(state.p2);
       clampMallets();
       acc += dt;
       var step = 1 / 120;

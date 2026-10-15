@@ -111,10 +111,25 @@
         border-radius: 8px;
         font-size: 2rem;
         user-select: none;
+        overflow: hidden;
+        text-align: center;
+        padding: 4px;
+        box-sizing: border-box;
+    }
+
+    /* Fronts show word labels (FLOWER, PHOTO…) — sized to stay inside the card. */
+    .card-front {
+        font-size: 0.85rem;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
 
     @media (max-width: 600px) {
         .card-face { font-size: 1.5rem; }
+        .card-front { font-size: 0.72rem; }
     }
 
     .card-back {

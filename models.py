@@ -32,6 +32,11 @@ class User(UserMixin):
         # Premium tier
         self._user_data_tier = user_data  # cache for tier resolution
         self.account_tier = get_user_tier(user_data)
+        # Age assurance / parental consent state (DPA s.33)
+        self.date_of_birth = user_data.get('date_of_birth')
+        self.is_minor = user_data.get('is_minor', False)
+        self.parental_consent_status = user_data.get('parental_consent_status')
+        self.age_assurance_pending = user_data.get('age_assurance_pending', False)
         # Theme preference (cached on the user object to avoid a DB query per request)
         self.theme_preference = user_data.get('theme_preference', 'light')
 

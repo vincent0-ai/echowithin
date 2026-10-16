@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %} <title>Confirm Your Age</title> {% endblock %}
+
+
+{% block content %}
+
+<div class="auth-container">
+    <div class="auth-forms">
+        <form class="auth-form active" method="POST" action="{{ url_for('auth.age_confirmation') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <h2 class="form-title">Confirm Your Age</h2>
+            <p class="form-description">Please provide your date of birth to continue.</p>
+            <div class="inputs">
+                <input type="date" name="date_of_birth" id="age_dob" class="form-input" required
+                    style="color: var(--text-dark-color);">
+
+                <div id="age-minor-section" style="display: none; text-align: left; width: 100%;">
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0 0 8px 2px;">
+                        You are under 18. A parent or guardian must consent before you can use EchoWithin.
+                    </p>
+                    <input type="email" name="guardian_email" id="age_guardian_email" class="form-input"
+                        placeholder="Parent or guardian email">
+                    <label for="age_parental_consent"
+                        style="font-size: 0.85rem; text-align: left; display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; cursor: pointer;">
+                        <input type="checkbox" name="parental_consent" id="age_parental_consent" value="1"
+                            style="margin-top: 3px; cursor: pointer;">
+                        <span style="color: var(--text-muted);">My parent or guardian consents to my use of
+                            EchoWithin.</span>
+                    </label>
+                </div>
+            </div>
+            <button type="submit" class="form-button">Continue</button>
+        </form>
+    </div>
+</div>
+<script nonce="{{ csp_nonce }}">
+(function () {
+    var dobInput = document.getElementById('age_dob');
+    var minorSection = document.getElementById('age-minor-section');
+    var guardianEmail = document.getElementById('age_guardian_email');
+    var parentalConsent = document.getElementById('age_parental_consent');
+    if (!dobInput) return;
+    var today = new Date();
+    dobInput.max = today.toISOString().split('T')[0];
+    var update = function () {
+        if (!dobInput.value) { minorSection.style.display = 'none'; return; }
+        var dob = new Date(dobInput.value + 'T00:00:00');
+        var age = Math.floor((today - dob) / (365.25 * 24 * 60 * 60 * 1000));
+        var isMinor = age >= 13 && age < 18;
+        minorSection.style.display = isMinor ? 'block' : 'none';
+        guardianEmail.required = isMinor;
+        parentalConsent.required = isMinor;
+    };
+    dobInput.addEventListener('change', update);
+    dobInput.addEventListener('input', update);
+})();
+</script>
+
+{% endblock %}

@@ -259,6 +259,43 @@ This link will expire in 1 hour.
         _get_app().logger.error(f"Failed to send password reset email to {mask_email(email)} after {retries} attempts.")
 
 
+def send_parental_consent_email(guardian_email, minor_username=None, consent_token=None, retries=3, delay=2):
+    """Emails a parent/guardian to obtain verifiable consent for a minor (DPA s.33)."""
+    consent_url = ""
+    try:
+        consent_url = url_for('auth.parental_consent', token=consent_token, _external=True)
+    except Exception:
+        consent_url = f"https://echowithin.xyz/parental_consent/{consent_token}"
+    for attempt in range(retries):
+        try:
+            sender_email = _get_app().config.get('MAIL_DEFAULT_SENDER') or get_env_variable('MAIL_USERNAME')
+            msg = Message(
+                subject="Consent needed for an EchoWithin account",
+                sender=f"EchoWithin <{sender_email}>",
+                recipients=[guardian_email]
+            )
+            child = minor_username or "your child"
+            msg.body = f"""EchoWithin - Parental/Guardian Consent
+
+A request was made to create an EchoWithin account ({child}) using an age under 18.
+
+Under the Kenya Data Protection Act, 2019, we need your consent before this account can be used.
+
+To review and give consent, open this link:
+{consent_url}
+
+If you do not recognise this request, you can ignore this email and no account will be activated.
+This link expires in 7 days.
+"""
+            _get_mail().send(msg)
+            _get_app().logger.info(f"Parental consent email sent to {mask_email(guardian_email)}.")
+            return True
+        except Exception as e:
+            _get_app().logger.error(f"Attempt {attempt+1} failed to send parental consent email to {mask_email(guardian_email)}: {e}")
+            time.sleep(delay)
+    return False
+
+
 @rq.job
 def send_new_post_notifications(post_id_str):
     """Sends new post notification emails to opted-in users as a background job."""

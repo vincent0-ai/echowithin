@@ -68,6 +68,7 @@ def _purge_guest_data_standalone(db, guest_id_str):
 
     # 4. User record
     db['users'].delete_one({'_id': g_oid})
+    db['consent_records'].delete_many({'user_id': g_oid})
 
 
 def cleanup_expired_auth():
@@ -83,6 +84,12 @@ def cleanup_expired_auth():
         # Delete expired password reset tokens
         result_tokens = auth_conf.delete_many({
             'reset_expiry': {'$exists': True, '$ne': None, '$lt': now}
+        })
+
+        # Delete expired parental consent tokens (DPA s.33)
+        result_consent = auth_conf.delete_many({
+            'type': 'parental_consent',
+            'token_expiry': {'$exists': True, '$ne': None, '$lt': now}
         })
 
         # Purge expired guest tour sessions
@@ -102,11 +109,13 @@ def cleanup_expired_auth():
         for guest_id_str in all_expired_ids:
             _purge_guest_data_standalone(db, guest_id_str)
 
-        total_deleted = result_codes.deleted_count + result_tokens.deleted_count + len(all_expired_ids)
+        total_deleted = result_codes.deleted_count + result_tokens.deleted_count + result_consent.deleted_count + len(all_expired_ids)
         if total_deleted > 0:
             print(
                 f"Auth & Guest cleanup: removed {result_codes.deleted_count} expired verification codes, "
-                f"{result_tokens.deleted_count} expired reset tokens, and {len(all_expired_ids)} expired guest session(s)."
+                f"{result_tokens.deleted_count} expired reset tokens, "
+                f"{result_consent.deleted_count} expired parental consent token(s), "
+                f"and {len(all_expired_ids)} expired guest session(s)."
             )
         else:
             print("Auth cleanup: no expired records found.")

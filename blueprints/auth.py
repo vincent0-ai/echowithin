@@ -142,6 +142,67 @@ def _user_is_guest(user):
     return getattr(user, 'is_guest', False) or session.get('is_guest_tour', False)
 
 
+MIN_AGE = 13
+
+
+def _parse_dob(raw):
+    """Parse an ISO date (YYYY-MM-DD) into a date, rejecting invalid/future/implausible values."""
+    if not raw:
+        return None
+    try:
+        dob = datetime.datetime.strptime(str(raw).strip(), '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return None
+    today = datetime.datetime.now(datetime.timezone.utc).date()
+    if dob > today or (today.year - dob.year) > 120 or dob.year < 1900:
+        return None
+    return dob
+
+
+def _compute_age(dob):
+    today = datetime.datetime.now(datetime.timezone.utc).date()
+    return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+
+def _dob_to_utc(dob):
+    return datetime.datetime(dob.year, dob.month, dob.day, tzinfo=datetime.timezone.utc)
+
+
+def _send_guardian_consent(minor_user, guardian_email, wait=False):
+    """Create a 7-day consent token and email the parent/guardian (DPA s.33)."""
+    import main as m
+    if not minor_user or not guardian_email:
+        return False
+    token = secrets.token_urlsafe(32)
+    hashed = hashlib.sha256(token.encode()).hexdigest()
+    expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=7)
+    try:
+        m.auth_conf.update_one(
+            {'type': 'parental_consent', 'minor_user_id': minor_user['_id']},
+            {'$set': {
+                'hashed_token': hashed,
+                'token_expiry': expiry,
+                'guardian_email': guardian_email,
+                'minor_user_id': minor_user['_id'],
+                'minor_email': minor_user.get('email'),
+                'created_at': datetime.datetime.now(datetime.timezone.utc),
+            }},
+            upsert=True
+        )
+    except Exception as e:
+        current_app.logger.warning(f"Failed to store parental consent token: {e}")
+        return False
+    sender = m.send_parental_consent_email
+    if wait and hasattr(sender, 'func'):
+        sender = sender.func
+    try:
+        sender(guardian_email, minor_user.get('username'), token)
+        return True
+    except Exception as e:
+        current_app.logger.warning(f"Failed to send parental consent email: {e}")
+        return False
+
+
 @bp.route('/register', methods=['GET', 'POST'])
 @limits(calls=15, period=60, methods=('POST',))
 def register():
@@ -160,6 +221,35 @@ def register():
         if len(username) < 2 or len(password) < 6:
             flash("Username must be at least 2 characters and password at least 6 characters.", "danger")
             return redirect(url_for('auth.register', next=next_url) if next_url else url_for('auth.register'))
+
+        # Age assurance & consent (Kenya DPA s.33; Children Act 2022)
+        if not request.form.get("agree_terms"):
+            flash("Please accept the Terms of Service and Privacy Notice.", "danger")
+            return redirect(url_for('auth.register', next=next_url) if next_url else url_for('auth.register'))
+
+        dob = _parse_dob(request.form.get("date_of_birth", ""))
+        if not dob:
+            flash("Please provide a valid date of birth.", "danger")
+            return redirect(url_for('auth.register', next=next_url) if next_url else url_for('auth.register'))
+
+        age = _compute_age(dob)
+        if age < MIN_AGE:
+            flash(f"You must be at least {MIN_AGE} years old to use EchoWithin.", "danger")
+            return redirect(url_for('auth.register', next=next_url) if next_url else url_for('auth.register'))
+
+        is_minor = age < 18
+        guardian_email = request.form.get("guardian_email", "").strip().lower()
+        if is_minor and (not guardian_email or "@" not in guardian_email or guardian_email == email.lower() or not request.form.get("parental_consent")):
+            flash("Users under 18 need a parent or guardian to consent.", "danger")
+            return redirect(url_for('auth.register', next=next_url) if next_url else url_for('auth.register'))
+
+        age_fields = {
+            "date_of_birth": _dob_to_utc(dob),
+            "is_minor": is_minor,
+            "guardian_email": guardian_email if is_minor else None,
+            "parental_consent_status": 'pending' if is_minor else 'not_required',
+            "age_assurance_pending": False,
+        }
 
         is_guest_session = _user_is_guest(current_user)
         guest_id = ObjectId(current_user.id) if is_guest_session else None
@@ -183,7 +273,8 @@ def register():
                     "email": email,
                     "password": hashed_password,
                     "is_confirmed": False,
-                    "guest_expires_at": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+                    "guest_expires_at": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24),
+                    **age_fields
                 }}
             )
         else:
@@ -195,6 +286,7 @@ def register():
                 "is_confirmed": False,
                 "join_date": datetime.datetime.now(datetime.timezone.utc),
                 "notification_preference": 'weekly',
+                **age_fields,
                 **envelope_keys
             })
 
@@ -203,6 +295,11 @@ def register():
         code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
         m.auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry, 'attempt_count': 0}}, upsert=True)
         m.send_code(email, gen_code)
+
+        if is_minor:
+            user_doc = m.users_conf.find_one({"email": email})
+            if user_doc:
+                _send_guardian_consent(user_doc, guardian_email)
 
         flash("Confirmation code sent to your email. Please verify to activate your account.", "info")
         return redirect(url_for('auth.confirm', email=email, next=next_url) if next_url else url_for('auth.confirm', email=email))
@@ -256,6 +353,9 @@ def confirm(email):
                         )
                         m.auth_conf.delete_one({"email": email})
                         user_data = m.users_conf.find_one({"email": email})
+                        if user_data and user_data.get('is_minor') and user_data.get('parental_consent_status') != 'approved':
+                            flash("Email confirmed. A parent or guardian must approve this account before you can sign in.", "info")
+                            return redirect(url_for('auth.login'))
                         if user_data:
                             user_obj = m.User(user_data)
                             login_user(user_obj, remember=True)
@@ -328,6 +428,9 @@ def login():
             if user_data['password'] and m.check_password_hash(user_data['password'], password):
                 # success — clear graduated counter
                 brute_force_clear('login', bf_account, bf_ip)
+                if user_data.get('is_minor') and user_data.get('parental_consent_status') != 'approved':
+                    flash("A parent or guardian must approve this account before you can sign in.", "warning")
+                    return redirect(url_for('auth.login'))
                 user_obj = m.User(user_data)
                 login_user(user_obj, remember=remember)
                 warm_user_fernet(str(user_data['_id']))  # Pre-derive Fernet key for notes
@@ -488,6 +591,9 @@ def google_callback():
             logout_user()
             flash('Your account has been suspended. Please contact support.', 'danger')
             return redirect(url_for('auth.login'))
+        if user.get('is_minor') and user.get('parental_consent_status') != 'approved':
+            flash("A parent or guardian must approve this account before you can sign in.", "warning")
+            return redirect(url_for('auth.login'))
         user_obj = m.User(user)
         login_user(user_obj, remember=True)
         warm_user_fernet(str(user['_id']))  # Pre-derive Fernet key for notes
@@ -529,6 +635,7 @@ def google_callback():
             'join_date': datetime.datetime.now(datetime.timezone.utc),
             'notification_preference': 'weekly',
             'google_signup': True,
+            'age_assurance_pending': True,
             **envelope_keys
         })
         try:
@@ -594,6 +701,99 @@ def logout():
     resp = redirect(url_for('pages.dashboard'))
     resp.delete_cookie('x_app_token')
     return resp
+
+
+@bp.route('/age-confirmation', methods=['GET', 'POST'])
+@login_required
+def age_confirmation():
+    """Collect a date of birth for accounts that signed up without one (e.g. Google)."""
+    import main as m
+    if _user_is_guest(current_user):
+        return redirect(url_for('pages.home'))
+    pending = bool(getattr(current_user, 'age_assurance_pending', False))
+    if not pending and getattr(current_user, 'date_of_birth', None):
+        return redirect(url_for('pages.home'))
+    if request.method == 'POST':
+        dob = _parse_dob(request.form.get("date_of_birth", ""))
+        if not dob:
+            flash("Please provide a valid date of birth.", "danger")
+            return redirect(url_for('auth.age_confirmation'))
+        age = _compute_age(dob)
+        if age < MIN_AGE:
+            user_id = ObjectId(current_user.id)
+            logout_user()
+            session.clear()
+            m.cascade_delete_user_data(user_id)
+            flash(f"You must be at least {MIN_AGE} years old to use EchoWithin.", "danger")
+            return redirect(url_for('pages.dashboard'))
+        is_minor = age < 18
+        update = {
+            "date_of_birth": _dob_to_utc(dob),
+            "is_minor": is_minor,
+            "age_assurance_pending": False,
+        }
+        guardian_email = ""
+        if is_minor:
+            guardian_email = request.form.get("guardian_email", "").strip().lower()
+            own_email = (getattr(current_user, 'email', '') or '').lower()
+            if not guardian_email or "@" not in guardian_email or guardian_email == own_email or not request.form.get("parental_consent"):
+                flash("Users under 18 need a parent or guardian to consent.", "danger")
+                return redirect(url_for('auth.age_confirmation'))
+            update["guardian_email"] = guardian_email
+            update["parental_consent_status"] = 'pending'
+        else:
+            update["parental_consent_status"] = 'not_required'
+        user_id = ObjectId(current_user.id)
+        m.users_conf.update_one({'_id': user_id}, {'$set': update})
+        m.user_loader_cache.pop(f"user:{current_user.id}", None)
+        if is_minor:
+            user_doc = m.users_conf.find_one({'_id': user_id})
+            _send_guardian_consent(user_doc, guardian_email)
+            logout_user()
+            session.clear()
+            flash("A consent request was sent to your parent or guardian. You can sign in once it is approved.", "info")
+            return redirect(url_for('auth.login'))
+        flash("Thanks. Your account is ready.", "success")
+        return redirect(url_for('pages.home'))
+    return render_template('age_confirmation.html', active_page='age_confirmation')
+
+
+@bp.route('/parental_consent/<token>')
+@limits(calls=20, period=60)
+def parental_consent(token):
+    """Guardian-facing endpoint that records verifiable consent for a minor account."""
+    import main as m
+    now = datetime.datetime.now(datetime.timezone.utc)
+    doc = None
+    try:
+        hashed = hashlib.sha256(str(token).encode()).hexdigest()
+        doc = m.auth_conf.find_one({'type': 'parental_consent', 'hashed_token': hashed})
+    except Exception as e:
+        current_app.logger.warning(f"parental_consent lookup failed: {e}")
+    if not doc:
+        return render_template('parental_consent.html', success=False, message="This consent link is invalid."), 400
+    expiry = doc.get('token_expiry')
+    if expiry and expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=datetime.timezone.utc)
+    if not expiry or expiry < now:
+        return render_template('parental_consent.html', success=False, message="This consent link has expired."), 410
+    minor_id = doc.get('minor_user_id')
+    if not minor_id:
+        return render_template('parental_consent.html', success=False, message="This consent link is invalid."), 400
+    try:
+        m.users_conf.update_one(
+            {'_id': minor_id},
+            {'$set': {
+                'parental_consent_status': 'approved',
+                'parental_consent_at': now,
+            }}
+        )
+        m.auth_conf.delete_one({'_id': doc['_id']})
+        m.user_loader_cache.pop(f"user:{minor_id}", None)
+    except Exception as e:
+        current_app.logger.error(f"Failed to record parental consent: {e}", exc_info=True)
+        return render_template('parental_consent.html', success=False, message="We could not record consent. Please try again later."), 500
+    return render_template('parental_consent.html', success=True, message="Thank you. Consent recorded. The account can now be used.")
 
 
 @bp.route('/forgot_password', methods=['GET', 'POST'])

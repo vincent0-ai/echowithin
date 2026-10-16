@@ -211,6 +211,39 @@ def terms():
     return render_template('terms.html', title="Terms and Conditions", description="Terms and Conditions for using EchoWithin.")
 
 
+@bp.route('/privacy')
+def privacy():
+    return render_template('privacy.html', title="Privacy Notice - EchoWithin", description="How EchoWithin collects, uses, shares, and protects your personal data, and your data protection rights.")
+
+
+@bp.route('/api/consent', methods=['POST'])
+@csrf_exempt
+@limits(calls=30, period=60)
+def record_cookie_consent():
+    """Persist a cookie/marketing consent choice as evidence (GDPR/DPA accountability)."""
+    import main as m
+    data = request.get_json(silent=True) or {}
+    necessary = True
+    analytics = bool(data.get('analytics'))
+    marketing = bool(data.get('marketing'))
+    now = datetime.datetime.now(datetime.timezone.utc)
+    try:
+        if m.consent_records_conf is not None:
+            record = {
+                'user_id': ObjectId(current_user.id) if current_user.is_authenticated else None,
+                'necessary': necessary,
+                'analytics': analytics,
+                'marketing': marketing,
+                'version': str(data.get('version') or '1'),
+                'user_agent': (request.headers.get('User-Agent') or '')[:512],
+                'created_at': now,
+            }
+            m.consent_records_conf.insert_one(record)
+    except Exception as e:
+        current_app.logger.warning(f"Failed to persist consent record: {e}")
+    return jsonify({'success': True})
+
+
 @bp.route('/faq')
 def faq():
     return render_template('faq.html', title="FAQ - EchoWithin", description="Frequently asked questions about using EchoWithin.")

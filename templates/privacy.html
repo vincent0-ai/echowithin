@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}<title>Privacy Notice - EchoWithin</title>{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <h1>Privacy Notice</h1>
+    <p class="last-updated">Last updated: October 16, 2026</p>
+
+    <div class="terms-container">
+        <section>
+            <h2>1. Who We Are</h2>
+            <p>EchoWithin ("we", "us") provides encrypted personal notes, collaborative notes, direct messaging,
+                Bonds (pair relationship spaces), communities, forms, and multiplayer games. For the purposes of the
+                <strong>Kenya Data Protection Act, 2019 (DPA)</strong>, EchoWithin is the <strong>data controller</strong>
+                for the personal data you provide to us.</p>
+            <p>Privacy questions and requests can be sent through the contact form on our
+                <a href="{{ url_for('pages.about') }}">About page</a> or by email to
+                <a href="mailto:echowithin@echowithin.xyz">echowithin@echowithin.xyz</a>.</p>
+        </section>
+
+        <section>
+            <h2>2. Data We Collect</h2>
+            <ul>
+                <li><strong>Account data</strong>: username, email address, password (stored hashed), date of birth,
+                    and profile details you choose to add (bio, avatar, links).</li>
+                <li><strong>Content you create</strong>: personal notes, shared notes, blog posts and comments,
+                    direct messages, voice notes, images, community posts, forms and responses, and game content.</li>
+                <li><strong>Bonds data</strong>: shared habits, countdowns, calendar events, goals, journal entries,
+                    photo albums, mood logs, and Question of the Day answers (encrypted at rest with per-bond keys).</li>
+                <li><strong>Technical data</strong>: session/device information, approximate location derived from IP
+                    address at login, push subscription tokens, and security/audit logs.</li>
+                <li><strong>Payment data</strong>: premium subscription status and payment reference. Card details are
+                    handled by our payment processor and never stored on our servers.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>3. Sensitive Personal Data</h2>
+            <p>Some features process data that the DPA treats as <strong>sensitive personal data</strong>, including
+                <strong>health data</strong> (the daily Mood Tracker) and <strong>marital/family status</strong>
+                (Bonds relationship type and shared journal). We process this data only with your explicit consent,
+                only for the feature you choose to use, and always encrypted at rest. You can remove this data at any
+                time from the relevant feature or by deleting your account.</p>
+        </section>
+
+        <section>
+            <h2>4. How We Use Your Data & Lawful Bases</h2>
+            <ul>
+                <li><strong>Contract</strong>: creating and operating your account and the features you request.</li>
+                <li><strong>Consent</strong>: sensitive data (mood, relationship, journal), marketing emails, and
+                    non-essential cookies. You may withdraw consent at any time.</li>
+                <li><strong>Legitimate interests</strong>: security, fraud and abuse prevention, service reliability,
+                    and moderation of public content.</li>
+                <li><strong>Legal obligation</strong>: responding to lawful requests and maintaining required records.</li>
+            </ul>
+            <p>We do <strong>not sell</strong> your personal data. We do not use the contents of your encrypted private
+                notes, DMs, Bonds journals, or Whisper sessions for advertising or profiling.</p>
+        </section>
+
+        <section>
+            <h2>5. Sharing & Third-Party Processors</h2>
+            <p>We share personal data only with service providers that help us run the platform, acting as
+                <strong>data processors</strong> under contract. These include hosting, database, media storage,
+                search, email delivery, push notification, payment, and AI moderation/assistance providers. A current
+                list of processors, their purpose, and their data location is maintained in our
+                <em>Processor &amp; Transfer Register</em> and is available on request.</p>
+        </section>
+
+        <section>
+            <h2>6. International Data Transfers</h2>
+            <p>Some of our processors store or process data outside Kenya. Where personal data leaves Kenya, we rely on
+                a lawful transfer basis (appropriate safeguards such as standard contractual clauses, or your consent
+                for sensitive data) and we keep a record of each transfer, its destination, and the safeguards applied,
+                in line with the DPA and the ODPC Guidance Notes on Cross-Border Data Transfers.</p>
+        </section>
+
+        <section>
+            <h2>7. How Long We Keep Data</h2>
+            <p>We keep personal data only as long as necessary for the purpose it was collected, then delete or
+                anonymise it. Deleted accounts are removed from live systems immediately and from encrypted backups
+                within the backup retention window (currently 3 days). Whisper Mode sessions are ephemeral and are
+                permanently erased when the session expires. A detailed retention schedule is maintained internally
+                and available on request.</p>
+        </section>
+
+        <section>
+            <h2>8. Your Data Protection Rights</h2>
+            <p>Under the DPA you have the right to:</p>
+            <ul>
+                <li>be informed about how your personal data is used;</li>
+                <li>access your personal data (download it from Account Settings &rarr; Export);</li>
+                <li>correct inaccurate data (Account Settings);</li>
+                <li>delete your data / erase your account (Account Settings &rarr; Delete Account);</li>
+                <li>port your data (JSON export);</li>
+                <li>object to or restrict processing;</li>
+                <li>withdraw consent at any time.</li>
+            </ul>
+            <p>To exercise a right you cannot do in-product, email
+                <a href="mailto:echowithin@echowithin.xyz">echowithin@echowithin.xyz</a>. We respond within the timelines set by
+                the DPA.</p>
+        </section>
+
+        <section>
+            <h2>9. Children</h2>
+            <p>EchoWithin is not intended for children under 13. Users aged 13 to 17 may use the service only with the
+                consent of a parent or guardian, which we verify before the account can be used. Where a child's data
+                is processed, we apply the protections required by the DPA and the Children Act, 2022.</p>
+        </section>
+
+        <section>
+            <h2>10. Cookies & Analytics</h2>
+            <p>We use strictly necessary cookies for login sessions and security (these are always on). Analytics and
+                marketing cookies are used only with your consent. You can change your choices at any time.</p>
+            <p><button type="button" class="cookie-settings-btn" id="cookie-settings-link">Manage cookie preferences</button></p>
+        </section>
+
+        <section>
+            <h2>11. Security</h2>
+            <ul>
+                <li>Encryption at rest for notes, DMs, Bonds journals, form responses, and more, using per-user and
+                    per-bond keys. Platform administrators cannot read your encrypted private content.</li>
+                <li>HTTPS with HSTS, Content Security Policy, CSRF protection, and rate limiting.</li>
+                <li>Encrypted media is served through signed, time-limited capability URLs.</li>
+                <li>Personal data breaches that pose a risk are assessed and reported to the ODPC within 72 hours of
+                    becoming aware, and affected users are notified where required.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>12. Complaints</h2>
+            <p>If you are not satisfied with how we handle your data, you may lodge a complaint with the
+                <strong>Office of the Data Protection Commissioner (ODPC)</strong> via
+                <a href="https://www.odpc.go.ke/" target="_blank" rel="noopener">odpc.go.ke</a> or
+                <a href="https://cie.odpc.go.ke" target="_blank" rel="noopener">cie.odpc.go.ke</a>.</p>
+        </section>
+    </div>
+
+    <div class="contact-footer" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+        <p>See also our <a href="{{ url_for('pages.terms') }}" style="color: var(--primary-color); font-weight: 600;">Terms
+                of Service</a> and <a href="{{ url_for('pages.faq') }}"
+                style="color: var(--primary-color); font-weight: 600;">FAQ</a>.</p>
+    </div>
+</div>
+
+<style>
+    .terms-container section {
+        margin-bottom: 2rem;
+    }
+
+    .terms-container h2 {
+        color: var(--primary-color);
+        margin-bottom: 1rem;
+        font-size: 1.5rem;
+    }
+
+    .terms-container p,
+    .terms-container li {
+        color: var(--text-dark-color);
+        line-height: 1.7;
+    }
+
+    .terms-container strong {
+        color: var(--text-dark-color);
+        font-weight: 600;
+    }
+
+    .terms-container ul {
+        margin-bottom: 1rem;
+        padding-left: 1.5rem;
+    }
+
+    .last-updated {
+        font-style: italic;
+        color: var(--text-secondary);
+        margin-bottom: 2rem;
+    }
+
+    .contact-footer p {
+        color: var(--text-dark-color);
+    }
+
+    .cookie-settings-btn {
+        background: none;
+        border: 1px solid var(--border-color);
+        color: var(--primary-color);
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+    }
+
+    .cookie-settings-btn:hover {
+        background: var(--hover-bg, rgba(0, 0, 0, 0.04));
+    }
+</style>
+{% endblock %}

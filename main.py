@@ -120,7 +120,7 @@ from blueprints.vault import bp as vault_bp
 from api import api_bp
 
 from notifications import (send_new_post_notifications, send_push_notification_async,
-    process_image_for_nsfw, send_ntfy_notification)
+    process_image_for_nsfw, send_ntfy_notification, send_parental_consent_email)
 from cachetools import TTLCache
 import requests
 import cloudinary
@@ -205,6 +205,7 @@ __all__ = [
     '_get_user_badge_count', '_has_active_auto_approve', '_deliver_scheduled_message',
     '_nlp_suggest_tags', 'get_zen_quote', 'is_blocked_by', 'send_code', 'send_reset_code',
     'send_account_deletion_code', 'send_weekly_newsletter', 'send_push_notification_to_user',
+    'send_parental_consent_email',
     'send_admin_broadcast_push', 'send_push_notifications_for_new_post',
     'send_fcm_notification_to_user', 'send_fcm_notifications_batch',
     'send_push_notification_for_comment', 'send_log_email_job', 'notify_saved_note_clones',
@@ -894,6 +895,14 @@ activity_read_conf.create_index([('user_id', 1), ('read_at', 1)])
 account_deletions_conf = db['account_deletions']
 account_deletions_conf.create_index([('deleted_at', -1)])
 
+# --- Cookie / marketing consent records (DPA accountability evidence) ---
+consent_records_conf = db['consent_records']
+try:
+    consent_records_conf.create_index([('user_id', 1), ('created_at', -1)])
+    consent_records_conf.create_index('created_at', expireAfterSeconds=730 * 24 * 3600)  # keep 2 years
+except Exception as e:
+    app.logger.warning(f"consent_records index creation deferred or failed: {e}")
+
 # --- Whisper Mode Collections ---
 whisper_sessions_conf = db['whisper_sessions']
 whisper_sessions_conf.create_index([('initiator_id', 1), ('status', 1)])
@@ -1167,6 +1176,7 @@ database.comment_votes_conf = comment_votes_conf
 database.activities_conf = activities_conf
 database.activity_read_conf = activity_read_conf
 database.account_deletions_conf = account_deletions_conf
+database.consent_records_conf = consent_records_conf
 database.whisper_sessions_conf = whisper_sessions_conf
 database.whisper_messages_conf = whisper_messages_conf
 database.bonds_conf = bonds_conf
@@ -1421,6 +1431,7 @@ def purge_guest_user_data(guest_id_str):
 
         # 4. User record
         users_conf.delete_one({'_id': g_oid})
+        consent_records_conf.delete_many({'user_id': g_oid})
         app.logger.info(f"Purged guest tour session: {guest_id_str}")
     except Exception as e:
         app.logger.error(f"Error purging guest user data: {e}")
@@ -1494,6 +1505,33 @@ def check_guest_expiration():
                 }), 401
             flash('Your 20-minute interactive tour session has expired.', 'info')
             return redirect(url_for('auth.login'))
+
+
+@app.before_request
+def enforce_age_assurance():
+    """Gate accounts that signed up without age verification (e.g. Google) until a DOB is provided."""
+    if not current_user.is_authenticated:
+        return
+    if getattr(current_user, 'is_guest', False):
+        return
+    if not getattr(current_user, 'age_assurance_pending', False):
+        return
+    allowed_prefixes = (
+        '/age-confirmation', '/logout', '/login', '/register', '/confirm/',
+        '/forgot_password', '/reset_password', '/google_login', '/google_callback',
+        '/parental_consent', '/mobile_auth', '/mobile_redirect', '/static/',
+        '/favicon.ico', '/socket.io', '/privacy', '/terms', '/faq', '/about',
+        '/api/consent', '/api/logout',
+    )
+    if request.path.startswith(allowed_prefixes):
+        return
+    if request.path.startswith('/api/'):
+        return jsonify({
+            'error': 'age_verification_required',
+            'message': 'Please confirm your date of birth to continue.'
+        }), 403
+    flash('Please confirm your date of birth to continue.', 'info')
+    return redirect(url_for('auth.age_confirmation'))
 
 
 @app.before_request

@@ -1234,6 +1234,8 @@ def cascade_delete_user_data(user_id):
 
     # Auth / sessions / tokens
     m.auth_conf.delete_many({'$or': [{'user_id': uid}, {'email': user_email}]} if user_email else {'user_id': uid})
+    m.auth_conf.delete_many({'minor_user_id': uid})
+    m.consent_records_conf.delete_many({'user_id': uid})
     m.user_sessions_conf.delete_many({'user_id': uid})
     m.app_tokens_conf.delete_many({'user_id': uid})
     m.fcm_tokens_conf.delete_many({'user_id': uid})

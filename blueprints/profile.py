@@ -219,7 +219,9 @@ def export_data(username):
     if not user:
         abort(404)
     user_id = user['_id']
+    uid_str = str(user_id)
     export = {
+        'export_generated_at': datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
         'account': {
             'username': user.get('username'),
             'email': user.get('email'),
@@ -232,18 +234,111 @@ def export_data(username):
             'blog_url_label': user.get('blog_url_label', ''),
             'social_links': user.get('social_links', {}),
         },
+        'age_and_consent': {
+            'date_of_birth': str(user.get('date_of_birth', '')) if user.get('date_of_birth') else None,
+            'is_minor': user.get('is_minor', False),
+            'parental_consent_status': user.get('parental_consent_status'),
+            'guardian_email': user.get('guardian_email'),
+        },
+        'cookie_consent_records': [],
         'posts': [],
         'comments': [],
         'personal_notes': [],
+        'direct_messages': [],
+        'communities': [],
+        'bonds': [],
+        'mood_entries': [],
+        'journal_entries': [],
+        'game_stats': [],
         'saved_post_ids': [str(pid) for pid in user.get('saved_posts', [])],
     }
+
+    def _safe(fn, default):
+        try:
+            return fn()
+        except Exception as e:
+            current_app.logger.warning(f"export_data partial failure: {e}")
+            return default
+
     for post in m.posts_conf.find({'author': user.get('username')}):
         export['posts'].append({'id': str(post['_id']), 'title': post.get('title', ''), 'content': post.get('content', ''), 'created_at': str(post.get('created_at', '')), 'tags': post.get('tags', [])})
     for comment in m.comments_conf.find({'author_id': user_id}):
         export['comments'].append({'id': str(comment['_id']), 'post_id': str(comment.get('post_id', '')), 'content': comment.get('content', ''), 'created_at': str(comment.get('created_at', ''))})
     for note in m.personal_posts_conf.find({'user_id': user_id}):
         export['personal_notes'].append({'id': str(note['_id']), 'title': note.get('title', ''), 'content': m._decrypt_note_record(note), 'created_at': str(note.get('created_at', '')), 'updated_at': str(note.get('updated_at', ''))})
-    data = json.dumps(export, indent=2, ensure_ascii=False)
+
+    # Cookie / analytics / marketing consent records
+    def _export_consent():
+        for rec in m.consent_records_conf.find({'user_id': user_id}):
+            export['cookie_consent_records'].append({
+                'necessary': rec.get('necessary', True),
+                'analytics': rec.get('analytics', False),
+                'marketing': rec.get('marketing', False),
+                'version': rec.get('version'),
+                'created_at': str(rec.get('created_at', '')),
+            })
+    _safe(_export_consent, None)
+
+    # Direct messages (decrypted for the data subject's own copy)
+    def _export_dms():
+        for dm in m.direct_messages_conf.find({'$or': [{'sender_id': user_id}, {'recipient_id': user_id}]}):
+            s_id, r_id = str(dm.get('sender_id')), str(dm.get('recipient_id'))
+            content = dm.get('content', '')
+            if content and str(content).startswith('gAAAAA'):
+                try:
+                    content = m.decrypt_dm(content, s_id, r_id)
+                except Exception:
+                    pass
+            export['direct_messages'].append({
+                'id': str(dm['_id']),
+                'sender_id': s_id,
+                'recipient_id': r_id,
+                'content': content,
+                'timestamp': str(dm.get('timestamp', '')),
+            })
+    _safe(_export_dms, None)
+
+    # Communities the user belongs to
+    def _export_communities():
+        for membership in m.community_memberships_conf.find({'user_id': user_id}):
+            export['communities'].append({
+                'community_id': str(membership.get('community_id', '')),
+                'role': membership.get('role', 'member'),
+                'joined_at': str(membership.get('joined_at', '')),
+            })
+    _safe(_export_communities, None)
+
+    # Bonds (relationships) — own contributions only
+    def _export_bonds():
+        for bond in m.bonds_conf.find({'$or': [{'user_a_id': user_id}, {'user_b_id': user_id}]}):
+            partner_id = bond.get('user_b_id') if bond.get('user_a_id') == user_id else bond.get('user_a_id')
+            export['bonds'].append({
+                'bond_id': str(bond['_id']),
+                'partner_id': str(partner_id) if partner_id else None,
+                'created_at': str(bond.get('created_at', '')),
+            })
+    _safe(_export_bonds, None)
+
+    # Mood + journal entries (health-adjacent data)
+    def _export_moods():
+        for mood in m.bond_moods_conf.find({'user_id': user_id}):
+            export['mood_entries'].append({'id': str(mood['_id']), 'mood': mood.get('mood'), 'note': mood.get('note', ''), 'date': str(mood.get('date', ''))})
+    _safe(_export_moods, None)
+
+    def _export_journal():
+        for entry in m.bond_journal_conf.find({'user_id': user_id}):
+            export['journal_entries'].append({'id': str(entry['_id']), 'title': entry.get('title', ''), 'content': entry.get('content', ''), 'created_at': str(entry.get('created_at', ''))})
+    _safe(_export_journal, None)
+
+    def _export_stats():
+        stats_list = []
+        for stats in m.player_stats_conf.find({'user_id': uid_str}):
+            stats.pop('_id', None)
+            stats_list.append(stats)
+        export['game_stats'] = stats_list
+    _safe(_export_stats, None)
+
+    data = json.dumps(export, indent=2, ensure_ascii=False, default=str)
     response = make_response(data)
     response.headers['Content-Type'] = 'application/json; charset=utf-8'
     response.headers['Content-Disposition'] = f'attachment; filename=echowithin_data_{username}.json'

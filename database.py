@@ -36,6 +36,7 @@ note_attachments_conf = None
 activities_conf = None
 comment_votes_conf = None
 account_deletions_conf = None
+consent_records_conf = None
 
 # --- Whisper Mode (Ephemeral Conversations) ---
 whisper_sessions_conf = None

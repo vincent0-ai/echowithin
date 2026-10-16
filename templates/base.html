@@ -974,7 +974,8 @@
                     {% endif %}
                     <a href="{{ url_for('pages.about') }}">About</a> |
                     <a href="{{ url_for('pages.faq') }}">FAQ</a> |
-                    <a href="{{ url_for('pages.terms') }}">Terms</a>
+                    <a href="{{ url_for('pages.terms') }}">Terms</a> |
+                    <a href="{{ url_for('pages.privacy') }}">Privacy</a>
                 </div>
                 <p>&copy; {{ current_year }} EchoWithin. All Rights Reserved.</p>
             </div>
@@ -1012,6 +1013,102 @@
         }
     }
     </style>
+
+    <!-- Cookie, analytics & marketing consent banner -->
+    <div id="cookie-consent-banner" style="display:none; position:fixed; left:0; right:0; bottom:0; z-index:200002; background:var(--card-bg, #ffffff); border-top:1px solid var(--border-color); box-shadow:0 -2px 12px rgba(0,0,0,0.08); padding:14px 16px; font-family:'Poppins', sans-serif;">
+        <div style="max-width:1000px; margin:0 auto; display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between;">
+            <p style="margin:0; flex:1 1 340px; font-size:0.85rem; color:var(--text-dark-color); line-height:1.5;">
+                We use necessary cookies to run EchoWithin. With your consent we also use analytics and marketing cookies. See our
+                <a href="{{ url_for('pages.privacy') }}" style="color:var(--primary-color); text-decoration:underline;">Privacy Notice</a>.
+            </p>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                <button type="button" id="cookie-manage-btn" style="background:none; border:1px solid var(--border-color); color:var(--text-dark-color); padding:8px 14px; border-radius:8px; font-size:0.82rem; font-weight:600; cursor:pointer; font-family:inherit;">Manage</button>
+                <button type="button" id="cookie-necessary-btn" style="background:none; border:1px solid var(--border-color); color:var(--text-dark-color); padding:8px 14px; border-radius:8px; font-size:0.82rem; font-weight:600; cursor:pointer; font-family:inherit;">Necessary only</button>
+                <button type="button" id="cookie-accept-btn" style="background:var(--primary-color); border:1px solid var(--primary-color); color:#ffffff; padding:8px 14px; border-radius:8px; font-size:0.82rem; font-weight:600; cursor:pointer; font-family:inherit;">Accept all</button>
+            </div>
+        </div>
+        <div id="cookie-consent-prefs" style="display:none; max-width:1000px; margin:12px auto 0; border-top:1px solid var(--border-color); padding-top:12px;">
+            <label style="display:flex; align-items:flex-start; gap:8px; font-size:0.82rem; color:var(--text-dark-color); margin-bottom:8px;">
+                <input type="checkbox" checked disabled style="margin-top:3px;">
+                <span><strong>Necessary</strong> — login sessions and security. Always on.</span>
+            </label>
+            <label style="display:flex; align-items:flex-start; gap:8px; font-size:0.82rem; color:var(--text-dark-color); margin-bottom:8px; cursor:pointer;">
+                <input type="checkbox" id="cookie-analytics-toggle" style="margin-top:3px; cursor:pointer;">
+                <span><strong>Analytics</strong> — helps us understand how the service is used.</span>
+            </label>
+            <label style="display:flex; align-items:flex-start; gap:8px; font-size:0.82rem; color:var(--text-dark-color); margin-bottom:12px; cursor:pointer;">
+                <input type="checkbox" id="cookie-marketing-toggle" style="margin-top:3px; cursor:pointer;">
+                <span><strong>Marketing</strong> — used to measure and improve our communications.</span>
+            </label>
+            <button type="button" id="cookie-save-btn" style="background:var(--primary-color); border:1px solid var(--primary-color); color:#ffffff; padding:8px 16px; border-radius:8px; font-size:0.82rem; font-weight:600; cursor:pointer; font-family:inherit;">Save choices</button>
+        </div>
+    </div>
+
+    <script nonce="{{ csp_nonce }}">
+    (function () {
+        var COOKIE_NAME = 'ew_consent';
+        var MAX_AGE = 180 * 24 * 3600;
+        var banner = document.getElementById('cookie-consent-banner');
+        var prefs = document.getElementById('cookie-consent-prefs');
+        var analyticsToggle = document.getElementById('cookie-analytics-toggle');
+        var marketingToggle = document.getElementById('cookie-marketing-toggle');
+
+        function readConsent() {
+            var match = document.cookie.match(new RegExp('(?:^|; )' + COOKIE_NAME + '=([^;]*)'));
+            if (!match) return null;
+            try { return JSON.parse(decodeURIComponent(match[1])); } catch (e) { return null; }
+        }
+
+        function writeConsent(c) {
+            var secure = location.protocol === 'https:' ? '; Secure' : '';
+            document.cookie = COOKIE_NAME + '=' + encodeURIComponent(JSON.stringify(c)) +
+                '; path=/; max-age=' + MAX_AGE + '; SameSite=Lax' + secure;
+        }
+
+        function persist(c) {
+            c.necessary = true;
+            c.version = '1';
+            writeConsent(c);
+            try {
+                fetch('/api/consent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(c)
+                }).catch(function () {});
+            } catch (e) {}
+            hide();
+        }
+
+        function hide() { if (banner) banner.style.display = 'none'; }
+        function show() { if (banner) banner.style.display = 'block'; }
+
+        function showPreferences() {
+            var c = readConsent() || { analytics: false, marketing: false };
+            if (analyticsToggle) analyticsToggle.checked = !!c.analytics;
+            if (marketingToggle) marketingToggle.checked = !!c.marketing;
+            if (prefs) prefs.style.display = 'block';
+            show();
+        }
+
+        var acceptBtn = document.getElementById('cookie-accept-btn');
+        var necessaryBtn = document.getElementById('cookie-necessary-btn');
+        var manageBtn = document.getElementById('cookie-manage-btn');
+        var saveBtn = document.getElementById('cookie-save-btn');
+        if (acceptBtn) acceptBtn.addEventListener('click', function () { persist({ analytics: true, marketing: true }); });
+        if (necessaryBtn) necessaryBtn.addEventListener('click', function () { persist({ analytics: false, marketing: false }); });
+        if (manageBtn) manageBtn.addEventListener('click', showPreferences);
+        if (saveBtn) saveBtn.addEventListener('click', function () {
+            persist({ analytics: !!(analyticsToggle && analyticsToggle.checked), marketing: !!(marketingToggle && marketingToggle.checked) });
+        });
+
+        document.addEventListener('click', function (e) {
+            var el = e.target;
+            if (el && el.id === 'cookie-settings-link') { e.preventDefault(); showPreferences(); }
+        });
+
+        if (!readConsent()) { show(); }
+    })();
+    </script>
 
     <script>
     // PWA Install Prompt handling

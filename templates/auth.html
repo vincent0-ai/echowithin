@@ -110,6 +110,24 @@
                                 placeholder="Password" required>
                             <i class="far fa-eye password-toggle-icon"></i>
                         </div>
+
+                        <input type="date" name="date_of_birth" id="date_of_birth" class="form-input"
+                            aria-label="Date of birth" required style="color: var(--text-dark-color);">
+
+                        <div id="minor-consent-section" style="display: none; text-align: left; width: 100%;">
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0 0 8px 2px;">
+                                You are under 18. A parent or guardian must consent before you can use EchoWithin.
+                            </p>
+                            <input type="email" name="guardian_email" id="guardian_email" class="form-input"
+                                placeholder="Parent or guardian email">
+                            <label for="parental_consent"
+                                style="font-size: 0.85rem; text-align: left; display: flex; align-items: flex-start; gap: 8px; margin-top: 8px;">
+                                <input type="checkbox" name="parental_consent" id="parental_consent" value="1"
+                                    style="margin-top: 3px; cursor: pointer;">
+                                <span style="cursor: pointer; color: var(--text-muted);">My parent or guardian consents to
+                                    my use of EchoWithin.</span>
+                            </label>
+                        </div>
                     </div>
                     <div
                         style="font-size: 0.85rem; text-align: left; display: flex; align-items: flex-start; gap: 8px;">
@@ -117,8 +135,9 @@
                             style="margin-top: 3px; cursor: pointer;">
                         <label for="agree_terms" style="cursor: pointer; color: var(--text-muted);">
                             I agree to the <a href="{{ url_for('pages.terms') }}" target="_blank"
-                                style="color: var(--primary-color); text-decoration: underline;">Terms of Service and
-                                Privacy Policy</a>
+                                style="color: var(--primary-color); text-decoration: underline;">Terms of Service</a>
+                            and <a href="{{ url_for('pages.privacy') }}" target="_blank"
+                                style="color: var(--primary-color); text-decoration: underline;">Privacy Notice</a>
                         </label>
                     </div>
                     <button type="submit" class="form-button">Register</button>
@@ -220,6 +239,30 @@
             switchForm('register-form');
         } else if (currentForm === 'login') {
             switchForm('login-form');
+        }
+
+        // Age assurance: reveal minor consent fields for users under 18
+        const dobInput = document.getElementById('date_of_birth');
+        const minorSection = document.getElementById('minor-consent-section');
+        const guardianEmail = document.getElementById('guardian_email');
+        const parentalConsent = document.getElementById('parental_consent');
+        if (dobInput) {
+            const today = new Date();
+            dobInput.max = today.toISOString().split('T')[0];
+            const updateMinorFields = function () {
+                if (!dobInput.value) {
+                    if (minorSection) minorSection.style.display = 'none';
+                    return;
+                }
+                const dob = new Date(dobInput.value + 'T00:00:00');
+                const age = Math.floor((today - dob) / (365.25 * 24 * 60 * 60 * 1000));
+                const isMinor = age >= 13 && age < 18;
+                if (minorSection) minorSection.style.display = isMinor ? 'block' : 'none';
+                if (guardianEmail) guardianEmail.required = isMinor;
+                if (parentalConsent) parentalConsent.required = isMinor;
+            };
+            dobInput.addEventListener('change', updateMinorFields);
+            dobInput.addEventListener('input', updateMinorFields);
         }
     });
 </script>

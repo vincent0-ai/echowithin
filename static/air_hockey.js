@@ -11,10 +11,17 @@
     p2: { x: 0.5, y: 0.22, vx: 0, vy: 0, tx: 0.5, ty: 0.22 },
     serveTimer: 0, aiTick: 0, netTick: 0, inputTick: 0
   };
+  // Per-difficulty brain: easy is slow, dozy and sprays shots; hard is fast and precise.
   var AI = {
-    easy:   { speed: 1.15, lunge: 1.7, react: 10, err: 0.10, aggression: 0.30, guardY: 0.18, pressY: 0.45 },
-    normal: { speed: 1.75, lunge: 2.2, react: 5,  err: 0.05, aggression: 0.65, guardY: 0.15, pressY: 0.55 },
-    hard:   { speed: 2.4,  lunge: 2.9, react: 2,  err: 0.018, aggression: 0.92, guardY: 0.13, pressY: 0.65 }
+    easy:   { speed: 0.80, lunge: 1.35, react: 18, err: 0.11, aggression: 0.12, guardY: 0.20, pressY: 0.35,
+              missRate: 0.32, trackErr: 0.085, strikeErr: 0.070, maxCap: 1.7, guardBlend: 0.45,
+              stallFrames: 90, hustle: 1.0, whiff: 0.10, gain: 7,  base: 0.12, dead: 0.008 },
+    normal: { speed: 1.40, lunge: 1.90, react: 8,  err: 0.05,  aggression: 0.50, guardY: 0.16, pressY: 0.55,
+              missRate: 0.10, trackErr: 0.030, strikeErr: 0.025, maxCap: 2.6, guardBlend: 0.65,
+              stallFrames: 55, hustle: 1.08, whiff: 0.02, gain: 10, base: 0.18, dead: 0.005 },
+    hard:   { speed: 2.30, lunge: 2.70, react: 3,  err: 0.016, aggression: 0.90, guardY: 0.13, pressY: 0.68,
+              missRate: 0.02, trackErr: 0.006, strikeErr: 0.007, maxCap: 3.4, guardBlend: 0.82,
+              stallFrames: 32, hustle: 1.12, whiff: 0.0,  gain: 13, base: 0.25, dead: 0.003 }
   };
   // Adaptive AI brain: persists across rallies so it can adjust to the player.
   var aiMem = {
@@ -258,11 +265,18 @@
     return clampNum(x, minX, maxX);
   }
 
-  // Pick a spot inside the opponent goal mouth, biased away from the player
+  // Pick a spot in/around the opponent goal mouth, biased away from the player
   // mallet so shots are harder to block. Holds for a few decisions to avoid jitter.
+  // Each difficulty has a missRate that deliberately sprays wide (easy misses
+  // often, hard almost never) — otherwise clamping would make everyone perfect.
   function chooseAim(cfg) {
     var margin = 0.045;
     var lo = W / 2 - GOAL_W / 2 + margin, hi = W / 2 + GOAL_W / 2 - margin;
+    if (Math.random() < (cfg.missRate || 0)) {
+      var side = Math.random() < 0.5 ? -1 : 1;
+      var missBy = 0.06 + Math.random() * 0.10;
+      return clampNum(0.5 + side * (GOAL_W / 2 + missBy), 0.08, 0.92);
+    }
     var away = (state.p1.x < 0.5) ? 1 : -1;
     var r = Math.random();
     var offset;
@@ -303,10 +317,12 @@
 
     var puckSp = Math.hypot(p.vx, p.vy);
     // Stall detection: slow puck => force an attacking clear to break deadlock.
+    // Easy dawdles (high threshold), hard pounces quickly.
+    var stallNeed = cfg.stallFrames || 40;
     if (puckSp < 0.20) aiMem.stall++;
     else aiMem.stall = 0;
-    var stalled = aiMem.stall > 40;
-    var justStalled = aiMem.stall === 41;
+    var stalled = aiMem.stall > stallNeed;
+    var justStalled = aiMem.stall === stallNeed + 1;
 
     aiMem.decide++;
     if (aiMem.decide >= cfg.react || justStalled) {
@@ -344,28 +360,36 @@
         var distPuck = Math.hypot(m.x - p.x, m.y - p.y);
         if ((mBehindY && alignX < 0.09 && distPuck < 0.22) || (distBehind < 0.03 && mBehindY)) {
           // Strike: aim through the puck, overshooting so contact drives it out.
-          tx = p.x + b.dx * 0.16;
-          ty = p.y + b.dy * 0.16;
+          // strikeErr makes easy mishit and hard stay laser-precise.
+          tx = p.x + b.dx * 0.16 + (Math.random() - 0.5) * 2 * (cfg.strikeErr || 0);
+          ty = p.y + b.dy * 0.16 + (Math.random() - 0.5) * (cfg.strikeErr || 0);
+          // Whiff: easy occasionally swings and misses the puck entirely.
+          if (Math.random() < (cfg.whiff || 0)) tx += (Math.random() < 0.5 ? -1 : 1) * 0.09;
           aiMem.strike = true;
         } else {
-          tx = b.x + aiMem.jitterX * 0.4;
+          tx = b.x + aiMem.jitterX * 0.4 + (Math.random() - 0.5) * 2 * (cfg.trackErr || 0) * 0.4;
           ty = b.y;
           // If puck is almost stopped right in front of us, go straight at it.
           if (puckSp < 0.12 && distPuck < 0.16) { tx = p.x; ty = p.y - 0.01; aiMem.strike = true; }
         }
-        // Adapt: when losing, stay a touch deeper before committing.
-        if (losing && !aiMem.strike) ty = Math.min(ty, 0.30);
+        // Adapt: when losing, stay a touch deeper before committing (not on easy).
+        if (losing && !aiMem.strike && (cfg.hustle || 1) > 1.0) ty = Math.min(ty, 0.30);
         if (winning && aiMem.strike) tx = clampNum(tx, MALLET_R, W - MALLET_R);
       } else if (comingFast) {
-        // --- DEFEND fast shot: goalie cut the angle ---
-        var pred = predictXAtY(p.x, p.y, p.vx, p.vy, cfg.guardY);
-        tx = 0.5 * 0.30 + pred * 0.70 + aiMem.jitterX * 0.3;
+        // --- DEFEND fast shot: goalie cuts the angle ---
+        // trackErr makes easy misread bounces; guardBlend keeps easy near center.
+        var pred = predictXAtY(p.x, p.y, p.vx, p.vy, cfg.guardY)
+          + (Math.random() - 0.5) * 2 * (cfg.trackErr || 0);
+        var blend = (cfg.guardBlend == null ? 0.7 : cfg.guardBlend);
+        tx = 0.5 * (1 - blend) + pred * blend + aiMem.jitterX * 0.3;
         ty = cfg.guardY;
+        // Easy ball-watches: sometimes stays rooted at center, leaving the net open.
+        if (Math.random() < (cfg.whiff || 0) * 1.5) tx = 0.5;
         // If already beaten wide, scramble toward the puck line instead of center.
         if (Math.abs(p.x - 0.5) > GOAL_W / 2) tx = clampNum(pred, MALLET_R, W - MALLET_R);
       } else {
         // --- READY: shadow the puck, hold mid between goal and center ---
-        var shadow = clampNum(p.x, 0.2, 0.8);
+        var shadow = clampNum(p.x + (Math.random() - 0.5) * 2 * (cfg.trackErr || 0), 0.2, 0.8);
         tx = 0.5 * 0.45 + shadow * 0.55 + aiMem.jitterX * 0.5;
         // Sit deeper when the player holds the puck; step up when it drifts center.
         var threat = (p.y > 0.9) ? 1 : 0;
@@ -378,18 +402,20 @@
     }
 
     // --- Smooth pursuit with deadzone (kills the old vibration) ---
+    // dead/gain/base per difficulty: easy feels dozy, hard feels razor sharp.
     var dx = aiMem.tx - m.x, dy = aiMem.ty - m.y;
     var d = Math.hypot(dx, dy);
     var ox = m.x, oy = m.y;
-    if (d < 0.004) {
+    var dead = cfg.dead || 0.004;
+    if (d < dead) {
       m.vx *= 0.8; m.vy *= 0.8;
     } else {
       var boost = 1.0;
       var diff2 = state.scores[1] - state.scores[0];
-      if (diff2 <= -2) boost = 1.12; // adapt: hustle when losing
+      if (diff2 <= -2) boost = cfg.hustle || 1.0; // adapt: hustle when losing (off on easy)
       var maxSp = cfg.speed * boost * (aiMem.strike ? cfg.lunge : 1.0);
-      maxSp = Math.min(maxSp, 3.4);
-      var desired = Math.min(maxSp, d * 12 + 0.25);
+      maxSp = Math.min(maxSp, cfg.maxCap || 3.4);
+      var desired = Math.min(maxSp, d * (cfg.gain || 12) + (cfg.base == null ? 0.25 : cfg.base));
       var step = Math.min(d, desired * dt);
       m.x += dx / d * step;
       m.y += dy / d * step;

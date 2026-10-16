@@ -577,16 +577,17 @@ def _get_user_fernet(user_id: str) -> Fernet:
 
 
 def warm_user_fernet(user_id: str):
-    """Pre-derive and cache the v3 envelope Fernet key for a user.
-    
-    Call on login to avoid cold-derivation cost when the user
-    navigates to /personal_space. Only warms the v3 envelope key,
-    saving ~200ms of CPU per login.
+    """Pre-derive and cache a user's Fernet key on login.
+
+    Warms the v3 envelope key (current format). Only falls back to warming the
+    expensive v2 key when the user has no envelope key yet, so v3 users never
+    pay an extra PBKDF2 derivation at login.
     """
     try:
-        _get_user_fernet_v3(str(user_id))
+        if _get_user_fernet_v3(str(user_id)) is None:
+            _get_user_fernet(str(user_id))
     except Exception as e:
-        _get_app().logger.warning(f"Could not warm v3 Fernet for user {user_id}: {e}")
+        _get_app().logger.warning(f"Could not warm Fernet for user {user_id}: {e}")
 
 
 def _get_bond_fernet(bond_id: str) -> Fernet:
@@ -1295,6 +1296,7 @@ def encrypt_note(content, user_id=None):
             # Fall back to v2
             f = _get_user_fernet(str(user_id))
         else:
+            _get_app().logger.warning("encrypt_note called without user_id; using legacy v1 global key")
             f = get_notes_fernet()
         encrypted = f.encrypt(content.encode('utf-8'))
         return encrypted.decode('utf-8')
@@ -1354,24 +1356,25 @@ def _decrypt_with_candidate_ids(encrypted_content, candidate_user_ids):
         return encrypted_content
     if not isinstance(encrypted_content, str) or not encrypted_content.startswith('gAAAAA'):
         return encrypted_content
+    token = encrypted_content.encode('utf-8')
+    # Phase 1: try the envelope (v3) key for every candidate first. This is the
+    # current format, so a hit here avoids the expensive v2 PBKDF2 derivation.
     for candidate_user_id in candidate_user_ids:
-        uid_str = str(candidate_user_id)
-        # Try v3 (envelope encryption) first
+        f_v3 = _get_user_fernet_v3(str(candidate_user_id))
+        if f_v3:
+            try:
+                return f_v3.decrypt(token).decode('utf-8')
+            except Exception:
+                pass
+    # Phase 2: fall back to the v2 per-user key only for genuinely old records.
+    for candidate_user_id in candidate_user_ids:
         try:
-            f_v3 = _get_user_fernet_v3(uid_str)
-            if f_v3:
-                return f_v3.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
-        except Exception:
-            pass
-        # Try v2 (deterministic PBKDF2 fallback)
-        try:
-            f = _get_user_fernet(uid_str)
-            return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
+            return _get_user_fernet(str(candidate_user_id)).decrypt(token).decode('utf-8')
         except Exception:
             continue
-    # Try v1 global key (backward compatibility)
+    # Phase 3: v1 global key (backward compatibility)
     try:
-        return get_notes_fernet().decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
+        return get_notes_fernet().decrypt(token).decode('utf-8')
     except Exception:
         return None
 
@@ -1447,17 +1450,11 @@ def _cache_encrypt_value(plain_text):
 
 
 def _cache_decrypt_value(cipher_bytes):
-    """Decode a Redis-cached note value. Decodes UTF-8 directly, with backward-compatible Fernet fallback."""
+    """Decode a Redis-cached note value (plaintext stored as UTF-8 bytes)."""
     if cipher_bytes is None:
         return None
     try:
         if isinstance(cipher_bytes, bytes):
-            # If legacy cache entry starts with Fernet header 'gAAAAA'
-            if cipher_bytes.startswith(b'gAAAAA'):
-                try:
-                    return get_notes_fernet().decrypt(cipher_bytes).decode('utf-8')
-                except Exception:
-                    pass
             return cipher_bytes.decode('utf-8')
         return str(cipher_bytes)
     except Exception:

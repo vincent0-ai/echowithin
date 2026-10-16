@@ -1643,8 +1643,6 @@ def add_security_headers(response):
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     # Prevent MIME type sniffing
     response.headers['X-Content-Type-Options'] = 'nosniff'
-    # XSS protection (legacy but still useful)
-    response.headers['X-XSS-Protection'] = '1; mode=block'
     # Referrer policy
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     # Permissions policy (restrict features)
@@ -1813,8 +1811,6 @@ def inject_pinned_announcement():
                 pass
 
     return dict(pinned_announcements=cache_docs, pinned_announcement=cache_docs[0] if cache_docs else None)
-
-## Remark42 removed: internal comments will be used instead.
 
 @app.context_processor
 def inject_template_globals():

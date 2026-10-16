@@ -41,7 +41,7 @@
             <h2>4. Privacy & Data Encryption</h2>
             <p>We prioritize your privacy and data security across all features:</p>
             <ul>
-                <li><strong>Personal Note Encryption</strong>: Personal notes are encrypted at rest using per-user Fernet keys (AES-128-CBC + HMAC-SHA256). Platform administrators cannot read your private notes.</li>
+                <li><strong>Personal Note Encryption</strong>: Personal notes are encrypted at rest using per-user Fernet keys (AES-128-CBC + HMAC-SHA256); access is restricted to your authenticated session.</li>
                 <li><strong>Bond Journal, Habit & QotD Encryption</strong>: Shared bond journals, Question of the Day responses, daily habits, and countdown titles are encrypted at rest using unique per-bond Fernet keys.</li>
                 <li><strong>Form Response Encryption</strong>: All interactive form responses are encrypted at rest using symmetric Fernet encryption keys.</li>
                 <li><strong>Direct Message Encryption</strong>: Direct messages are encrypted at rest using envelope encryption keys.</li>

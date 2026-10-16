@@ -11,7 +11,7 @@ covered by live __pongNetstats/__slimeNetstats counters plus
 scripts/latency_sim.py runs — see commit.md for before/after numbers.
 """
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 def _handlers():
@@ -22,6 +22,22 @@ def _handlers():
             fn = call.args[0]
             handlers[getattr(fn, '__name__', '')] = fn
     return handlers
+
+
+def _seed_room(m, kind, room_id='r1', host_sid='sid_A', guest_sid='sid_B'):
+    if kind == 'pong':
+        m.active_pong_rooms[room_id] = {'host_sid': host_sid, 'guest_sid': guest_sid,
+                                        'scores': [0, 0], 'target': None}
+    else:
+        m.active_slime_rooms[room_id] = {'host_sid': host_sid, 'guest_sid': guest_sid}
+    return room_id
+
+
+def _drop_room(m, kind, room_id='r1'):
+    if kind == 'pong':
+        m.active_pong_rooms.pop(room_id, None)
+    else:
+        m.active_slime_rooms.pop(room_id, None)
 
 
 class TestNetcodeRelayProtocol:
@@ -35,11 +51,18 @@ class TestNetcodeRelayProtocol:
         payload = {'room_id': 'r1', 'x': 100.12, 'y': 50.5, 'vx': 5.25,
                    'vy': 1.0, 'speed': 5.5, 'p1Y': 200.0, 'volleys': 3,
                    'seq': 4242, 'tSend': 12345.67}
-        with app.test_request_context():
-            with patch.object(m, 'emit') as mock_emit:
-                fn(dict(payload))
-                mock_emit.assert_called_with('pong_ball_sync', payload,
-                                             room='r1', include_self=False)
+        _seed_room(m, 'pong')
+        try:
+            with app.test_request_context():
+                req = MagicMock()
+                req.sid = 'sid_A'
+                with patch.object(m, 'request', req), \
+                        patch.object(m, 'emit') as mock_emit:
+                    fn(dict(payload))
+                    mock_emit.assert_called_with('pong_ball_sync', payload,
+                                                 room='r1', include_self=False)
+        finally:
+            _drop_room(m, 'pong')
 
     def test_pong_paddle_sync_preserves_seq(self, app):
         import main as m
@@ -48,11 +71,18 @@ class TestNetcodeRelayProtocol:
         assert fn is not None
         payload = {'room_id': 'r1', 'player': 1, 'y': 210.44,
                    'seq': 4243, 'tSend': 12346.0}
-        with app.test_request_context():
-            with patch.object(m, 'emit') as mock_emit:
-                fn(dict(payload))
-                mock_emit.assert_called_with('pong_paddle_sync', payload,
-                                             room='r1', include_self=False)
+        _seed_room(m, 'pong')
+        try:
+            with app.test_request_context():
+                req = MagicMock()
+                req.sid = 'sid_B'
+                with patch.object(m, 'request', req), \
+                        patch.object(m, 'emit') as mock_emit:
+                    fn(dict(payload))
+                    mock_emit.assert_called_with('pong_paddle_sync', payload,
+                                                 room='r1', include_self=False)
+        finally:
+            _drop_room(m, 'pong')
 
     def test_slime_host_sync_preserves_seq_and_ack(self, app):
         import main as m
@@ -64,11 +94,18 @@ class TestNetcodeRelayProtocol:
                    'p1': {'x': -1.0, 'y': 1.5, 'vx': 0.0, 'vy': 0.0},
                    'scores': [2, 1], 'serveState': 'PLAYING',
                    'seq': 991, 'tSend': 999.0, 'ack': 988}
-        with app.test_request_context():
-            with patch.object(m, 'emit') as mock_emit:
-                fn(dict(payload))
-                mock_emit.assert_called_with('slime_host_sync', payload,
-                                             room='r1', include_self=False)
+        _seed_room(m, 'slime')
+        try:
+            with app.test_request_context():
+                req = MagicMock()
+                req.sid = 'sid_A'
+                with patch.object(m, 'request', req), \
+                        patch.object(m, 'emit') as mock_emit:
+                    fn(dict(payload))
+                    mock_emit.assert_called_with('slime_host_sync', payload,
+                                                 room='r1', include_self=False)
+        finally:
+            _drop_room(m, 'slime')
 
     def test_slime_player_input_preserves_seq(self, app):
         import main as m
@@ -79,11 +116,18 @@ class TestNetcodeRelayProtocol:
                    'p2': {'x': 1.0, 'y': 1.5, 'vx': 0.5, 'vy': 0.0,
                           'desiredVx': 2.22},
                    'seq': 992, 'tSend': 1000.0}
-        with app.test_request_context():
-            with patch.object(m, 'emit') as mock_emit:
-                fn(dict(payload))
-                mock_emit.assert_called_with('slime_player_input', payload,
-                                             room='r1', include_self=False)
+        _seed_room(m, 'slime')
+        try:
+            with app.test_request_context():
+                req = MagicMock()
+                req.sid = 'sid_B'
+                with patch.object(m, 'request', req), \
+                        patch.object(m, 'emit') as mock_emit:
+                    fn(dict(payload))
+                    mock_emit.assert_called_with('slime_player_input', payload,
+                                                 room='r1', include_self=False)
+        finally:
+            _drop_room(m, 'slime')
 
     def test_engineio_heartbeat_tuned_for_long_haul(self):
         import flask_socketio

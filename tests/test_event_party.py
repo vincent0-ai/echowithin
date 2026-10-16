@@ -494,3 +494,83 @@ def _authed_for_churn(uid, name):
     stub.id = uid
     stub.username = name
     return stub
+
+
+class TestVoteRaceAndShape:
+    def test_duplicate_key_means_already_voted(self, client):
+        """G5/BUG-015: losing a concurrent-vote race surfaces as 409, and no
+        tally is written (insert precedes $inc)."""
+        from pymongo.errors import DuplicateKeyError
+        import main as m
+        sessions = FakeCollection()
+        sessions.insert_one(_poll_lobby())
+        votes = FakeCollection()
+        p1, p2, p3 = _patch_db(m, sessions, votes)
+        with p1, p2, p3:
+            with patch.object(votes, 'insert_one', side_effect=DuplicateKeyError('dup')):
+                res = client.post('/g/p1/vote', json={'option': 'Red'})
+                assert res.status_code == 409
+            assert sessions.find_one({'lobby_id': 'p1'})['counts'] == {'Red': 0, 'Blue': 0}
+
+    def test_broadcast_fires_with_nested_total(self, client):
+        """G5/BUG-014: game_vote emits with a correct recursive total on
+        nested counts (previously TypeError swallowed the broadcast)."""
+        import main as m
+        sessions = FakeCollection()
+        sessions.insert_one(_poll_lobby())
+        p1, p2, p3 = _patch_db(m, sessions)
+        with p1, p2, p3:
+            with patch.object(m.socketio, 'emit') as mock_emit:
+                res = client.post('/g/p1/vote', json={'option': 'Red'})
+                assert res.status_code == 200
+            votes = [c for c in mock_emit.call_args_list if c[0][0] == 'game_vote']
+            assert len(votes) == 1
+            assert votes[0][0][1]['total'] == 1
+
+    def test_dotted_option_rejected_at_vote_and_create(self, client, auth_client):
+        """G5/BUG-016: '.'/'$' options are 400, never reaching $inc keys."""
+        import main as m
+        sessions = FakeCollection()
+        sessions.insert_one(_poll_lobby())
+        p1, p2, p3 = _patch_db(m, sessions)
+        with p1, p2, p3:
+            assert client.post('/g/p1/vote', json={'option': 'a.b'}).status_code in (400,)
+            res = auth_client.post('/api/game/poll/create',
+                                   json={'title': 'T', 'question': 'Q?',
+                                         'options': ['a.b', 'ok']})
+            assert res.status_code == 400
+
+    def test_story_lost_race_redirects_cleanly(self, auth_client):
+        """G5/BUG-015: turn advanced by a concurrent writer -> friendly
+        redirect, no double sentence."""
+        import main as m
+        sessions = FakeCollection()
+        now = _now()
+        sessions.insert_one({
+            'lobby_id': 's9', 'pin': '999999', 'host_id': HOST_OID, 'host_username': 'H',
+            'title': 'S', 'game_type': 'story',
+            'question': {'label': 'S', 'options': [], 'correct_option': None},
+            'counts': {}, 'status': 'active', 'sentences': [],
+            'turn_order': [str(USER_OID)], 'current_turn': 0,
+            'allow_anonymous': True, 'max_players': 30,
+            'expires_at': now + datetime.timedelta(hours=2), 'created_at': now})
+        p1, p2, p3 = _patch_db(m, sessions)
+        with p1, p2, p3:
+            raced = MagicMock()
+            raced.matched_count = 0
+            raced.modified_count = 0
+            with patch.object(sessions, 'update_one', return_value=raced):
+                res = auth_client.post('/g/s9/story/add', data={'sentence': 'Late.'})
+                assert res.status_code == 302
+            assert sessions.find_one({'lobby_id': 's9'})['sentences'] == []
+
+    def test_live_answer_garbage_q_idx_400(self, auth_client):
+        """G5/G4: non-numeric q_idx is 400, not 500."""
+        import main as m
+        sessions = FakeCollection()
+        sessions.insert_one(_trivia_lobby())
+        p1, p2, p3 = _patch_db(m, sessions)
+        with p1, p2, p3:
+            res = auth_client.post('/g/t1/live/answer',
+                                   json={'option': 'Alpha', 'q_idx': 'abc'})
+            assert res.status_code == 400

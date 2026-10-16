@@ -196,13 +196,21 @@ class TestLobbyAlias:
 
 
 class TestSlimeRestartEcho:
-    def test_slime_restart_excludes_sender(self, pong_state):
+    def test_slime_restart_excludes_sender(self, pong_state, app):
         m = pong_state
         h = _handlers()['handle_slime_restart']
-        with patch.object(m, 'emit') as mock_emit:
-            h({'room_id': 's1'})
-        assert mock_emit.call_count == 1
-        assert mock_emit.call_args[1].get('include_self') is False
+        m.active_slime_rooms['s1'] = {'host_sid': 'sid_A', 'guest_sid': None}
+        try:
+            with app.test_request_context():
+                req = MagicMock()
+                req.sid = 'sid_A'
+                with patch.object(m, 'request', req), \
+                        patch.object(m, 'emit') as mock_emit:
+                    h({'room_id': 's1'})
+            assert mock_emit.call_count == 1
+            assert mock_emit.call_args[1].get('include_self') is False
+        finally:
+            m.active_slime_rooms.pop('s1', None)
 
 
 class TestPingPongPerspectiveMirror:

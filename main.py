@@ -1103,6 +1103,17 @@ except Exception:
     pass
 game_votes_conf.create_index([('lobby_id', 1), ('user_id', 1)])
 game_votes_conf.create_index([('lobby_id', 1), ('submitted_at', -1)])
+# Exactly-once votes: one poll/trivia/caption vote per identity per question.
+# Implemented as a fingerprint field (vote_fp) so the partial index needs no
+# $exists:false (rejected by Mongo) and legacy/TTAL docs without the field
+# stay unconstrained. TTAL guesses never set vote_fp (multi-doc by design).
+# NOTE: creation fails if duplicates already exist — dedupe first in prod;
+# the app must keep booting, so failures only warn (see TESTING/BUGS.md BUG-015).
+try:
+    game_votes_conf.create_index('vote_fp', unique=True, name='game_votes_fp_unique',
+                                 partialFilterExpression={'vote_fp': {'$exists': True}})
+except Exception as _vfp_e:
+    app.logger.warning('unique vote_fp index not created: %s', _vfp_e)
 game_submissions_conf.create_index([('lobby_id', 1), ('user_id', 1), ('type', 1)], unique=True)
 game_submissions_conf.create_index([('lobby_id', 1), ('type', 1)])
 
@@ -3175,6 +3186,7 @@ def handle_join_ttt_room(data=None, *args, **kwargs):
             'symbol': 'x',
             'turn': 'x'
         }, room=sid)
+        return
     seat = _seat_status(room_info, sid, user_uid)
     if seat == 'host':
         if room_info.get('host_sid') != sid:
@@ -4898,6 +4910,7 @@ def handle_join_duet_room(data=None, *args, **kwargs):
             'seed': room_info['seed'],
             'partner_name': None
         }, room=sid)
+        return
     seat = _seat_status(room_info, sid, user_uid)
     if seat == 'host':
         if room_info.get('host_sid') != sid:

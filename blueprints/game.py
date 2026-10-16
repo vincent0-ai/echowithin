@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, make_response, session, current_app
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
+from pymongo.errors import DuplicateKeyError
 import datetime, secrets, hashlib
 from security import limits
 import database
@@ -16,6 +17,22 @@ MAX_OPTION_LEN = 100
 MAX_SENTENCE_LEN = 280
 MAX_CAPTION_LEN = 200
 ALLOWED_GAME_TYPES = ('poll', 'trivia', 'wyr', 'ttal', 'story', 'caption')
+
+
+def _is_valid_option_key(value):
+    """Mongo field paths forbid '.' and leading '$' (counts use $inc keys)."""
+    return bool(value) and '.' not in value and not value.startswith('$') and '\x00' not in value
+
+
+def _nested_total(counts):
+    """Recursive vote total across flat {opt: n} and nested {qi: {opt: n}} shapes."""
+    total = 0
+    for v in (counts or {}).values():
+        if isinstance(v, dict):
+            total += _nested_total(v)
+        elif isinstance(v, (int, float)):
+            total += v
+    return total
 
 def _decrypt_lobby(lobby):
     """Return a copy of a game lobby doc with any at-rest encrypted fields decrypted for display.
@@ -484,6 +501,9 @@ def games_create():
                             if len(o) > MAX_OPTION_LEN:
                                 flash('Option too long (max 100).', 'danger')
                                 return render_template('game_create.html', active_page='games')
+                            if not _is_valid_option_key(o):
+                                flash('Options cannot contain . or start with $.', 'danger')
+                                return render_template('game_create.html', active_page='games')
                         if len(set(opts)) != len(opts):
                             flash('Options must be unique.', 'danger')
                             return render_template('game_create.html', active_page='games')
@@ -525,6 +545,9 @@ def games_create():
                 for o in opts:
                     if len(o) > MAX_OPTION_LEN:
                         flash('Option too long (max 100).', 'danger')
+                        return render_template('game_create.html', active_page='games')
+                    if not _is_valid_option_key(o):
+                        flash('Options cannot contain . or start with $.', 'danger')
                         return render_template('game_create.html', active_page='games')
                 if len(set(opts)) != len(opts):
                     flash('Options must be unique.', 'danger')
@@ -693,6 +716,7 @@ def api_create_poll():
     else:
         if len(opts)<2 or len(opts)>MAX_OPTIONS: return jsonify({'error':f'2-{MAX_OPTIONS} options'}),400
     if len(set(opts))!=len(opts): return jsonify({'error':'Options unique'}),400
+    if any(not _is_valid_option_key(o) for o in opts): return jsonify({'error':'Options cannot contain . or start with $'}),400
     if game_type=='trivia' and correct and correct not in opts: return jsonify({'error':'Correct must be option'}),400
     now = datetime.datetime.now(datetime.timezone.utc)
     expires_in = (data.get('expires_in') or '')
@@ -711,7 +735,9 @@ def api_create_poll():
     pin = _generate_game_pin()
     if game_type == 'trivia' and not timer_seconds:
         timer_seconds = 20
-    doc={'lobby_id':lobby_id,'pin':pin,'host_id':ObjectId(current_user.id),'host_username':current_user.username,'title':title,'game_type':game_type,'question':{'label':question,'options':opts,'correct_option':correct},'counts':{o:0 for o in opts},'status':'active','max_players':MAX_PLAYERS,'expires_at':expires_at,'created_at':now,'revealed':False,'allow_anonymous':bool(allow_anonymous),'timer_seconds':timer_seconds}
+    # Nested counts shape matches the form path (indexed by question index);
+    # the legacy read-compat wrap routes single-question tallies under '0'.
+    doc={'lobby_id':lobby_id,'pin':pin,'host_id':ObjectId(current_user.id),'host_username':current_user.username,'title':title,'game_type':game_type,'question':{'label':question,'options':opts,'correct_option':correct},'counts':{'0':{o:0 for o in opts}},'status':'active','max_players':MAX_PLAYERS,'expires_at':expires_at,'created_at':now,'revealed':False,'allow_anonymous':bool(allow_anonymous),'timer_seconds':timer_seconds}
     if game_type == 'trivia':
         doc['is_live'] = True
         doc['phase'] = 'lobby'
@@ -919,11 +945,26 @@ def vote_lobby(lobby_id):
     # NOTE: counts keys stay plaintext (atomic $inc tally needs stable keys).
     # The vote doc option below is encrypted to break the voter↔choice linkage at rest.
     # Exception: caption votes store a submission _id reference (needed for lookup/tally), not content.
+    if not _is_valid_option_key(option) and gt != 'caption':
+        if data: return jsonify({'error': 'Invalid option'}), 400
+        flash('Invalid option', 'danger')
+        return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
     stored_option = option if gt == 'caption' else m.encrypt_game_data(option, lobby_id)
     vote_doc = {'lobby_id': lobby_id, 'user_id': voter_user_id, 'username': voter_username, 'option': stored_option, 'submitted_at': datetime.datetime.now(datetime.timezone.utc), 'ip_hash': ip_hash}
     if gt in ('poll', 'trivia') and questions:
         vote_doc['question_index'] = question_index
-    m.game_votes_conf.insert_one(vote_doc)
+    # Exactly-once fingerprint for the partial unique index (BUG-015).
+    # Caption votes carry no question_index; TTAL guesses never get vote_fp.
+    _fp_identity = str(voter_user_id) if voter_user_id else (ip_hash or 'anon')
+    _fp_q = question_index if 'question_index' in vote_doc else 'x'
+    vote_doc['vote_fp'] = '%s:%s:%s' % (lobby_id, _fp_identity, _fp_q)
+    try:
+        m.game_votes_conf.insert_one(vote_doc)
+    except DuplicateKeyError:
+        # Lost a concurrent-vote race (unique vote index): treat as duplicate.
+        if data: return jsonify({'error': 'Already voted'}), 409
+        flash('You already voted', 'warning')
+        return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
     # increment count
     if gt in ('poll', 'trivia') and questions:
         m.game_sessions_conf.update_one({'lobby_id':lobby_id},{'$inc':{f'counts.{question_index}.{option}':1}})
@@ -934,7 +975,7 @@ def vote_lobby(lobby_id):
     try:
         lobby2 = m.game_sessions_conf.find_one({'lobby_id':lobby_id},{'counts':1})
         counts = lobby2.get('counts',{}) if lobby2 else {}
-        m.socketio.emit('game_vote', {'lobby_id':lobby_id,'counts':counts,'total': sum(counts.values())}, room=lobby_id)
+        m.socketio.emit('game_vote', {'lobby_id':lobby_id,'counts':counts,'total': _nested_total(counts)}, room=lobby_id)
         # presence update
         if current_user.is_authenticated:
             players = database.active_game_players.get(lobby_id, {})
@@ -942,7 +983,8 @@ def vote_lobby(lobby_id):
                 players[str(current_user.id)] = {'name':current_user.username,'avatar':getattr(current_user,'profile_image_url',None),'id':str(current_user.id)}
                 database.active_game_players[lobby_id]=players
                 m.socketio.emit('game_presence_update', {'players': list(players.values())}, room=lobby_id)
-    except: pass
+    except Exception as ex:
+        current_app.logger.warning('game_vote broadcast failed for %s: %s', lobby_id, ex)
     if data:
         return jsonify({'success':True,'message':'Vote recorded'})
     flash('Vote recorded — waiting for host reveal.' if gt in ('trivia',) and not lobby.get('revealed') else 'Vote recorded','success')
@@ -1180,7 +1222,10 @@ def live_submit_answer(lobby_id):
 
     data = request.get_json(silent=True) or {}
     option = (data.get('option') or request.form.get('option') or '').strip()
-    q_idx = int(data.get('q_idx') or request.form.get('q_idx') or 0)
+    try:
+        q_idx = int(data.get('q_idx') or request.form.get('q_idx') or 0)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid question index'}), 400
     current_q_idx = int(lobby.get('current_q_idx', 0))
 
     if q_idx != current_q_idx:
@@ -1193,6 +1238,8 @@ def live_submit_answer(lobby_id):
     q_data = questions[q_idx]
     if option not in q_data.get('options', []):
         return jsonify({'error': 'Option not found in choices'}), 400
+    if not _is_valid_option_key(option):
+        return jsonify({'error': 'Invalid option'}), 400
 
     player_id, player_name, player_avatar = _get_player_identity()
 
@@ -1230,7 +1277,30 @@ def live_submit_answer(lobby_id):
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    # Save to MongoDB
+    # Claim the vote first: the unique vote index turns a concurrent
+    # double-submit into DuplicateKeyError before any tally is mutated.
+    ip = (request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or request.remote_addr or '')
+    ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:16] if ip else ''
+    try:
+        _fp_uid = ObjectId(current_user.id) if current_user.is_authenticated else None
+        _fp_identity = str(_fp_uid) if _fp_uid else (ip_hash or 'anon')
+        m.game_votes_conf.insert_one({
+            'lobby_id': lobby_id,
+            'user_id': _fp_uid,
+            'player_id': player_id,
+            'username': player_name,
+            'question_index': q_idx,
+            'vote_fp': '%s:%s:%s' % (lobby_id, _fp_identity, q_idx),
+            'option': m.encrypt_game_data(option, lobby_id),
+            'is_correct': is_correct,
+            'points': points_earned,
+            'submitted_at': now,
+            'ip_hash': ip_hash
+        })
+    except DuplicateKeyError:
+        return jsonify({'error': 'Already answered this question'}), 409
+
+    # Save scores + tally (single atomic update)
     m.game_sessions_conf.update_one(
         {'lobby_id': lobby_id},
         {
@@ -1258,22 +1328,6 @@ def live_submit_answer(lobby_id):
             }
         }
     )
-
-    # Record persistent vote document
-    ip = (request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or request.remote_addr or '')
-    ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:16] if ip else ''
-    m.game_votes_conf.insert_one({
-        'lobby_id': lobby_id,
-        'user_id': ObjectId(current_user.id) if current_user.is_authenticated else None,
-        'player_id': player_id,
-        'username': player_name,
-        'question_index': q_idx,
-        'option': m.encrypt_game_data(option, lobby_id),
-        'is_correct': is_correct,
-        'points': points_earned,
-        'submitted_at': now,
-        'ip_hash': ip_hash
-    })
 
     # Broadcast answer count update to room
     try:
@@ -1734,10 +1788,19 @@ def story_add(lobby_id):
         'text': m.encrypt_game_data(sentence, lobby_id),
         'added_at': now.isoformat().replace('+00:00', 'Z') + 'Z'
     }
-    m.game_sessions_conf.update_one({'lobby_id': lobby_id}, {
-        '$push': {'sentences': entry},
-        '$inc': {'current_turn': 1}
-    })
+    # Atomic turn claim: the filter pins the turn we validated, so a
+    # concurrent writer advancing it first makes this a no-op instead of
+    # an interleaved double-add.
+    _res = m.game_sessions_conf.update_one(
+        {'lobby_id': lobby_id, 'current_turn': current_turn},
+        {
+            '$push': {'sentences': entry},
+            '$inc': {'current_turn': 1}
+        }
+    )
+    if getattr(_res, 'modified_count', 1) == 0:
+        flash('Someone just added a sentence — your turn moved on.', 'warning')
+        return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
     # Broadcast (decrypt sentences for the live payload — at rest they stay ciphertext)
     try:
         updated = m.game_sessions_conf.find_one({'lobby_id': lobby_id})

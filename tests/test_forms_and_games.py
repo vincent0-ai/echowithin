@@ -474,7 +474,11 @@ class TestSlimeVolleyball:
                 sync_handler(sync_payload)
                 mock_emit.assert_called_with('slime_host_sync', sync_payload, room=room_id, include_self=False)
 
-                # Guest input relay
+                # Guest joins, then guest input relay (side-gated: only the
+                # seated guest's input is relayed to the host sim)
+                mock_req.sid = 'sid_guest_456'
+                join_handler({'room_id': room_id})
+                assert m.active_slime_rooms[room_id]['guest_sid'] == 'sid_guest_456'
                 input_payload = {
                     'room_id': room_id,
                     'p2': {'x': 10, 'y': 1.5, 'vx': 0, 'vy': 0}
@@ -482,8 +486,10 @@ class TestSlimeVolleyball:
                 input_handler(input_payload)
                 mock_emit.assert_called_with('slime_player_input', input_payload, room=room_id, include_self=False)
 
-                # Restart event (must exclude the sender: a remote-triggered
-                # restart never re-emits, so an echo would ping-pong forever)
+                # Restart event (member-gated; must exclude the sender: a
+                # remote-triggered restart never re-emits, so an echo would
+                # ping-pong forever)
+                mock_req.sid = 'sid_host_123'
                 restart_handler({'room_id': room_id})
                 assert mock_emit.call_args[0][0] == 'slime_restart'
                 assert 'serving' in mock_emit.call_args[0][1]

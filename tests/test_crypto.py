@@ -504,3 +504,143 @@ class TestSecretKeyRotation:
             security._MEDIA_FERNET_CACHE.clear()
 
 
+class TestMasterKeyCustody:
+    """Root-key (master key) resolution and legacy KEK fallback."""
+
+    def test_master_key_env_changes_kek_with_legacy_fallback(self, app, monkeypatch):
+        import security
+
+        with app.app_context():
+            monkeypatch.delenv('VAULT_ADDR', raising=False)
+            monkeypatch.delenv('VAULT_TOKEN', raising=False)
+            monkeypatch.delenv('VAULT_MASTER_KEY_PATH', raising=False)
+            monkeypatch.delenv('VAULT_TRANSIT_KEY', raising=False)
+            monkeypatch.delenv('MASTER_KEY', raising=False)
+            security._KEK_CACHE.clear()
+
+            legacy_token = security._get_kek().encrypt(b'x' * 32).decode('utf-8')
+            assert security._get_legacy_kek() is None  # transition mode
+
+            monkeypatch.setenv('MASTER_KEY', 'test-master-key-material-0123456789')
+            security._KEK_CACHE.clear()
+
+            primary = security._get_kek()
+            assert primary.decrypt(primary.encrypt(b'y' * 32)) == b'y' * 32
+            assert security._get_legacy_kek() is not None
+
+            raw, used_legacy = security._unwrap_dek(legacy_token)
+            assert raw == b'x' * 32 and used_legacy is True
+
+            fresh = security._encrypt_dek(b'z' * 32)
+            raw2, used_legacy2 = security._unwrap_dek(fresh)
+            assert raw2 == b'z' * 32 and used_legacy2 is False
+
+            security._KEK_CACHE.clear()
+
+    def test_vault_master_key_read(self, app, monkeypatch):
+        import key_management
+        from unittest.mock import MagicMock
+
+        captured = {}
+
+        def fake_get(url, headers=None, timeout=None):
+            captured['url'] = url
+            captured['headers'] = headers
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.raise_for_status = lambda: None
+            resp.json = lambda: {'data': {'data': {'value': 'vault-master-key-material'}}}
+            return resp
+
+        monkeypatch.setenv('VAULT_ADDR', 'https://vault.example:8200')
+        monkeypatch.setenv('VAULT_TOKEN', 'scoped-token')
+        monkeypatch.setenv('VAULT_MASTER_KEY_PATH', 'secret/data/echowithin/master')
+        monkeypatch.setattr(key_management.requests, 'get', fake_get)
+
+        material = key_management.get_master_key_material(b'fallback-secret')
+        assert material == b'vault-master-key-material'
+        assert captured['url'].endswith('/v1/secret/data/echowithin/master')
+        assert captured['headers']['X-Vault-Token'] == 'scoped-token'
+
+    def test_vault_misconfig_fails_fast(self, app, monkeypatch):
+        import key_management
+
+        monkeypatch.setenv('VAULT_ADDR', 'https://vault.example:8200')
+        monkeypatch.setenv('VAULT_MASTER_KEY_PATH', 'secret/data/echowithin/master')
+        monkeypatch.delenv('VAULT_TOKEN', raising=False)
+        monkeypatch.delenv('MASTER_KEY', raising=False)
+        monkeypatch.delenv('VAULT_TRANSIT_KEY', raising=False)
+
+        with pytest.raises(Exception):
+            key_management.get_master_key_material(b'fallback-secret')
+
+    def test_transit_wrap_unwrap_and_migration(self, app, monkeypatch):
+        import security
+        import key_management
+        from unittest.mock import MagicMock
+
+        def fake_post(url, headers=None, json=None, timeout=None):
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.raise_for_status = lambda: None
+            if '/transit/encrypt/' in url:
+                b64 = json['plaintext']
+                resp.json = lambda: {'data': {'ciphertext': 'vault:v1:' + b64}}
+            else:
+                ct = json['ciphertext']
+                resp.json = lambda: {'data': {'plaintext': ct.split('vault:v1:', 1)[1]}}
+            return resp
+
+        monkeypatch.setenv('VAULT_ADDR', 'https://vault.example:8200')
+        monkeypatch.setenv('VAULT_TOKEN', 'scoped-token')
+        monkeypatch.setenv('VAULT_TRANSIT_KEY', 'echowithin-dek')
+        monkeypatch.delenv('MASTER_KEY', raising=False)
+        monkeypatch.setattr(key_management.requests, 'post', fake_post)
+
+        with app.app_context():
+            security._KEK_CACHE.clear()
+
+            token = security._encrypt_dek(b'x' * 32)
+            assert token.startswith('vault:v1:')
+            raw, needs_migration = security._unwrap_dek(token)
+            assert raw == b'x' * 32 and needs_migration is False
+
+            legacy_token = security._get_kek().encrypt(b'y' * 32).decode('utf-8')
+            raw2, needs_migration2 = security._unwrap_dek(legacy_token)
+            assert raw2 == b'y' * 32 and needs_migration2 is True
+
+            security._KEK_CACHE.clear()
+
+    def test_transit_self_check_and_mode(self, app, monkeypatch):
+        import key_management
+        from unittest.mock import MagicMock
+
+        def fake_post(url, headers=None, json=None, timeout=None):
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.raise_for_status = lambda: None
+            if '/transit/encrypt/' in url:
+                resp.json = lambda: {'data': {'ciphertext': 'vault:v1:' + json['plaintext']}}
+            else:
+                resp.json = lambda: {'data': {'plaintext': json['ciphertext'].split('vault:v1:', 1)[1]}}
+            return resp
+
+        monkeypatch.setenv('VAULT_ADDR', 'https://vault.example:8200')
+        monkeypatch.setenv('VAULT_TOKEN', 'scoped-token')
+        monkeypatch.setenv('VAULT_TRANSIT_KEY', 'echowithin-dek')
+        monkeypatch.setattr(key_management.requests, 'post', fake_post)
+
+        assert key_management.verify_transit() is True
+        assert key_management.current_mode().startswith('vault-transit')
+
+    def test_transition_mode_label(self, app, monkeypatch):
+        import key_management
+
+        monkeypatch.delenv('VAULT_TRANSIT_KEY', raising=False)
+        monkeypatch.delenv('VAULT_MASTER_KEY_PATH', raising=False)
+        monkeypatch.delenv('MASTER_KEY', raising=False)
+        assert key_management.current_mode().startswith('transition')
+
+
+
+

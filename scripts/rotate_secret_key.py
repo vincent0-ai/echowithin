@@ -1,6 +1,12 @@
 """
 Comprehensive SECRET_KEY rotation tool for EchoWithin.
 
+Note: once at-rest data keys are wrapped by Vault Transit (run
+scripts/migrate_deks_to_transit.py first), rotating SECRET_KEY no longer
+requires re-encrypting data. Phases 1-3 (KEK-wrapped DEKs and the media key)
+auto-skip records already wrapped as 'vault:vN:...'. Migrate to Transit before
+rotating SECRET_KEY so no stored key still depends on the old SECRET.
+
 Safely rotates SECRET_KEY across ALL encrypted data categories in the platform:
   Phase 1:  User v3 envelope DEKs (users.encryption_key_enc) + missing v3 keys
   Phase 2:  Conversation v3 envelope DEKs (dm_permissions.conversation_key_enc)
@@ -67,6 +73,11 @@ _CIRCUIT_BREAKER_MIN_FAILURES = 10  # at least 10 failures before tripping
 def _is_fernet_token(val) -> bool:
     """Return True if value looks like a Fernet token string."""
     return isinstance(val, str) and val.startswith('gAAAAA') and len(val) >= 50
+
+
+def _is_transit_token(val) -> bool:
+    """Return True if value is a Vault Transit ciphertext ('vault:vN:...')."""
+    return isinstance(val, str) and val.startswith('vault:')
 
 
 def _try_decrypt(fernet: Fernet, token_str: str):
@@ -503,6 +514,11 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                     audit_entries.append({'phase': 'p1_users', 'id': uid, 'result': 'failed', 'error': str(e)})
                 continue
 
+            if _is_transit_token(enc_dek_str):
+                p1_skipped += 1
+                audit_entries.append({'phase': 'p1_users', 'id': uid, 'result': 'skipped_transit'})
+                continue
+
             try:
                 enc_bytes = enc_dek_str.encode('utf-8')
                 try:
@@ -566,6 +582,11 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                     audit_entries.append({'phase': 'p2_conversations', 'id': cid, 'result': 'failed', 'error': str(e)})
                 continue
 
+            if _is_transit_token(enc_dek_str):
+                p2_skipped += 1
+                audit_entries.append({'phase': 'p2_conversations', 'id': cid, 'result': 'skipped_transit'})
+                continue
+
             try:
                 enc_bytes = enc_dek_str.encode('utf-8')
                 try:
@@ -606,7 +627,11 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
             media_key_raw = None
             p3_status = 'rewrapped'
 
-            if media_doc and media_doc.get('encryption_key_enc'):
+            if media_doc and _is_transit_token(media_doc.get('encryption_key_enc')):
+                # Already wrapped by Vault Transit — nothing for SECRET rotation to do.
+                p3_status = 'skipped_transit'
+                media_key_raw = b'__transit__'
+            elif media_doc and media_doc.get('encryption_key_enc'):
                 enc_val = media_doc['encryption_key_enc'].encode('utf-8')
                 try:
                     media_key_raw = keyring.new_kek.decrypt(enc_val)
@@ -624,7 +649,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                 media_key_raw = keyring._derive(keyring.old_bytes, b'echowithin_media_at_rest_v1', keyring._iters)
                 p3_status = 'initialized_envelope'
 
-            if p3_status != 'skipped' and confirm:
+            if p3_status not in ('skipped', 'skipped_transit') and confirm:
                 now_utc = datetime.datetime.now(datetime.timezone.utc)
                 database.auth_conf.update_one(
                     {'type': 'media_encryption_key'},

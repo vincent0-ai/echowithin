@@ -549,6 +549,13 @@ app.config['PREFERRED_URL_SCHEME'] = 'https'
 # Setup the secret key
 app.config["SECRET_KEY"] = get_env_variable('SECRET')
 
+# --- Root key custody self-check (Vault Transit / master key) ---
+try:
+    import key_management as _key_management
+    _key_management.log_startup_status(app.logger)
+except Exception as _km_err:
+    app.logger.error("Key custody startup check errored: %s", _km_err)
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 

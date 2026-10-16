@@ -14,11 +14,14 @@ from urllib.parse import urlparse, urljoin, quote
 from flask import request, flash, redirect, url_for, has_request_context
 from flask_login import current_user
 from bson.objectid import ObjectId
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from ratelimit import RateLimitException
 from config import BYPASS_RATE_LIMIT, _NOTES_KDF_ITERATIONS, _NOTES_V1_SALT
+from key_management import (
+    get_master_key_material, transit_enabled, transit_encrypt, transit_decrypt,
+)
 import database
 from cachetools import TTLCache
 
@@ -854,16 +857,25 @@ def _get_media_fernet():
                 {'encryption_key_enc': 1, 'encryption_key_enc_prev': 1}
             )
             if doc:
-                kek = _get_kek()
                 unwrapped_key = None
+                needs_migration = False
                 for field in ('encryption_key_enc', 'encryption_key_enc_prev'):
                     enc_val = doc.get(field)
-                    if enc_val:
-                        try:
-                            unwrapped_key = kek.decrypt(enc_val.encode('utf-8'))
-                            break
-                        except Exception:
-                            continue
+                    if not enc_val:
+                        continue
+                    try:
+                        unwrapped_key, needs_migration = _unwrap_dek(enc_val)
+                        break
+                    except Exception:
+                        continue
+                if unwrapped_key and needs_migration:
+                    try:
+                        database.auth_conf.update_one(
+                            {'type': 'media_encryption_key'},
+                            {'$set': {'encryption_key_enc': _encrypt_dek(unwrapped_key)}}
+                        )
+                    except Exception as e:
+                        app.logger.warning(f"Could not re-wrap media key under current root key: {e}")
                 if unwrapped_key:
                     from cryptography.fernet import MultiFernet
                     fernets = [Fernet(unwrapped_key)]
@@ -955,34 +967,86 @@ def is_media_proxy_url(url):
 # v3 ENVELOPE ENCRYPTION
 # ---------------------------------------------------------------------------
 # Each user gets a random DEK (Data Encryption Key) encrypted by a KEK
-# (Key Encryption Key) derived from SECRET_KEY. The encrypted DEK and a
-# random salt are stored in the user document.
+# (Key Encryption Key) derived from the configured root key material
+# (Vault master key or MASTER_KEY, see key_management.py). The encrypted DEK
+# and a random salt are stored in the user document.
 #
 # Threat model improvement:
 #   - DB breach alone → attacker gets encrypted DEKs, no plaintext
-#   - SECRET_KEY leak alone → attacker needs the DB to get encrypted DEKs
+#   - Root key leak alone → attacker needs the DB to get encrypted DEKs
 #   - Both together → still need both pieces (vs today: SECRET_KEY alone)
 #
-# The KEK is derived from SECRET_KEY with a fixed namespace salt.
-# The DEK is a random 32-byte key, never derived from SECRET_KEY.
+# The KEK is derived from the root material with a fixed namespace salt.
+# The DEK is a random 32-byte key, never derived from the root material.
 # A random 32-byte salt per user adds uniqueness to the derived Fernet key.
 # ---------------------------------------------------------------------------
 
-_KEK_CACHE = {}  # module-level singleton cache for KEK Fernet
+_KEK_CACHE = {}  # module-level cache: 'instance' (primary KEK), 'legacy' (SECRET-derived KEK)
+
+
+def _secret_bytes() -> bytes:
+    """The Flask SECRET_KEY as bytes (session/CSRF signing + transition KEK)."""
+    secret = _get_app().config["SECRET_KEY"]
+    return secret.encode('utf-8') if isinstance(secret, str) else secret
 
 
 def _get_kek() -> Fernet:
-    """Master Key Encryption Key — derived from SECRET_KEY with a fixed namespace salt.
-    
-    This is used ONLY to wrap/unwrap user DEKs, never to encrypt content directly.
+    """Master Key Encryption Key — derived from the configured root key material.
+
+    Root material is resolved by key_management (Vault → MASTER_KEY env →
+    SECRET_KEY fallback). This KEK is used ONLY to wrap/unwrap data keys
+    (user DEKs, DM conversation DEKs, the media-at-rest key), never to encrypt
+    content directly.
     """
     if 'instance' in _KEK_CACHE:
         return _KEK_CACHE['instance']
-    secret = _get_app().config["SECRET_KEY"].encode() if isinstance(_get_app().config["SECRET_KEY"], str) else _get_app().config["SECRET_KEY"]
-    key = _derive_fernet_key(secret, b'echowithin_kek_v1', _NOTES_KDF_ITERATIONS)
+    material = get_master_key_material(_secret_bytes())
+    key = _derive_fernet_key(material, b'echowithin_kek_v1', _NOTES_KDF_ITERATIONS)
     f = Fernet(key)
     _KEK_CACHE['instance'] = f
     return f
+
+
+def _get_legacy_kek():
+    """KEK derived from SECRET_KEY, used only to unwrap tokens written before a
+    master key was configured.
+
+    Returns None when it is identical to the primary KEK (transition mode), so
+    callers can skip the redundant attempt.
+    """
+    secret = _secret_bytes()
+    if get_master_key_material(secret) == secret:
+        return None
+    if 'legacy' not in _KEK_CACHE:
+        key = _derive_fernet_key(secret, b'echowithin_kek_v1', _NOTES_KDF_ITERATIONS)
+        _KEK_CACHE['legacy'] = Fernet(key)
+    return _KEK_CACHE['legacy']
+
+
+def _unwrap_dek(encrypted_dek: str):
+    """Unwrap a wrapped data key.
+
+    Returns (raw_bytes, needs_migration). Handles three token forms:
+      - 'vault:vN:...'  → Vault Transit ciphertext (current mode)
+      - Fernet token under the primary KEK
+      - Fernet token under the legacy SECRET-derived KEK (pre-master/Transit)
+
+    needs_migration is True when the token was not produced by the current
+    primary mechanism, so callers can re-wrap it.
+    """
+    token_str = encrypted_dek if isinstance(encrypted_dek, str) else encrypted_dek.decode('utf-8')
+    if token_str.startswith('vault:'):
+        return transit_decrypt(token_str), False
+
+    needs_migration = transit_enabled()
+    token = token_str.encode('utf-8')
+    try:
+        return _get_kek().decrypt(token), needs_migration
+    except InvalidToken:
+        legacy = _get_legacy_kek()
+        if legacy is None:
+            raise
+        return legacy.decrypt(token), True
 
 
 def generate_user_envelope_keys() -> dict:
@@ -997,7 +1061,7 @@ def generate_user_envelope_keys() -> dict:
     """
     dek_raw = _secrets.token_bytes(32)
     salt_raw = _secrets.token_bytes(32)
-    encrypted_dek = _get_kek().encrypt(dek_raw).decode('utf-8')
+    encrypted_dek = _encrypt_dek(dek_raw)
     return {
         'encryption_key_enc': encrypted_dek,
         'encryption_salt': base64.urlsafe_b64encode(salt_raw).decode('utf-8'),
@@ -1007,11 +1071,13 @@ def generate_user_envelope_keys() -> dict:
 
 def _decrypt_dek(encrypted_dek: str) -> bytes:
     """Decrypt a user's DEK from the stored Fernet token."""
-    return _get_kek().decrypt(encrypted_dek.encode('utf-8'))
+    return _unwrap_dek(encrypted_dek)[0]
 
 
 def _encrypt_dek(dek_raw: bytes) -> str:
-    """Encrypt a DEK with the current KEK for storage."""
+    """Wrap a data key with the current root mechanism (Vault Transit or KEK)."""
+    if transit_enabled():
+        return transit_encrypt(dek_raw)
     return _get_kek().encrypt(dek_raw).decode('utf-8')
 
 
@@ -1035,7 +1101,9 @@ def _get_user_fernet_v3(user_id: str):
         return None
 
     try:
-        dek_raw = _decrypt_dek(user_doc['encryption_key_enc'])
+        dek_raw, needs_migration = _unwrap_dek(user_doc['encryption_key_enc'])
+        if needs_migration:
+            _rewrap_user_dek(user_id, dek_raw)
         salt = base64.urlsafe_b64decode(user_doc['encryption_salt'])
         key = _derive_fernet_key(dek_raw, salt, _NOTES_KDF_ITERATIONS)
         f = Fernet(key)
@@ -1045,6 +1113,17 @@ def _get_user_fernet_v3(user_id: str):
         _get_app().logger.error(f"Failed to derive v3 Fernet for user {user_id}: {e}")
         database._user_fernet_v3_cache[user_id] = '__none__'
         return None
+
+
+def _rewrap_user_dek(user_id: str, dek_raw: bytes):
+    """Re-wrap a user DEK under the current KEK after a legacy unwrap."""
+    try:
+        database.users_conf.update_one(
+            {'_id': ObjectId(user_id)},
+            {'$set': {'encryption_key_enc': _encrypt_dek(dek_raw)}}
+        )
+    except Exception as e:
+        _get_app().logger.warning(f"Could not re-wrap DEK for user {user_id}: {e}")
 
 
 def _invalidate_user_fernet_v3(user_id: str):
@@ -1070,7 +1149,7 @@ def generate_conversation_envelope_keys() -> dict:
         }
     """
     dek_raw = _secrets.token_bytes(32)
-    encrypted_dek = _get_kek().encrypt(dek_raw).decode('utf-8')
+    encrypted_dek = _encrypt_dek(dek_raw)
     return {
         'conversation_key_enc': encrypted_dek,
         'dm_encryption_version': 3
@@ -1105,7 +1184,9 @@ def _get_dm_fernet_v3(user1_id: str, user2_id: str):
         return None
 
     try:
-        dek_raw = _decrypt_dek(perm_doc['conversation_key_enc'])
+        dek_raw, needs_migration = _unwrap_dek(perm_doc['conversation_key_enc'])
+        if needs_migration:
+            _rewrap_conversation_dek(uids, dek_raw)
         # Use a deterministic salt from the conversation ID for the Fernet key derivation
         salt = f'echowithin_dm_v3_{conv_id}'.encode()
         key = _derive_fernet_key(dek_raw, salt, _NOTES_KDF_ITERATIONS)
@@ -1116,6 +1197,22 @@ def _get_dm_fernet_v3(user1_id: str, user2_id: str):
         _get_app().logger.error(f"Failed to derive v3 DM Fernet for conversation {conv_id}: {e}")
         database._dm_fernet_v3_cache[conv_id] = '__none__'
         return None
+
+
+def _rewrap_conversation_dek(uids, dek_raw: bytes):
+    """Re-wrap a DM conversation DEK under the current KEK after a legacy unwrap."""
+    try:
+        database.dm_permissions_conf.update_one(
+            {
+                '$or': [
+                    {'requester_id': ObjectId(uids[0]), 'target_id': ObjectId(uids[1])},
+                    {'requester_id': ObjectId(uids[1]), 'target_id': ObjectId(uids[0])}
+                ]
+            },
+            {'$set': {'conversation_key_enc': _encrypt_dek(dek_raw)}}
+        )
+    except Exception as e:
+        _get_app().logger.warning(f"Could not re-wrap DM DEK for conversation {uids}: {e}")
 
 
 def _invalidate_dm_fernet_v3(user1_id: str, user2_id: str):

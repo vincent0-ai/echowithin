@@ -1608,6 +1608,10 @@ def api_bond_request(target_user_id):
             'streak_shield': None
         }
         result = m.bonds_conf.insert_one(bond_doc)
+        try:
+            m.bonds_conf.update_one({'_id': result.inserted_id}, {'$set': m.generate_bond_envelope_keys()})
+        except Exception as e:
+            m.app.logger.warning(f"Could not create bond envelope key for {result.inserted_id}: {e}")
 
         # Notify via SocketIO
         m.socketio.emit('bond_request_received', {

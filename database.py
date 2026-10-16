@@ -123,6 +123,10 @@ _community_fernet_v2_cache = TTLCache(maxsize=512, ttl=3600)
 _bond_fernet_cache = TTLCache(maxsize=1024, ttl=3600)
 _form_fernet_cache = TTLCache(maxsize=1024, ttl=3600)
 _game_fernet_cache = TTLCache(maxsize=1024, ttl=3600)
+# v3 per-object envelope caches
+_bond_fernet_v3_cache = TTLCache(maxsize=1024, ttl=3600)
+_form_fernet_v3_cache = TTLCache(maxsize=1024, ttl=3600)
+_game_fernet_v3_cache = TTLCache(maxsize=1024, ttl=3600)
 
 # Game lobby presence (mirrors active_note_viewers) — lobby_id -> {user_id: {name, avatar, id, ready}}
 active_game_players = {}

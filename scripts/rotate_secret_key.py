@@ -6,6 +6,8 @@ scripts/migrate_deks_to_transit.py first), rotating SECRET_KEY no longer
 requires re-encrypting data. Phases 1-3 (KEK-wrapped DEKs and the media key)
 auto-skip records already wrapped as 'vault:vN:...'. Migrate to Transit before
 rotating SECRET_KEY so no stored key still depends on the old SECRET.
+Bond/form/game content already moved onto Vault-wrapped per-object DEKs (run
+scripts/migrate_object_deks_to_transit.py) is likewise skipped in Phases 7/9/10.
 
 Safely rotates SECRET_KEY across ALL encrypted data categories in the platform:
   Phase 1:  User v3 envelope DEKs (users.encryption_key_enc) + missing v3 keys
@@ -403,13 +405,22 @@ class _RotationKeyRing:
         new_cipher = target_fernet.encrypt(plaintext.encode('utf-8')).decode('utf-8')
         return new_cipher, 'rotated'
 
-    def rotate_simple_field(self, ciphertext: str, old_fernet: Fernet, new_fernet: Fernet, extra_old_fernets=None):
+    def rotate_simple_field(self, ciphertext: str, old_fernet: Fernet, new_fernet: Fernet, extra_old_fernets=None,
+                            current_fernets=None):
         """Rotate a single-domain Fernet field (bond, community, form, game, vault).
+
+        ``current_fernets`` are v3 per-object envelope keys (bond/form/game DEKs).
+        A field that already decrypts with one of them is DEK-encrypted and is left
+        alone (SECRET_KEY rotation must never touch Transit-custodied content).
 
         Returns (new_ciphertext, status) where status is 'skipped', 'rotated', or 'failed'.
         """
         if not _is_fernet_token(ciphertext):
             return ciphertext, 'skipped'
+
+        for cf in (current_fernets or ()):
+            if cf is not None and _try_decrypt(cf, ciphertext) is not None:
+                return ciphertext, 'skipped'
 
         if _try_decrypt(new_fernet, ciphertext) is not None:
             return ciphertext, 'skipped'
@@ -989,12 +1000,13 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                     continue
                 old_f = keyring.get_old_bond(bid)
                 new_f = keyring.get_new_bond(bid)
+                v3f = security._get_bond_fernet_v3(bid)
                 updates = {}
                 failed_flag = False
                 for fn in field_names:
                     val = doc.get(fn)
                     if _is_fernet_token(val):
-                        nv, st = keyring.rotate_simple_field(val, old_f, new_f)
+                        nv, st = keyring.rotate_simple_field(val, old_f, new_f, current_fernets=[v3f])
                         if st == 'rotated':
                             updates[fn] = nv
                         elif st == 'failed':
@@ -1016,12 +1028,13 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                 continue
             old_f = keyring.get_old_bond(bid)
             new_f = keyring.get_new_bond(bid)
+            v3f = security._get_bond_fernet_v3(bid)
             updates = {}
             failed_flag = False
             for fn in ('title', 'description'):
                 val = gdoc.get(fn)
                 if _is_fernet_token(val):
-                    nv, st = keyring.rotate_simple_field(val, old_f, new_f)
+                    nv, st = keyring.rotate_simple_field(val, old_f, new_f, current_fernets=[v3f])
                     if st == 'rotated':
                         updates[fn] = nv
                     elif st == 'failed':
@@ -1034,7 +1047,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                 for ms in ms_list:
                     if isinstance(ms, dict) and _is_fernet_token(ms.get('title')):
                         ms_copy = dict(ms)
-                        nv, st = keyring.rotate_simple_field(ms['title'], old_f, new_f)
+                        nv, st = keyring.rotate_simple_field(ms['title'], old_f, new_f, current_fernets=[v3f])
                         if st == 'rotated':
                             ms_copy['title'] = nv
                             ms_changed = True
@@ -1053,7 +1066,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                 for ci in ci_list:
                     if isinstance(ci, dict) and _is_fernet_token(ci.get('note')):
                         ci_copy = dict(ci)
-                        nv, st = keyring.rotate_simple_field(ci['note'], old_f, new_f)
+                        nv, st = keyring.rotate_simple_field(ci['note'], old_f, new_f, current_fernets=[v3f])
                         if st == 'rotated':
                             ci_copy['note'] = nv
                             ci_changed = True
@@ -1085,9 +1098,10 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
             updates = {}
             failed_flag = False
 
+            v3f = security._get_bond_fernet_v3(bid)
             qt = qdoc.get('question_text')
             if _is_fernet_token(qt):
-                nv, st = keyring.rotate_simple_field(qt, old_f, new_f)
+                nv, st = keyring.rotate_simple_field(qt, old_f, new_f, current_fernets=[v3f])
                 if st == 'rotated':
                     updates['question_text'] = nv
                 elif st == 'failed':
@@ -1100,7 +1114,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                 for uid_key, a_val in answers.items():
                     if isinstance(a_val, dict) and _is_fernet_token(a_val.get('answer')):
                         a_copy = dict(a_val)
-                        nv, st = keyring.rotate_simple_field(a_val['answer'], old_f, new_f)
+                        nv, st = keyring.rotate_simple_field(a_val['answer'], old_f, new_f, current_fernets=[v3f])
                         if st == 'rotated':
                             a_copy['answer'] = nv
                             new_answers[uid_key] = a_copy
@@ -1108,7 +1122,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                         elif st == 'failed':
                             failed_flag = True
                     elif _is_fernet_token(a_val):
-                        nv, st = keyring.rotate_simple_field(a_val, old_f, new_f)
+                        nv, st = keyring.rotate_simple_field(a_val, old_f, new_f, current_fernets=[v3f])
                         if st == 'rotated':
                             new_answers[uid_key] = nv
                             ans_changed = True
@@ -1177,13 +1191,14 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
             fid = str(fdoc['_id'])
             old_f = keyring.get_old_form(fid)
             new_f = keyring.get_new_form(fid)
+            v3f = security._get_form_fernet_v3(fid)
             updates = {}
             failed_flag = False
 
             for fn in ('title', 'description'):
                 val = fdoc.get(fn)
                 if _is_fernet_token(val):
-                    nv, st = keyring.rotate_simple_field(val, old_f, new_f)
+                    nv, st = keyring.rotate_simple_field(val, old_f, new_f, current_fernets=[v3f])
                     if st == 'rotated':
                         updates[fn] = nv
                     elif st == 'failed':
@@ -1199,7 +1214,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                         continue
                     q_copy = dict(q)
                     if _is_fernet_token(q.get('label')):
-                        nv, st = keyring.rotate_simple_field(q['label'], old_f, new_f)
+                        nv, st = keyring.rotate_simple_field(q['label'], old_f, new_f, current_fernets=[v3f])
                         if st == 'rotated':
                             q_copy['label'] = nv
                             qs_changed = True
@@ -1210,7 +1225,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                         new_opts = []
                         for o in opts:
                             if _is_fernet_token(o):
-                                nv, st = keyring.rotate_simple_field(o, old_f, new_f)
+                                nv, st = keyring.rotate_simple_field(o, old_f, new_f, current_fernets=[v3f])
                                 if st == 'rotated':
                                     new_opts.append(nv)
                                     qs_changed = True
@@ -1242,6 +1257,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                 continue
             old_f = keyring.get_old_form(fid)
             new_f = keyring.get_new_form(fid)
+            v3f = security._get_form_fernet_v3(fid)
             ans_list = rdoc.get('answers')
             if not isinstance(ans_list, list):
                 p9_skipped += 1
@@ -1252,7 +1268,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
             for a in ans_list:
                 if isinstance(a, dict) and _is_fernet_token(a.get('value')):
                     a_copy = dict(a)
-                    nv, st = keyring.rotate_simple_field(a['value'], old_f, new_f)
+                    nv, st = keyring.rotate_simple_field(a['value'], old_f, new_f, current_fernets=[v3f])
                     if st == 'rotated':
                         a_copy['value'] = nv
                         ans_changed = True
@@ -1286,13 +1302,14 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                 continue
             old_f = keyring.get_old_game(lid)
             new_f = keyring.get_new_game(lid)
+            v3f = security._get_game_fernet_v3(lid)
             updates = {}
             failed_flag = False
 
             for fn in ('title', 'prompt'):
                 val = gdoc.get(fn)
                 if _is_fernet_token(val):
-                    nv, st = keyring.rotate_simple_field(val, old_f, new_f)
+                    nv, st = keyring.rotate_simple_field(val, old_f, new_f, current_fernets=[v3f])
                     if st == 'rotated':
                         updates[fn] = nv
                     elif st == 'failed':
@@ -1304,7 +1321,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                 q0_changed = False
                 for qf in ('label', 'correct_option'):
                     if _is_fernet_token(q0.get(qf)):
-                        nv, st = keyring.rotate_simple_field(q0[qf], old_f, new_f)
+                        nv, st = keyring.rotate_simple_field(q0[qf], old_f, new_f, current_fernets=[v3f])
                         if st == 'rotated':
                             q0_copy[qf] = nv
                             q0_changed = True
@@ -1322,7 +1339,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                         q_copy = dict(q)
                         for qf in ('label', 'correct_option'):
                             if _is_fernet_token(q.get(qf)):
-                                nv, st = keyring.rotate_simple_field(q[qf], old_f, new_f)
+                                nv, st = keyring.rotate_simple_field(q[qf], old_f, new_f, current_fernets=[v3f])
                                 if st == 'rotated':
                                     q_copy[qf] = nv
                                     qs_changed = True
@@ -1341,7 +1358,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                 for s in sents:
                     if isinstance(s, dict) and _is_fernet_token(s.get('text')):
                         s_copy = dict(s)
-                        nv, st = keyring.rotate_simple_field(s['text'], old_f, new_f)
+                        nv, st = keyring.rotate_simple_field(s['text'], old_f, new_f, current_fernets=[v3f])
                         if st == 'rotated':
                             s_copy['text'] = nv
                             sents_changed = True
@@ -1363,7 +1380,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                         for pid, pinfo in players_map.items():
                             if isinstance(pinfo, dict) and _is_fernet_token(pinfo.get('option')):
                                 p_copy = dict(pinfo)
-                                nv, st = keyring.rotate_simple_field(pinfo['option'], old_f, new_f)
+                                nv, st = keyring.rotate_simple_field(pinfo['option'], old_f, new_f, current_fernets=[v3f])
                                 if st == 'rotated':
                                     p_copy['option'] = nv
                                     la_changed = True
@@ -1398,6 +1415,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                 continue
             old_f = keyring.get_old_game(lid)
             new_f = keyring.get_new_game(lid)
+            v3f = security._get_game_fernet_v3(lid)
             c_copy = dict(content)
             c_changed = False
             failed_flag = False
@@ -1406,7 +1424,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                 new_stmts = []
                 for s in content['statements']:
                     if _is_fernet_token(s):
-                        nv, st = keyring.rotate_simple_field(s, old_f, new_f)
+                        nv, st = keyring.rotate_simple_field(s, old_f, new_f, current_fernets=[v3f])
                         if st == 'rotated':
                             new_stmts.append(nv)
                             c_changed = True
@@ -1421,7 +1439,7 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
 
             for fn in ('lie_index', 'caption'):
                 if _is_fernet_token(content.get(fn)):
-                    nv, st = keyring.rotate_simple_field(content[fn], old_f, new_f)
+                    nv, st = keyring.rotate_simple_field(content[fn], old_f, new_f, current_fernets=[v3f])
                     if st == 'rotated':
                         c_copy[fn] = nv
                         c_changed = True
@@ -1445,7 +1463,8 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
                 continue
             old_f = keyring.get_old_game(lid)
             new_f = keyring.get_new_game(lid)
-            nv, st = keyring.rotate_simple_field(opt, old_f, new_f)
+            v3f = security._get_game_fernet_v3(lid)
+            nv, st = keyring.rotate_simple_field(opt, old_f, new_f, current_fernets=[v3f])
             if st == 'rotated':
                 if confirm:
                     database.game_votes_conf.update_one({'_id': vdoc['_id']}, {'$set': {'option': nv}})
@@ -1463,7 +1482,8 @@ def run_rotation(old_secret: str, new_secret: str, confirm=False, batch_size=50)
             for cache_attr in (
                 '_user_fernet_cache', '_dm_fernet_cache', '_decrypted_notes_memory_cache',
                 '_user_fernet_v3_cache', '_dm_fernet_v3_cache', '_community_fernet_v2_cache',
-                '_bond_fernet_cache', '_form_fernet_cache', '_game_fernet_cache'
+                '_bond_fernet_cache', '_form_fernet_cache', '_game_fernet_cache',
+                '_bond_fernet_v3_cache', '_form_fernet_v3_cache', '_game_fernet_v3_cache'
             ):
                 c = getattr(database, cache_attr, None)
                 if c is not None:

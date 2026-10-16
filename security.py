@@ -620,8 +620,97 @@ def warm_user_fernet(user_id: str):
         _get_app().logger.warning(f"Could not warm Fernet for user {user_id}: {e}")
 
 
-def _get_bond_fernet(bond_id: str) -> Fernet:
-    """Per-bond Fernet instance. Derives key from SECRET_KEY + bond_id salt."""
+# -- v3 object envelopes (bonds / forms / game lobbies) -----------------------
+# Same design as user/conversation envelopes: a random per-object DEK, wrapped by
+# Vault Transit (or the KEK), stored on the object's own document. The content
+# Fernet key is derived from the DEK + a deterministic per-object salt, so a
+# SECRET_KEY leak no longer exposes this data once migration completes.
+
+def _rewrap_object_dek(collection, field_name, query, dek_raw: bytes):
+    """Re-wrap an object DEK under the current KEK after a legacy unwrap."""
+    try:
+        getattr(database, collection).update_one(query, {'$set': {field_name: _encrypt_dek(dek_raw)}})
+    except Exception as e:
+        _get_app().logger.warning(f"Could not re-wrap {field_name} ({query}): {e}")
+
+
+def generate_bond_envelope_keys() -> dict:
+    """Random wrapped DEK for a new bond (merge into the bonds document)."""
+    return {'bond_key_enc': _encrypt_dek(_secrets.token_bytes(32)), 'bond_encryption_version': 3}
+
+
+def generate_form_envelope_keys() -> dict:
+    """Random wrapped DEK for a new form (merge into the forms document)."""
+    return {'form_key_enc': _encrypt_dek(_secrets.token_bytes(32)), 'form_encryption_version': 3}
+
+
+def generate_game_envelope_keys() -> dict:
+    """Random wrapped DEK for a new game lobby (merge into the game lobby document)."""
+    return {'game_key_enc': _encrypt_dek(_secrets.token_bytes(32)), 'game_encryption_version': 3}
+
+
+def _get_object_fernet_v3(cache, collection, field_name, object_id_str, salt_prefix,
+                          lookup_field='_id', lookup_is_oid=True):
+    """Shared v3 lookup for per-object envelopes. Returns None if not migrated.
+
+    Bonds/forms are keyed by the document ``_id``; game lobbies by their
+    string ``lobby_id`` field.
+    """
+    cached = cache.get(object_id_str)
+    if cached is not None:
+        return cached if cached != '__none__' else None
+    try:
+        query = {lookup_field: ObjectId(object_id_str) if lookup_is_oid else object_id_str}
+    except Exception:
+        return None
+    try:
+        doc = getattr(database, collection).find_one(query, {field_name: 1})
+    except Exception:
+        # Transient/unavailable lookup — do not cache a negative result.
+        return None
+    if not doc or not doc.get(field_name):
+        cache[object_id_str] = '__none__'
+        return None
+    try:
+        dek_raw, needs_migration = _unwrap_dek(doc[field_name])
+        if needs_migration:
+            _rewrap_object_dek(collection, field_name, query, dek_raw)
+        salt = f'{salt_prefix}{object_id_str}'.encode()
+        f = Fernet(_derive_fernet_key(dek_raw, salt, _NOTES_KDF_ITERATIONS))
+        cache[object_id_str] = f
+        return f
+    except Exception as e:
+        _get_app().logger.error(f"Failed to derive v3 Fernet for {field_name} {object_id_str}: {e}")
+        cache[object_id_str] = '__none__'
+        return None
+
+
+def _get_bond_fernet_v3(bond_id: str):
+    return _get_object_fernet_v3(database._bond_fernet_v3_cache, 'bonds_conf', 'bond_key_enc', str(bond_id), 'echowithin_bonds_v2_')
+
+
+def _get_form_fernet_v3(form_id: str):
+    return _get_object_fernet_v3(database._form_fernet_v3_cache, 'forms_conf', 'form_key_enc', str(form_id), 'echowithin_forms_v2_')
+
+
+def _get_game_fernet_v3(lobby_id: str):
+    return _get_object_fernet_v3(database._game_fernet_v3_cache, 'game_sessions_conf', 'game_key_enc', str(lobby_id), 'echowithin_games_v2_', lookup_field='lobby_id', lookup_is_oid=False)
+
+
+def _invalidate_bond_fernet_v3(bond_id: str):
+    database._bond_fernet_v3_cache.pop(str(bond_id), None)
+
+
+def _invalidate_form_fernet_v3(form_id: str):
+    database._form_fernet_v3_cache.pop(str(form_id), None)
+
+
+def _invalidate_game_fernet_v3(lobby_id: str):
+    database._game_fernet_v3_cache.pop(str(lobby_id), None)
+
+
+def _get_bond_fernet_legacy(bond_id: str) -> Fernet:
+    """Per-bond Fernet instance (legacy). Derives key from SECRET_KEY + bond_id salt."""
     cached = database._bond_fernet_cache.get(bond_id)
     if cached:
         return cached
@@ -634,11 +723,11 @@ def _get_bond_fernet(bond_id: str) -> Fernet:
 
 
 def encrypt_bond_data(content: str, bond_id: str) -> str:
-    """Encrypts bond content (journal entries, QotD answers, goals, etc.) using per-bond key."""
+    """Encrypts bond content using the v3 per-bond envelope key, else legacy key."""
     if not content:
         return content
     try:
-        f = _get_bond_fernet(str(bond_id))
+        f = _get_bond_fernet_v3(str(bond_id)) or _get_bond_fernet_legacy(str(bond_id))
         return f.encrypt(content.encode('utf-8')).decode('utf-8')
     except Exception as e:
         _get_app().logger.error(f"Error encrypting bond data for bond {bond_id}: {e}")
@@ -646,22 +735,22 @@ def encrypt_bond_data(content: str, bond_id: str) -> str:
 
 
 def decrypt_bond_data(encrypted_content: str, bond_id: str) -> str:
-    """Decrypts bond content using per-bond key. Falls back to raw text if legacy/unencrypted."""
+    """Decrypts bond content (v3 envelope first, then legacy). Falls back to raw text."""
     if not encrypted_content:
         return encrypted_content
-    try:
-        f = _get_bond_fernet(str(bond_id))
-        return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
-    except Exception:
-        # If decryption fails and text doesn't look like Fernet ciphertext, return raw (legacy/plaintext)
-        if not encrypted_content.startswith('gAAAAA'):
-            return encrypted_content
-        _get_app().logger.warning(f"Bond data decryption failed for bond {bond_id}")
-        return '[Content unavailable — decryption error]'
+    for f in (_get_bond_fernet_v3(str(bond_id)), _get_bond_fernet_legacy(str(bond_id))):
+        try:
+            return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
+        except Exception:
+            continue
+    if not encrypted_content.startswith('gAAAAA'):
+        return encrypted_content
+    _get_app().logger.warning(f"Bond data decryption failed for bond {bond_id}")
+    return '[Content unavailable — decryption error]'
 
 
-def _get_form_fernet(form_id: str) -> Fernet:
-    """Per-form Fernet — encrypted at rest with server-held key (not E2E). Reuses per-bond pattern."""
+def _get_form_fernet_legacy(form_id: str) -> Fernet:
+    """Per-form Fernet (legacy). Reuses per-bond pattern."""
     cached = database._form_fernet_cache.get(str(form_id))
     if cached:
         return cached
@@ -674,11 +763,11 @@ def _get_form_fernet(form_id: str) -> Fernet:
 
 
 def encrypt_form_response(plaintext: str, form_id: str) -> str:
-    """Encrypt a single form answer value at rest (per-form key)."""
+    """Encrypt a single form answer value at rest (v3 per-form envelope, else legacy)."""
     if not plaintext:
         return plaintext
     try:
-        f = _get_form_fernet(str(form_id))
+        f = _get_form_fernet_v3(str(form_id)) or _get_form_fernet_legacy(str(form_id))
         return f.encrypt(plaintext.encode('utf-8')).decode('utf-8')
     except Exception as e:
         _get_app().logger.error(f"Error encrypting form response {form_id}: {e}")
@@ -686,7 +775,7 @@ def encrypt_form_response(plaintext: str, form_id: str) -> str:
 
 
 def decrypt_form_response(ciphertext: str, form_id: str) -> str:
-    """Decrypt a form answer value. Falls back to plaintext if not Fernet."""
+    """Decrypt a form answer value (v3 envelope first, then legacy). Falls back to plaintext."""
     if not ciphertext:
         return ciphertext
     if not isinstance(ciphertext, str) or not ciphertext.startswith('gAAAAA'):
@@ -696,19 +785,20 @@ def decrypt_form_response(ciphertext: str, form_id: str) -> str:
         cached = database._decrypted_forms_cache.get(cache_key)
         if cached is not None:
             return cached
-    try:
-        f = _get_form_fernet(str(form_id))
-        dec = f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
-        if getattr(database, '_decrypted_forms_cache', None) is not None:
-            database._decrypted_forms_cache[cache_key] = dec
-        return dec
-    except Exception:
-        _get_app().logger.warning(f"Form response decryption failed for form {form_id}")
-        return '[Unavailable]'
+    for f in (_get_form_fernet_v3(str(form_id)), _get_form_fernet_legacy(str(form_id))):
+        try:
+            dec = f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+            if getattr(database, '_decrypted_forms_cache', None) is not None:
+                database._decrypted_forms_cache[cache_key] = dec
+            return dec
+        except Exception:
+            continue
+    _get_app().logger.warning(f"Form response decryption failed for form {form_id}")
+    return '[Unavailable]'
 
 
-def _get_game_fernet(lobby_id: str) -> Fernet:
-    """Per-lobby Fernet — encrypted at rest with server-held key (not E2E). Reuses per-bond pattern."""
+def _get_game_fernet_legacy(lobby_id: str) -> Fernet:
+    """Per-lobby Fernet (legacy). Reuses per-bond pattern."""
     cached = database._game_fernet_cache.get(str(lobby_id))
     if cached:
         return cached
@@ -721,11 +811,11 @@ def _get_game_fernet(lobby_id: str) -> Fernet:
 
 
 def encrypt_game_data(plaintext: str, lobby_id: str) -> str:
-    """Encrypt a game field (vote option, submission text, correct answer) at rest (per-lobby key)."""
+    """Encrypt a game field at rest (v3 per-lobby envelope, else legacy)."""
     if not plaintext:
         return plaintext
     try:
-        f = _get_game_fernet(str(lobby_id))
+        f = _get_game_fernet_v3(str(lobby_id)) or _get_game_fernet_legacy(str(lobby_id))
         return f.encrypt(plaintext.encode('utf-8')).decode('utf-8')
     except Exception as e:
         _get_app().logger.error(f"Error encrypting game data {lobby_id}: {e}")
@@ -733,7 +823,7 @@ def encrypt_game_data(plaintext: str, lobby_id: str) -> str:
 
 
 def decrypt_game_data(ciphertext: str, lobby_id: str) -> str:
-    """Decrypt a game field. Falls back to plaintext if not Fernet (legacy rows)."""
+    """Decrypt a game field (v3 envelope first, then legacy). Falls back to plaintext."""
     if not ciphertext:
         return ciphertext
     if not isinstance(ciphertext, str) or not ciphertext.startswith('gAAAAA'):
@@ -743,15 +833,16 @@ def decrypt_game_data(ciphertext: str, lobby_id: str) -> str:
         cached = database._decrypted_lobbies_cache.get(cache_key)
         if cached is not None:
             return cached
-    try:
-        f = _get_game_fernet(str(lobby_id))
-        dec = f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
-        if getattr(database, '_decrypted_lobbies_cache', None) is not None:
-            database._decrypted_lobbies_cache[cache_key] = dec
-        return dec
-    except Exception:
-        _get_app().logger.warning(f"Game data decryption failed for lobby {lobby_id}")
-        return '[Unavailable]'
+    for f in (_get_game_fernet_v3(str(lobby_id)), _get_game_fernet_legacy(str(lobby_id))):
+        try:
+            dec = f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+            if getattr(database, '_decrypted_lobbies_cache', None) is not None:
+                database._decrypted_lobbies_cache[cache_key] = dec
+            return dec
+        except Exception:
+            continue
+    _get_app().logger.warning(f"Game data decryption failed for lobby {lobby_id}")
+    return '[Unavailable]'
 
 
 def generate_signed_cloudinary_url(public_id: str, resource_type: str = 'image', delivery_type: str = 'authenticated', expires_in: int = 14400) -> str:

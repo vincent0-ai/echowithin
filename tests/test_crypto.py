@@ -674,6 +674,70 @@ class TestLegacyKeyFallbackFlag:
             assert decrypt_note(token, user_id=user_id) == '[Content unavailable \u2014 decryption error]'
 
 
+class TestObjectEnvelopeEncryption:
+    """v3 per-object envelopes for bonds, forms and game lobbies.
+
+    The test suite patches MongoClient, so the collection ``find_one`` is stubbed to
+    return a wrapped DEK, exercising the envelope path without a real database.
+    """
+
+    def _install_dek(self, monkeypatch, security, conf, key_field):
+        from bson.objectid import ObjectId  # noqa: F401
+        enc = security._encrypt_dek(b'\x11' * 32)
+        monkeypatch.setattr(conf, 'find_one', lambda *a, **k: {key_field: enc})
+        return enc
+
+    def test_bond_legacy_then_envelope(self, app, monkeypatch):
+        import security, database
+        from main import encrypt_bond_data, decrypt_bond_data
+        bond_id = '507f1f77bcf86cd799439012'
+        with app.app_context():
+            legacy_ct = encrypt_bond_data('legacy bond secret', bond_id)
+            database._bond_fernet_v3_cache.clear()
+            self._install_dek(monkeypatch, security, database.bonds_conf, 'bond_key_enc')
+            v3_ct = encrypt_bond_data('enveloped bond secret', bond_id)
+            assert v3_ct != legacy_ct
+            assert decrypt_bond_data(legacy_ct, bond_id) == 'legacy bond secret'
+            assert decrypt_bond_data(v3_ct, bond_id) == 'enveloped bond secret'
+
+    def test_form_envelope_roundtrip(self, app, monkeypatch):
+        import security, database
+        from main import encrypt_form_response, decrypt_form_response
+        form_id = '507f1f77bcf86cd799439013'
+        with app.app_context():
+            database._form_fernet_v3_cache.clear()
+            self._install_dek(monkeypatch, security, database.forms_conf, 'form_key_enc')
+            database._decrypted_forms_cache.clear()
+            ct = encrypt_form_response('answer value', form_id)
+            assert decrypt_form_response(ct, form_id) == 'answer value'
+
+    def test_game_envelope_roundtrip(self, app, monkeypatch):
+        import security, database
+        from main import encrypt_game_data, decrypt_game_data
+        lobby_id = 'okGVMN3mFiVdUvgLeZhV2w'
+        with app.app_context():
+            database._game_fernet_v3_cache.clear()
+            self._install_dek(monkeypatch, security, database.game_sessions_conf, 'game_key_enc')
+            database._decrypted_lobbies_cache.clear()
+            ct = encrypt_game_data('vote option', lobby_id)
+            assert decrypt_game_data(ct, lobby_id) == 'vote option'
+
+    def test_bond_envelope_distinct_per_object(self, app, monkeypatch):
+        import security, database
+        from main import encrypt_bond_data, decrypt_bond_data
+        with app.app_context():
+            database._bond_fernet_v3_cache.clear()
+            enc = security._encrypt_dek(b'\x22' * 32)
+            monkeypatch.setattr(database.bonds_conf, 'find_one', lambda *a, **k: {'bond_key_enc': enc})
+            a, b = '507f1f77bcf86cd79943901a', '507f1f77bcf86cd79943901b'
+            ca = encrypt_bond_data('bond A', a)
+            cb = encrypt_bond_data('bond B', b)
+            assert decrypt_bond_data(ca, a) == 'bond A'
+            assert decrypt_bond_data(cb, b) == 'bond B'
+            # Different objects derive different keys from the same DEK (per-id salt)
+            assert decrypt_bond_data(ca, b) == '[Content unavailable \u2014 decryption error]'
+
+
 
 
 

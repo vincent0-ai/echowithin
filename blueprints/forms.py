@@ -205,6 +205,10 @@ def forms_create():
             'versions': [],
         }
         m.forms_conf.insert_one(doc)
+        try:
+            m.forms_conf.update_one({'_id': doc['_id']}, {'$set': m.generate_form_envelope_keys()})
+        except Exception as e:
+            m.app.logger.warning(f"Could not create form envelope key for {doc.get('_id')}: {e}")
         flash('Form created — share link copied.', 'success')
         return redirect(url_for('forms.form_responses_view', share_id=share_id))
     return render_template('form_create.html', active_page='forms')
@@ -263,6 +267,10 @@ def api_create_form():
         'versions': [],
     }
     m.forms_conf.insert_one(doc)
+    try:
+        m.forms_conf.update_one({'_id': doc['_id']}, {'$set': m.generate_form_envelope_keys()})
+    except Exception as e:
+        m.app.logger.warning(f"Could not create form envelope key for {doc.get('_id')}: {e}")
     share_url = url_for('forms.view_form', share_id=share_id, _external=True)
     return jsonify({'success': True, 'share_id': share_id, 'share_url': share_url, 'form_id': str(doc['_id'])}), 201
 

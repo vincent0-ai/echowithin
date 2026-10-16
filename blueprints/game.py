@@ -691,6 +691,10 @@ def games_create():
             if not timer_seconds:
                 doc['timer_seconds'] = 20
         m.game_sessions_conf.insert_one(doc)
+        try:
+            m.game_sessions_conf.update_one({'lobby_id': lobby_id}, {'$set': m.generate_game_envelope_keys()})
+        except Exception as e:
+            m.app.logger.warning(f"Could not create game envelope key for {lobby_id}: {e}")
         flash('Game lobby created — share the link.', 'success')
         return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
     return render_template('game_create.html', active_page='games', selected_type=selected_type)
@@ -745,6 +749,10 @@ def api_create_poll():
         doc['live_scores'] = {}
         doc['live_answers'] = {}
     m.game_sessions_conf.insert_one(doc)
+    try:
+        m.game_sessions_conf.update_one({'lobby_id': lobby_id}, {'$set': m.generate_game_envelope_keys()})
+    except Exception as e:
+        m.app.logger.warning(f"Could not create game envelope key for {lobby_id}: {e}")
     share_url = url_for('game.view_lobby', lobby_id=lobby_id, _external=True)
     return jsonify({'success':True,'lobby_id':lobby_id,'share_url':share_url}),201
 

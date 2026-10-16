@@ -91,11 +91,12 @@ def _migrate(confirm=False):
     db = client['echowithin_db']
 
     keks = _build_legacy_keks()
-    stats = {'migrated': 0, 'skipped': 0, 'failed': 0}
+    stats = {'migrated': 0, 'skipped': 0, 'failed': 0, 'by_collection': {}}
     audit = []
 
     for coll_name, flt, fields in _TARGETS:
         coll = db[coll_name]
+        per = stats['by_collection'].setdefault(coll_name, {'migrated': 0, 'skipped': 0, 'failed': 0})
         projection = {f: 1 for f in fields}
         for doc in coll.find(flt, projection):
             updates = {}
@@ -105,10 +106,12 @@ def _migrate(confirm=False):
                     continue
                 if isinstance(token, str) and token.startswith('vault:'):
                     stats['skipped'] += 1
+                    per['skipped'] += 1
                     continue
                 raw = _unwrap_with_any(keks, token)
                 if raw is None:
                     stats['failed'] += 1
+                    per['failed'] += 1
                     audit.append({'collection': coll_name, '_id': str(doc['_id']),
                                   'field': field, 'status': 'unwrap_failed'})
                     continue
@@ -117,6 +120,7 @@ def _migrate(confirm=False):
                 coll.update_one({'_id': doc['_id']}, {'$set': updates})
             for field in updates:
                 stats['migrated'] += 1
+                per['migrated'] += 1
                 audit.append({'collection': coll_name, '_id': str(doc['_id']),
                               'field': field, 'status': 'migrated'})
 
@@ -157,6 +161,10 @@ def main():
     mode = "DRY-RUN" if args.dry_run else "APPLIED"
     print(f"\n[{mode}] migrated={stats['migrated']} skipped={stats['skipped']} "
           f"failed={stats['failed']} in {elapsed:.1f}s")
+    print("  Per collection (legacy=needs migration, transit=already done):")
+    for coll_name, per in stats['by_collection'].items():
+        print(f"    {coll_name}: legacy={per['migrated']} transit={per['skipped']} "
+              f"failed={per['failed']}")
     _write_audit(audit)
 
 

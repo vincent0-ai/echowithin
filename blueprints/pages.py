@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 import datetime, os, json, hashlib, re
 from bson.objectid import ObjectId
-from security import limits, admin_required, brute_force_check, brute_force_record_failure, _bf_get_client_ip
+from security import limits, admin_required, brute_force_check, brute_force_record_failure, _bf_get_client_ip, normalize_email, email_match_filter, email_suppression_hash
 
 def csrf_exempt(view):
     """Mark view as exempt from CSRF protection."""
@@ -495,8 +495,20 @@ def unsubscribe(email, token):
     expected_token = hashlib.sha256(f"{secret}{email}unsubscribe".encode()).hexdigest()
     if token != expected_token:
         return render_template('unsubscribe_result.html', success=False, message="Invalid or expired unsubscribe link.")
-    m.users_conf.update_one({'email': email}, {'$set': {'notification_preference': 'none'}})
-    m.newsletter_conf.delete_one({'email': email})
+    # Match case-insensitively so an address stored with different casing/whitespace
+    # (or a footer subscription that duplicated the account email) is fully removed.
+    m.users_conf.update_one(email_match_filter(email), {'$set': {'notification_preference': 'none'}})
+    m.newsletter_conf.delete_many(email_match_filter(email))
+    suppression_hash = email_suppression_hash(email)
+    if suppression_hash:
+        try:
+            m.email_suppressions_conf.update_one(
+                {'email_hash': suppression_hash},
+                {'$set': {'email_hash': suppression_hash, 'suppressed_at': datetime.datetime.now(datetime.timezone.utc), 'reason': 'unsubscribe'}},
+                upsert=True
+            )
+        except Exception as e:
+            current_app.logger.error(f"Failed to record email suppression: {e}")
     if request.method == 'POST':
         return jsonify({'success': True, 'message': 'Unsubscribed successfully'})
     return render_template('unsubscribe_result.html', success=True, message=f"You have been successfully unsubscribed from all EchoWithin automated emails for {email}.")
@@ -506,11 +518,15 @@ def unsubscribe(email, token):
 @limits(calls=5, period=60)
 def api_newsletter_subscribe():
     import main as m
-    email = request.json.get('email')
+    email = normalize_email((request.json or {}).get('email'))
     if not email or '@' not in email:
         return jsonify({'error': 'Invalid email address'}), 400
     try:
         m.newsletter_conf.insert_one({'email': email, 'subscribed_at': datetime.datetime.now(datetime.timezone.utc), 'ip': request.remote_addr})
+        # Explicit (re-)subscription overrides any previous opt-out.
+        suppression_hash = email_suppression_hash(email)
+        if suppression_hash:
+            m.email_suppressions_conf.delete_one({'email_hash': suppression_hash})
         return jsonify({'success': True, 'message': 'Successfully subscribed to the newsletter!'})
     except m.DuplicateKeyError:
         return jsonify({'success': True, 'message': 'You are already subscribed!'})

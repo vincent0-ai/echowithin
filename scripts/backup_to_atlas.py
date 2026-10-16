@@ -68,6 +68,7 @@ TIMESTAMP_FIELDS = {
     'announcements':            ['created_at'],
     'logs':                     ['timestamp'],
     'newsletter_subs':          ['subscribed_at'],
+    'email_suppressions':       ['suppressed_at'],
     'push_subscriptions':       ['created_at'],
     'fcm_tokens':               ['updated_at', 'created_at'],
     'user_post_views':          ['last_viewed'],

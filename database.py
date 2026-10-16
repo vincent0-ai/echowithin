@@ -18,6 +18,7 @@ revoked_push_endpoints_conf = None
 fcm_tokens_conf = None
 direct_messages_conf = None
 newsletter_conf = None
+email_suppressions_conf = None
 user_post_views_conf = None
 unlock_notifications_conf = None
 weekly_winners_conf = None

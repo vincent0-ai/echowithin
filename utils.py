@@ -16,7 +16,7 @@ from bson.objectid import ObjectId
 
 from config import TIER_LIMITS, PREMIUM_TRIAL_DAYS, _TAG_KEYWORDS
 import database
-from security import decrypt_note, get_active_achievements, decrypt_dm, re_sign_cloudinary_url, build_media_serve_url, destroy_cloudinary_media
+from security import decrypt_note, get_active_achievements, decrypt_dm, re_sign_cloudinary_url, build_media_serve_url, destroy_cloudinary_media, email_match_filter, email_suppression_hash
 
 _APP = None
 _T = None
@@ -1406,7 +1406,20 @@ def cascade_delete_user_data(user_id):
     # Payments / misc
     m.payment_grants_conf.delete_many({'user_id': uid})
     if user_email:
-        m.newsletter_conf.delete_many({'email': user_email})
+        # Case-insensitive match so newsletter rows stored with different casing
+        # or stray whitespace are removed too (otherwise the weekly digest, which
+        # selects every newsletter row unfiltered, keeps emailing a deleted user).
+        m.newsletter_conf.delete_many(email_match_filter(user_email))
+        try:
+            suppression_hash = email_suppression_hash(user_email)
+            if suppression_hash:
+                m.email_suppressions_conf.update_one(
+                    {'email_hash': suppression_hash},
+                    {'$set': {'email_hash': suppression_hash, 'suppressed_at': now_utc, 'reason': 'account_deleted'}},
+                    upsert=True
+                )
+        except Exception:
+            pass
 
     # Record account deletion event (for backup circuit breaker & audit trail)
     try:

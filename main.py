@@ -737,6 +737,7 @@ revoked_push_endpoints_conf = db['revoked_push_endpoints']
 fcm_tokens_conf = db['fcm_tokens']  # FCM tokens for native app push notifications
 direct_messages_conf = db['direct_messages']
 newsletter_conf = db['newsletter_subs']
+email_suppressions_conf = db['email_suppressions']  # opted-out addresses (normalized) that must never be emailed
 user_post_views_conf = db['user_post_views']
 unlock_notifications_conf = db['unlock_notifications']
 weekly_winners_conf = db['weekly_winners']
@@ -1020,6 +1021,7 @@ push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=T
 revoked_push_endpoints_conf.create_index('endpoint', unique=True)
 revoked_push_endpoints_conf.create_index('revoked_at', expireAfterSeconds=14 * 86400)
 newsletter_conf.create_index('email', unique=True)
+email_suppressions_conf.create_index('email_hash', unique=True)
 users_conf.create_index('username')
 user_post_views_conf.create_index([('user_id', 1), ('post_id', 1)], unique=True)
 
@@ -1158,6 +1160,7 @@ database.revoked_push_endpoints_conf = revoked_push_endpoints_conf
 database.fcm_tokens_conf = fcm_tokens_conf
 database.direct_messages_conf = direct_messages_conf
 database.newsletter_conf = newsletter_conf
+database.email_suppressions_conf = email_suppressions_conf
 database.user_post_views_conf = user_post_views_conf
 database.unlock_notifications_conf = unlock_notifications_conf
 database.weekly_winners_conf = weekly_winners_conf

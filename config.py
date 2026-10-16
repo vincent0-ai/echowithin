@@ -79,6 +79,11 @@ BYPASS_RATE_LIMIT = _bypass_env in ('1', 'true', 'yes') and os.environ.get('FLAS
 _NOTES_KDF_ITERATIONS = 480000  # OWASP minimum for PBKDF2-HMAC-SHA256
 _NOTES_V1_SALT = b'echowithin_notes_salt_v1'  # legacy global salt
 
+# Legacy key-version read fallbacks (v1 global notes, v2 per-user notes, v2 DMs,
+# v1 community notes). Default ON. Set LEGACY_KEY_FALLBACK=false to disable once
+# the data audit (scripts/audit_legacy_encryption.py) reports zero legacy records.
+LEGACY_KEY_FALLBACK = os.environ.get('LEGACY_KEY_FALLBACK', 'true').strip().lower() in ('1', 'true', 'yes')
+
 # --- Private Vault ---
 VAULT_PIN_LENGTH = 4
 VAULT_AUTO_LOCK_MINUTES = 5

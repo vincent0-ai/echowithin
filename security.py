@@ -18,7 +18,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from ratelimit import RateLimitException
-from config import BYPASS_RATE_LIMIT, _NOTES_KDF_ITERATIONS, _NOTES_V1_SALT
+from config import BYPASS_RATE_LIMIT, _NOTES_KDF_ITERATIONS, _NOTES_V1_SALT, LEGACY_KEY_FALLBACK
 from key_management import (
     get_master_key_material, transit_enabled, transit_encrypt, transit_decrypt,
 )
@@ -95,6 +95,36 @@ def mask_email(email: str) -> str:
     else:
         masked_name = name[0] + '***' + name[-1]
     return f"{masked_name}@{domain}"
+
+
+def normalize_email(email: str) -> str:
+    """Canonicalize an email address for storage and lookup (trim + lowercase)."""
+    if not isinstance(email, str):
+        return ''
+    return email.strip().lower()
+
+
+def email_match_filter(email: str) -> dict:
+    """Case-insensitive exact-match MongoDB filter for an email field.
+
+    Legacy records may be stored with inconsistent casing or stray whitespace,
+    which previously caused account deletion and unsubscribe to silently miss
+    newsletter rows. This matches them regardless of case/outer whitespace.
+    """
+    normalized = normalize_email(email)
+    return {'email': {'$regex': f'^\\s*{re.escape(normalized)}\\s*$', '$options': 'i'}}
+
+
+def email_suppression_hash(email: str) -> str:
+    """Salted HMAC-SHA256 key used to record an email opt-out.
+
+    Stored in place of the raw address so deleted/unsubscribed emails leave no
+    recoverable trace, while still blocking any future send to that address.
+    """
+    normalized = normalize_email(email)
+    if not normalized:
+        return ''
+    return hmac.new(_secret_bytes(), normalized.encode('utf-8'), hashlib.sha256).hexdigest()
 
 
 def build_unified_diff_text(original_text, updated_text, context=3, max_lines=500):
@@ -1274,13 +1304,15 @@ def decrypt_dm(encrypted_content, user1_id, user2_id):
             return f_v3.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
         except Exception:
             pass  # Fall through to v2
-    # Try v2 DM-specific key (backward compatibility)
-    try:
-        f = _get_dm_fernet(user1_id, user2_id)
-        return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
-    except Exception as e:
-        _get_app().logger.warning(f"DM Decryption failed for user pair ({user1_id}, {user2_id}): {e}")
-        return '[Content unavailable \u2014 decryption error]'
+    # Try v2 DM-specific key (legacy)
+    if LEGACY_KEY_FALLBACK:
+        try:
+            f = _get_dm_fernet(user1_id, user2_id)
+            return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
+        except Exception:
+            pass
+    _get_app().logger.warning(f"DM Decryption failed for user pair ({user1_id}, {user2_id})")
+    return '[Content unavailable \u2014 decryption error]'
 
 
 def encrypt_note(content, user_id=None):
@@ -1320,19 +1352,22 @@ def decrypt_note(encrypted_content, user_id=None):
                 return f_v3.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
             except Exception:
                 pass  # Fall through to v2
-        # Try v2 per-user key
+        # Try v2 per-user key (legacy)
+        if LEGACY_KEY_FALLBACK:
+            try:
+                f = _get_user_fernet(str(user_id))
+                return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
+            except Exception:
+                pass  # Fall through to v1
+    # Try v1 global key (legacy)
+    if LEGACY_KEY_FALLBACK:
         try:
-            f = _get_user_fernet(str(user_id))
+            f = get_notes_fernet()
             return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
         except Exception:
-            pass  # Fall through to v1
-    # Try v1 global key (backward compatibility)
-    try:
-        f = get_notes_fernet()
-        return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
-    except Exception:
-        _get_app().logger.warning("Note decryption failed for all key versions")
-        return '[Content unavailable \u2014 decryption error]'
+            pass
+    _get_app().logger.warning("Note decryption failed for all key versions")
+    return '[Content unavailable \u2014 decryption error]'
 
 
 def _candidate_user_ids(*values):
@@ -1367,16 +1402,18 @@ def _decrypt_with_candidate_ids(encrypted_content, candidate_user_ids):
             except Exception:
                 pass
     # Phase 2: fall back to the v2 per-user key only for genuinely old records.
-    for candidate_user_id in candidate_user_ids:
+    if LEGACY_KEY_FALLBACK:
+        for candidate_user_id in candidate_user_ids:
+            try:
+                return _get_user_fernet(str(candidate_user_id)).decrypt(token).decode('utf-8')
+            except Exception:
+                continue
+        # Phase 3: v1 global key (backward compatibility)
         try:
-            return _get_user_fernet(str(candidate_user_id)).decrypt(token).decode('utf-8')
+            return get_notes_fernet().decrypt(token).decode('utf-8')
         except Exception:
-            continue
-    # Phase 3: v1 global key (backward compatibility)
-    try:
-        return get_notes_fernet().decrypt(token).decode('utf-8')
-    except Exception:
-        return None
+            return None
+    return None
 
 
 def _note_decryption_candidates(note, share=None):
@@ -1631,8 +1668,10 @@ def decrypt_community_note(ciphertext, community_id):
         except Exception:
             pass
         # Fall back to v1 (100K iterations) for legacy community notes
-        f_legacy = _get_community_fernet_legacy(community_id)
-        return f_legacy.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+        if LEGACY_KEY_FALLBACK:
+            f_legacy = _get_community_fernet_legacy(community_id)
+            return f_legacy.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+        raise ValueError('legacy community key decryption disabled')
     except Exception as e:
         _get_app().logger.error(f"Failed to decrypt community note: {e}")
         return ciphertext

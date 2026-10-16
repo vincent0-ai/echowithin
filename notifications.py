@@ -3,7 +3,6 @@ import os
 import json
 import time
 import hashlib
-import hmac
 import re
 
 from flask import render_template, url_for
@@ -18,7 +17,7 @@ from config import (get_env_variable, ENGAGEMENT_WEIGHTS,
     VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY, FIREBASE_AVAILABLE)
 from utils import (_is_ios_web_push_subscription,
     _remove_stale_push_subscription, _get_user_badge_count)
-from security import mask_email
+from security import mask_email, normalize_email, email_suppression_hash
 import database
 
 messaging = None
@@ -321,19 +320,39 @@ def send_new_post_notifications(post_id_str):
                 },
                 {'email': 1, 'username': 1}
             )
+            recipients = list(recipients_cursor)
+            normalized_recipients = {
+                normalize_email(u.get('email')) for u in recipients if u.get('email')
+            }
+            normalized_recipients.discard('')
+            suppressed = set()
+            if normalized_recipients:
+                key_to_email = {email_suppression_hash(e): e for e in normalized_recipients}
+                suppressed_keys = {
+                    doc.get('email_hash')
+                    for doc in database.email_suppressions_conf.find(
+                        {'email_hash': {'$in': list(key_to_email.keys())}}, {'email_hash': 1}
+                    )
+                }
+                suppressed = {key_to_email[k] for k in suppressed_keys if k in key_to_email}
 
             with _get_mail().connect() as conn:
-                for u in recipients_cursor:
+                for u in recipients:
                     try:
-                        recipient_email = u.get('email')
+                        raw_email = u.get('email')
+                        if not raw_email:
+                            continue
+                        recipient_email = normalize_email(raw_email)
+                        if not recipient_email or recipient_email in suppressed:
+                            continue
                         recipient_name = u.get('username') or ''
                         
                         secret = _get_app().config["SECRET_KEY"]
-                        unsub_token = hmac.new(secret.encode(), f"{recipient_email}unsubscribe".encode(), hashlib.sha256).hexdigest()
+                        unsub_token = hashlib.sha256(f"{secret}{recipient_email}unsubscribe".encode()).hexdigest()
                         try:
                             unsub_url = url_for('pages.unsubscribe', email=recipient_email, token=unsub_token, _external=True)
                         except RuntimeError:
-                            unsub_url = f"{base_url}/unsubscribe?email={recipient_email}&token={unsub_token}"
+                            unsub_url = f"{base_url}/unsubscribe/{recipient_email}/{unsub_token}"
                         
                         msg = Message(
                             subject=subject,
@@ -409,14 +428,27 @@ def send_weekly_newsletter():
             week_end = now.strftime('%B %d, %Y')
 
             recipient_emails = set()
-            
+
             for sub in database.newsletter_conf.find({}, {'email': 1}):
                 if sub.get('email'):
-                    recipient_emails.add(sub['email'])
-            
+                    recipient_emails.add(normalize_email(sub['email']))
+
             for user in database.users_conf.find({'is_confirmed': True, 'notification_preference': 'weekly'}, {'email': 1}):
                 if user.get('email'):
-                    recipient_emails.add(user['email'])
+                    recipient_emails.add(normalize_email(user['email']))
+
+            recipient_emails.discard('')
+
+            # Never email addresses that opted out or belonged to deleted accounts.
+            if recipient_emails:
+                key_to_email = {email_suppression_hash(e): e for e in recipient_emails}
+                suppressed_keys = {
+                    doc.get('email_hash')
+                    for doc in database.email_suppressions_conf.find(
+                        {'email_hash': {'$in': list(key_to_email.keys())}}, {'email_hash': 1}
+                    )
+                }
+                recipient_emails -= {key_to_email[k] for k in suppressed_keys if k in key_to_email}
 
             if not recipient_emails:
                 _get_app().logger.info("No recipients found for weekly newsletter, skipping")

@@ -642,5 +642,38 @@ class TestMasterKeyCustody:
         assert key_management.current_mode().startswith('transition')
 
 
+class TestLegacyKeyFallbackFlag:
+    """LEGACY_KEY_FALLBACK gates reads of pre-v3 (v1/v2) ciphertext."""
+
+    def test_v1_note_readable_when_enabled(self, app, monkeypatch):
+        import security
+        from main import encrypt_note, decrypt_note
+        monkeypatch.setattr(security, 'LEGACY_KEY_FALLBACK', True)
+        with app.app_context():
+            token = encrypt_note('legacy note')
+            assert token.startswith('gAAAAA')
+            assert decrypt_note(token) == 'legacy note'
+
+    def test_v1_note_unreadable_when_disabled(self, app, monkeypatch):
+        import security
+        from main import encrypt_note, decrypt_note
+        with app.app_context():
+            token = encrypt_note('legacy note')
+        monkeypatch.setattr(security, 'LEGACY_KEY_FALLBACK', False)
+        with app.app_context():
+            assert decrypt_note(token) == '[Content unavailable \u2014 decryption error]'
+
+    def test_v2_note_unreadable_when_disabled(self, app, monkeypatch):
+        import security
+        from main import encrypt_note, decrypt_note
+        user_id = '507f1f77bcf86cd799439011'
+        with app.app_context():
+            token = encrypt_note('per-user note', user_id=user_id)
+        monkeypatch.setattr(security, 'LEGACY_KEY_FALLBACK', False)
+        with app.app_context():
+            assert decrypt_note(token, user_id=user_id) == '[Content unavailable \u2014 decryption error]'
+
+
+
 
 

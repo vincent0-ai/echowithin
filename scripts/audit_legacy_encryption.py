@@ -246,17 +246,40 @@ def _classify_community(db, keys, limit):
     return result
 
 
+def _has_ciphertext(value, _depth=0):
+    """True if a document (recursively) holds any Fernet-looking string.
+
+    Bonds/forms/game lobbies do not use a single ``content`` field; each sensitive
+    field (title, description, journal, goals, mood, answers, ...) is encrypted
+    individually, so a shallow ``content`` probe misreports them as plaintext.
+    """
+    if _depth > 6:
+        return False
+    if isinstance(value, str):
+        return value.startswith(_FERNET_HEADER)
+    if isinstance(value, dict):
+        return any(_has_ciphertext(v, _depth + 1) for v in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_has_ciphertext(v, _depth + 1) for v in value)
+    return False
+
+
 def _shape_counts(db, limit):
-    """Encrypted-vs-plaintext counts + plaintext-token counts (no decryption)."""
+    """Encrypted-vs-plaintext counts + plaintext-token counts (no decryption).
+
+    For bonds/forms/game_sessions a record is counted as ``with_ciphertext`` when
+    any (possibly nested) field holds a Fernet token; ``without_ciphertext`` covers
+    records that hold no encrypted field at all (e.g. empty/newly created rows).
+    """
     out = {}
     for coll in ('bonds', 'forms', 'game_sessions'):
         enc = plain = 0
-        for doc in db[coll].find({}, {'content': 1}).limit(limit):
-            if _is_cipher(doc.get('content')):
+        for doc in db[coll].find({}).limit(limit):
+            if _has_ciphertext(doc):
                 enc += 1
             else:
                 plain += 1
-        out[coll] = {'encrypted': enc, 'plaintext': plain}
+        out[coll] = {'with_ciphertext': enc, 'without_ciphertext': plain}
     tokens = db['app_tokens']
     out['app_tokens'] = {
         'with_plaintext_token': tokens.count_documents({'token': {'$exists': True, '$ne': None}}),

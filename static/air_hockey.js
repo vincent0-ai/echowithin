@@ -12,10 +12,21 @@
     serveTimer: 0, aiTick: 0, netTick: 0, inputTick: 0
   };
   var AI = {
-    easy: { speed: 0.9, react: 12, jitter: 0.09 },
-    normal: { speed: 1.5, react: 6, jitter: 0.045 },
-    hard: { speed: 2.2, react: 2, jitter: 0.015 }
+    easy:   { speed: 1.15, lunge: 1.7, react: 10, err: 0.10, aggression: 0.30, guardY: 0.18, pressY: 0.45 },
+    normal: { speed: 1.75, lunge: 2.2, react: 5,  err: 0.05, aggression: 0.65, guardY: 0.15, pressY: 0.55 },
+    hard:   { speed: 2.4,  lunge: 2.9, react: 2,  err: 0.018, aggression: 0.92, guardY: 0.13, pressY: 0.65 }
   };
+  // Adaptive AI brain: persists across rallies so it can adjust to the player.
+  var aiMem = {
+    tx: 0.5, ty: 0.22, aimX: 0.5, aimHold: 0,
+    stall: 0, decide: 0, jitterX: 0,
+    press: false, strike: false
+  };
+  function aiResetBrain() {
+    aiMem.tx = 0.5; aiMem.ty = 0.22; aiMem.aimX = 0.5; aiMem.aimHold = 0;
+    aiMem.stall = 0; aiMem.decide = 0; aiMem.jitterX = 0;
+    aiMem.press = false; aiMem.strike = false;
+  }
   var canvas = document.getElementById('air-canvas');
   var ctx = canvas.getContext('2d');
   var socket = window.__airSocket || null;
@@ -119,6 +130,8 @@
     }
     if (state.scores[scorer] >= TARGET) { endMatch(scorer); return true; }
     state.puck = { x: 0.5, y: 0.75, vx: (Math.random() - 0.5) * 0.6, vy: (scorer === 0 ? -1 : 1) * 0.8 };
+    // Fresh serve: clear stall + re-aim so the AI attacks the new puck immediately.
+    aiMem.stall = 0; aiMem.aimHold = 0; aiMem.decide = 99;
     return true;
   }
 
@@ -197,11 +210,13 @@
     state.puck = { x: 0.5, y: 0.75, vx: (Math.random() - 0.5) * 0.6, vy: -0.8 };
     state.p1 = { x: 0.5, y: 1.28, vx: 0, vy: 0, tx: 0.5, ty: 1.28 };
     state.p2 = { x: 0.5, y: 0.22, vx: 0, vy: 0, tx: 0.5, ty: 0.22 };
+    aiResetBrain();
   }
 
   function resetMatch() {
     state.scores = [0, 0]; state.over = false;
     resetPositions(); updateScores();
+    aiResetBrain();
     document.getElementById('air-result-overlay').style.display = 'none';
     setStatus(state.mode === 'online' ? 'Rally!' : 'Drag to play.');
   }
@@ -226,23 +241,164 @@
     return locked;
   }
 
-  function aiControl() {
-    var cfg = AI[state.difficulty] || AI.normal;
-    var m = state.p2;
-    state.aiTick++;
-    // Decide target a few times per second; move every frame so motion is smooth.
-    if (state.aiTick % cfg.react === 0) {
-      var p = state.puck, tx = 0.5, ty = 0.22;
-      if (p.vy < 0 || p.y < H / 2) {
-        tx = p.x + (p.vx * 0.25) + (Math.random() - 0.5) * cfg.jitter * 2;
-        ty = Math.min(0.42, Math.max(0.12, p.y - 0.06));
-      }
-      m.tx = tx; m.ty = ty;
+  function clampNum(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  // Linear puck prediction with side-wall bounces. Used for goalie positioning.
+  function predictXAtY(px, py, vx, vy, targetY) {
+    if (Math.abs(vy) < 1e-4) return px;
+    var t = (targetY - py) / vy;
+    if (t < 0 || t > 1.2) return px;
+    var minX = PUCK_R + 0.03, maxX = W - PUCK_R - 0.03;
+    var x = px + vx * t;
+    var guard = 0;
+    while ((x < minX || x > maxX) && guard++ < 8) {
+      if (x < minX) x = minX + (minX - x);
+      if (x > maxX) x = maxX - (x - maxX);
     }
-    var dx = m.tx - m.x, dy = m.ty - m.y, d = Math.hypot(dx, dy) || 1;
-    var step = Math.min(d, cfg.speed / 60);
-    m.vx = dx / d * step * 60; m.vy = dy / d * step * 60;
-    m.x += dx / d * step; m.y += dy / d * step;
+    return clampNum(x, minX, maxX);
+  }
+
+  // Pick a spot inside the opponent goal mouth, biased away from the player
+  // mallet so shots are harder to block. Holds for a few decisions to avoid jitter.
+  function chooseAim(cfg) {
+    var margin = 0.045;
+    var lo = W / 2 - GOAL_W / 2 + margin, hi = W / 2 + GOAL_W / 2 - margin;
+    var away = (state.p1.x < 0.5) ? 1 : -1;
+    var r = Math.random();
+    var offset;
+    if (r < 0.72) offset = away * GOAL_W * 0.30;       // punish open side
+    else if (r < 0.9) offset = -away * GOAL_W * 0.22;  // occasional fake
+    else offset = (Math.random() - 0.5) * GOAL_W * 0.3; // variation
+    // Triangular-ish error: easy sprays, hard is precise.
+    var err = (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+    // When ahead, take riskier (wider) shots; when behind, play safe (center).
+    var diff = state.scores[1] - state.scores[0];
+    var spread = diff >= 2 ? 1.15 : (diff <= -2 ? 0.6 : 1.0);
+    offset = offset * spread + err * cfg.err * 2;
+    return clampNum(0.5 + offset, lo, hi);
+  }
+
+  // Position behind the puck along the shot line so the AI drives *through*
+  // the puck toward the aim point instead of sitting head-on (which caused
+  // the old horizontal vibration deadlock).
+  function behindPuck(puck, aimX, aimY) {
+    var dx = aimX - puck.x, dy = aimY - puck.y;
+    var d = Math.hypot(dx, dy) || 1;
+    dx /= d; dy /= d;
+    var off = MALLET_R + PUCK_R + 0.022;
+    return {
+      x: clampNum(puck.x - dx * off, MALLET_R, W - MALLET_R),
+      y: clampNum(puck.y - dy * off, MALLET_R + 0.02, H / 2 - 0.03),
+      dx: dx, dy: dy
+    };
+  }
+
+  // Full AI: defend (goalie) -> intercept -> attack (get behind + strike)
+  // -> clear stall. Movement runs every frame; decisions run every cfg.react frames.
+  function aiControl(dt) {
+    var cfg = AI[state.difficulty] || AI.normal;
+    var m = state.p2, p = state.puck;
+    if (!dt || dt <= 0) dt = 1 / 60;
+    dt = Math.min(dt, 1 / 30);
+
+    var puckSp = Math.hypot(p.vx, p.vy);
+    // Stall detection: slow puck => force an attacking clear to break deadlock.
+    if (puckSp < 0.20) aiMem.stall++;
+    else aiMem.stall = 0;
+    var stalled = aiMem.stall > 40;
+    var justStalled = aiMem.stall === 41;
+
+    aiMem.decide++;
+    if (aiMem.decide >= cfg.react || justStalled) {
+      aiMem.decide = 0;
+      var losing = state.scores[1] < state.scores[0];
+      var winning = state.scores[1] > state.scores[0];
+
+      // Refresh aim every ~0.7s or once when a stall begins so shots stay varied.
+      aiMem.aimHold--;
+      if (aiMem.aimHold <= 0 || justStalled) {
+        aiMem.aimX = chooseAim(cfg);
+        aiMem.aimHold = 30 + ((Math.random() * 20) | 0);
+        if (stalled) aiMem.aimX = clampNum(0.5 + (Math.random() - 0.5) * (GOAL_W - 0.09), W / 2 - GOAL_W / 2 + 0.045, W / 2 + GOAL_W / 2 - 0.045);
+      }
+      // Small held jitter per decision (not per frame) so no vibration.
+      aiMem.jitterX = (Math.random() - 0.5) * cfg.err;
+
+      var aimY = H - 0.03; // opponent goal line
+      var onAiSide = p.y < H / 2 + 0.06;
+      var comingFast = p.vy < -0.45;
+      var slowNear = puckSp < 0.55 && p.y < 0.95;
+      // Higher difficulties press onto the player side for slow pucks.
+      var wantPress = slowNear && (Math.random() < cfg.aggression || stalled) && p.y < cfg.pressY + 0.3;
+      aiMem.press = wantPress && !onAiSide;
+
+      var tx = 0.5, ty = 0.22;
+      aiMem.strike = false;
+
+      if (onAiSide || wantPress || stalled) {
+        // --- ATTACK: get behind the puck, then drive through it ---
+        var b = behindPuck(p, aiMem.aimX, aimY);
+        var mBehindY = m.y < p.y - 0.015; // AI is on the goal side of the puck
+        var alignX = Math.abs(m.x - b.x);
+        var distBehind = Math.hypot(m.x - b.x, m.y - b.y);
+        var distPuck = Math.hypot(m.x - p.x, m.y - p.y);
+        if ((mBehindY && alignX < 0.09 && distPuck < 0.22) || (distBehind < 0.03 && mBehindY)) {
+          // Strike: aim through the puck, overshooting so contact drives it out.
+          tx = p.x + b.dx * 0.16;
+          ty = p.y + b.dy * 0.16;
+          aiMem.strike = true;
+        } else {
+          tx = b.x + aiMem.jitterX * 0.4;
+          ty = b.y;
+          // If puck is almost stopped right in front of us, go straight at it.
+          if (puckSp < 0.12 && distPuck < 0.16) { tx = p.x; ty = p.y - 0.01; aiMem.strike = true; }
+        }
+        // Adapt: when losing, stay a touch deeper before committing.
+        if (losing && !aiMem.strike) ty = Math.min(ty, 0.30);
+        if (winning && aiMem.strike) tx = clampNum(tx, MALLET_R, W - MALLET_R);
+      } else if (comingFast) {
+        // --- DEFEND fast shot: goalie cut the angle ---
+        var pred = predictXAtY(p.x, p.y, p.vx, p.vy, cfg.guardY);
+        tx = 0.5 * 0.30 + pred * 0.70 + aiMem.jitterX * 0.3;
+        ty = cfg.guardY;
+        // If already beaten wide, scramble toward the puck line instead of center.
+        if (Math.abs(p.x - 0.5) > GOAL_W / 2) tx = clampNum(pred, MALLET_R, W - MALLET_R);
+      } else {
+        // --- READY: shadow the puck, hold mid between goal and center ---
+        var shadow = clampNum(p.x, 0.2, 0.8);
+        tx = 0.5 * 0.45 + shadow * 0.55 + aiMem.jitterX * 0.5;
+        // Sit deeper when the player holds the puck; step up when it drifts center.
+        var threat = (p.y > 0.9) ? 1 : 0;
+        ty = threat ? cfg.guardY + 0.02 : 0.24;
+        if (p.y > H / 2 && p.y < 0.95 && puckSp < 0.3) ty = 0.32; // creep up, look for a mistake
+      }
+
+      aiMem.tx = clampNum(tx, MALLET_R * 0.6, W - MALLET_R * 0.6);
+      aiMem.ty = clampNum(ty, MALLET_R, H / 2 - 0.025);
+    }
+
+    // --- Smooth pursuit with deadzone (kills the old vibration) ---
+    var dx = aiMem.tx - m.x, dy = aiMem.ty - m.y;
+    var d = Math.hypot(dx, dy);
+    var ox = m.x, oy = m.y;
+    if (d < 0.004) {
+      m.vx *= 0.8; m.vy *= 0.8;
+    } else {
+      var boost = 1.0;
+      var diff2 = state.scores[1] - state.scores[0];
+      if (diff2 <= -2) boost = 1.12; // adapt: hustle when losing
+      var maxSp = cfg.speed * boost * (aiMem.strike ? cfg.lunge : 1.0);
+      maxSp = Math.min(maxSp, 3.4);
+      var desired = Math.min(maxSp, d * 12 + 0.25);
+      var step = Math.min(d, desired * dt);
+      m.x += dx / d * step;
+      m.y += dy / d * step;
+      m.vx = (m.x - ox) / dt;
+      m.vy = (m.y - oy) / dt;
+      // Clamp absurd spikes so hits stay powerful but stable.
+      var mv = Math.hypot(m.vx, m.vy);
+      if (mv > 4) { m.vx *= 4 / mv; m.vy *= 4 / mv; }
+    }
   }
 
   var last = 0, acc = 0;
@@ -253,7 +409,7 @@
     if (state.over) { draw(); return; }
     var sim = (state.mode !== 'online') || state.isHost;
     if (sim) {
-      if (state.mode === 'solo') aiControl();
+      if (state.mode === 'solo') aiControl(dt);
       moveToward(state.p1);
       // Solo: p2 is fully AI-driven (aiControl owns tx/ty and position).
       // Running moveToward on it too pulls it back to a stale target → vibration.

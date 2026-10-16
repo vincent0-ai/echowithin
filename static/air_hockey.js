@@ -9,7 +9,8 @@
     puck: { x: 0.5, y: 0.75, vx: 0, vy: 0 },
     p1: { x: 0.5, y: 1.28, vx: 0, vy: 0, tx: 0.5, ty: 1.28 },
     p2: { x: 0.5, y: 0.22, vx: 0, vy: 0, tx: 0.5, ty: 0.22 },
-    serveTimer: 0, aiTick: 0, netTick: 0, inputTick: 0
+    serveTimer: 0, aiTick: 0, netTick: 0, inputTick: 0,
+    deadX: 0.5, deadY: 0.75, deadT: 0
   };
   // Per-difficulty brain: easy is slow, dozy and sprays shots; hard is fast and precise.
   var AI = {
@@ -34,6 +35,33 @@
     aiMem.stall = 0; aiMem.decide = 0; aiMem.jitterX = 0;
     aiMem.press = false; aiMem.strike = false;
   }
+
+  // Dead-puck referee: if the puck hasn't meaningfully moved for a while, whistle
+  // and re-serve from center. A puck wedged in a corner can never be pushed out
+  // positionally (every placement normal lands outside the walls), and simulation
+  // proved no inside mallet action extracts a fully dead one — so the whistle is
+  // the geometry-proof safety net, with a fast fuse inside corner zones (neither
+  // side can play a wedged puck; our corners are unreachable for the player).
+  // Dribbling moves the puck, so live play never trips it. Host-authoritative.
+  function refereeDeadPuck(dt) {
+    if (state.over) { state.deadT = 0; return; }
+    var moved = Math.hypot(state.puck.x - state.deadX, state.puck.y - state.deadY);
+    var spd = Math.hypot(state.puck.vx, state.puck.vy);
+    if (moved > 0.012 || spd > 0.25) {
+      state.deadX = state.puck.x; state.deadY = state.puck.y; state.deadT = 0;
+      return;
+    }
+    var p = state.puck;
+    var cornered = (p.y < 0.22 || p.y > H - 0.22) && (p.x < 0.17 || p.x > W - 0.17);
+    state.deadT += dt;
+    if (state.deadT > (cornered ? 1.2 : 2.5)) {
+      state.puck = { x: 0.5, y: 0.75, vx: (Math.random() - 0.5) * 0.6, vy: (Math.random() < 0.5 ? -1 : 1) * 0.8 };
+      state.deadX = 0.5; state.deadY = 0.75; state.deadT = 0;
+      aiMem.stall = 0; aiMem.aimHold = 0; aiMem.decide = 99;
+      setStatus('Puck reset — play!');
+    }
+  }
+  function resetDeadTrack(x, y) { state.deadX = x; state.deadY = y; state.deadT = 0; }
   var canvas = document.getElementById('air-canvas');
   var ctx = canvas.getContext('2d');
   var socket = window.__airSocket || null;
@@ -112,7 +140,24 @@
       p.y = H - PUCK_R - 0.03; p.vy = -Math.abs(p.vy) * 0.92;
     }
     collide(state.p1); collide(state.p2);
+    containPuck();
     return false;
+  }
+
+  // Hard containment AFTER collisions: a mallet pressing the puck into a corner
+  // can otherwise shove it through the wall, where it rests out of reach forever
+  // (positional resolution runs after the wall bounce). Kill only the outward
+  // velocity component — inward motion is preserved, goals are never blocked
+  // (goal() already consumed any puck crossing the line inside the mouth).
+  function containPuck() {
+    var p = state.puck;
+    var minX = PUCK_R + 0.03, maxX = W - PUCK_R - 0.03;
+    var minY = PUCK_R + 0.03, maxY = H - PUCK_R - 0.03;
+    var inMouth = Math.abs(p.x - W / 2) < GOAL_W / 2;
+    if (p.x < minX) { p.x = minX; if (p.vx < 0) p.vx = 0; }
+    if (p.x > maxX) { p.x = maxX; if (p.vx > 0) p.vx = 0; }
+    if (p.y < minY && !(inMouth && p.vy < 0)) { p.y = minY; if (p.vy < 0) p.vy = 0; }
+    if (p.y > maxY && !(inMouth && p.vy > 0)) { p.y = maxY; if (p.vy > 0) p.vy = 0; }
   }
 
   function collide(m) {
@@ -139,6 +184,7 @@
     state.puck = { x: 0.5, y: 0.75, vx: (Math.random() - 0.5) * 0.6, vy: (scorer === 0 ? -1 : 1) * 0.8 };
     // Fresh serve: clear stall + re-aim so the AI attacks the new puck immediately.
     aiMem.stall = 0; aiMem.aimHold = 0; aiMem.decide = 99;
+    resetDeadTrack(0.5, 0.75);
     return true;
   }
 
@@ -218,6 +264,7 @@
     state.p1 = { x: 0.5, y: 1.28, vx: 0, vy: 0, tx: 0.5, ty: 1.28 };
     state.p2 = { x: 0.5, y: 0.22, vx: 0, vy: 0, tx: 0.5, ty: 0.22 };
     aiResetBrain();
+    resetDeadTrack(0.5, 0.75);
   }
 
   function resetMatch() {
@@ -351,7 +398,15 @@
       var tx = 0.5, ty = 0.22;
       aiMem.strike = false;
 
-      if (onAiSide || wantPress || stalled) {
+      // Puck dead in one of OUR top corners is unplayable: the mallet can never
+      // get behind it, and every contact just presses it deeper into the wedge
+      // (verified in simulation — wind-up/smash routines cannot extract it).
+      // So back off at once and let the referee re-serve (fast 1.2s fuse in
+      // corners). Never push the wedge.
+      var inCorner = (p.y < 0.22 && (p.x < 0.17 || p.x > W - 0.17) && puckSp < 0.4);
+      if (inCorner) {
+        tx = 0.5; ty = 0.30; aiMem.strike = false;
+      } else if (onAiSide || wantPress || stalled) {
         // --- ATTACK: get behind the puck, then drive through it ---
         var b = behindPuck(p, aiMem.aimX, aimY);
         var mBehindY = m.y < p.y - 0.015; // AI is on the goal side of the puck
@@ -444,6 +499,7 @@
       acc += dt;
       var step = 1 / 120;
       while (acc >= step) { if (stepPhysics(step)) break; acc -= step; }
+      refereeDeadPuck(dt);
       if (state.mode === 'online' && state.roomId && socket) {
         state.netTick++;
         if (state.netTick % 3 === 0) {

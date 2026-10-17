@@ -510,7 +510,7 @@ def _write_audit(entries):
 def _run(confirm):
     global _CONFIRM
     _CONFIRM = confirm
-    secret = _get_env('SECRET')
+    secret = _get_env('SECRET').encode('utf-8')
     client = MongoClient(_get_env('MONGODB_CONNECTION'))
     db = client['echowithin_db']
     stats = _Stats()

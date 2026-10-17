@@ -2418,33 +2418,41 @@
             // stored with HTML (e.g. <a href="...">). This prevents
             // double-escaping that makes raw HTML visible as text.
             text = text.replace(/<[^>]*>/g, '');
-            // Extract URLs BEFORE escaping so HTML entities don't corrupt URLs
+            // Extract URLs BEFORE escaping so HTML entities don't corrupt URLs.
+            // Use a sentinel that contains no markdown characters (_ * `) so the
+            // inline-formatting passes below cannot mangle it. URLs frequently
+            // contain underscores (e.g. share tokens), and formatting the raw
+            // anchor HTML would rewrite those underscores inside the href and
+            // break the link.
             const urlRegex = /(https?:\/\/[^\s]+)/g;
             const urls = [];
             let idx = 0;
             text = text.replace(urlRegex, (url) => {
-                const placeholder = `__URL_PLACEHOLDER_${idx}__`;
+                const placeholder = `\u0000URL${idx}\u0000`;
                 urls.push(url);
                 idx++;
                 return placeholder;
             });
             // SECURITY: Now escape HTML entities on the non-URL text
             text = escapeHtml(text);
-            // Restore URLs as proper <a> tags with truncated display text
-            urls.forEach((url, i) => {
-                const safeUrl = escapeHtml(url);
-                const displayUrl = escapeHtml(truncateUrl(url));
-                text = text.replace(
-                    `__URL_PLACEHOLDER_${i}__`,
-                    `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="message-link">${displayUrl}</a>`
-                );
-            });
+            // Inline formatting runs only on the escaped text (URLs are still
+            // sentinels here, so their contents are never rewritten).
             // Bold: *text*
             text = text.replace(/\*(.*?)\*/g, '<span class="fmt-bold">$1</span>');
             // Italic: _text_
             text = text.replace(/_(.*?)_/g, '<span class="fmt-italic">$1</span>');
             // Code: `text`
             text = text.replace(/`(.*?)`/g, '<span class="fmt-code">$1</span>');
+            // Restore URLs as proper <a> tags with truncated display text LAST
+            // so the generated markup is never touched by the regexes above.
+            urls.forEach((url, i) => {
+                const safeUrl = escapeHtml(url);
+                const displayUrl = escapeHtml(truncateUrl(url));
+                text = text.replace(
+                    `\u0000URL${i}\u0000`,
+                    `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="message-link">${displayUrl}</a>`
+                );
+            });
             return text;
         }
 

@@ -204,3 +204,65 @@ def log_startup_status(logger):
     else:
         logger.info('Key custody: %s.', label)
 
+
+# --- Token lifecycle (renewal / status) ---
+
+def vault_configured() -> bool:
+    """True when a Vault address and token are both present in the environment."""
+    return bool(
+        os.environ.get('VAULT_ADDR', '').strip()
+        and os.environ.get('VAULT_TOKEN', '').strip()
+    )
+
+
+def token_status():
+    """Return a dict describing the current Vault token (ttl, renewable, policies).
+
+    Returns None when Vault is not configured. Raises on transport or auth errors.
+    """
+    if not vault_configured():
+        return None
+    addr, token, namespace = _vault_conn()
+    url = f"{addr.rstrip('/')}/v1/auth/token/lookup-self"
+    resp = requests.get(url, headers=_vault_headers(token, namespace), timeout=_VAULT_HTTP_TIMEOUT)
+    if resp.status_code in (401, 403):
+        raise Exception(f'Vault rejected the token (HTTP {resp.status_code}); it may have expired.')
+    resp.raise_for_status()
+    data = (resp.json() or {}).get('data') or {}
+    return {
+        'ttl': data.get('ttl'),
+        'renewable': data.get('renewable'),
+        'policies': data.get('policies'),
+        'display_name': data.get('display_name'),
+    }
+
+
+def renew_self_token():
+    """Renew the current Vault token in place (``auth/token/renew-self``).
+
+    Best-effort: returns the new TTL in seconds on success, or None when Vault is
+    unconfigured or the renewal is refused. Never raises, so scheduler jobs and
+    health checks can call it safely.
+    """
+    if not vault_configured():
+        return None
+    try:
+        addr, token, namespace = _vault_conn()
+        url = f"{addr.rstrip('/')}/v1/auth/token/renew-self"
+        resp = requests.post(url, headers=_vault_headers(token, namespace),
+                             json={}, timeout=_VAULT_HTTP_TIMEOUT)
+        if resp.status_code in (401, 403):
+            logger.error(
+                'Vault token renewal rejected (HTTP %s): the token has expired or '
+                'is not renewable. Re-issue VAULT_TOKEN.', resp.status_code
+            )
+            return None
+        resp.raise_for_status()
+        auth = (resp.json() or {}).get('auth') or {}
+        ttl = auth.get('lease_duration')
+        logger.info('Vault token renewed successfully; new TTL ~%ss.', ttl)
+        return ttl
+    except Exception as e:
+        logger.error('Vault token renewal failed: %s', e)
+        return None
+

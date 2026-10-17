@@ -262,6 +262,30 @@ def admin_system_health():
         }
     except Exception as e:
         health['post_moderation'] = {'status': 'error', 'detail': str(e)}
+    try:
+        import key_management as _km
+        if _km.vault_configured() and (_km.transit_enabled() or os.environ.get('VAULT_MASTER_KEY_PATH', '').strip()):
+            healthy = _km.verify_transit() if _km.transit_enabled() else True
+            block = {'status': 'healthy' if healthy else 'error', 'mode': _km.current_mode()}
+            if not healthy:
+                block['detail'] = 'Transit encrypt/decrypt self-check failed'
+            try:
+                status = _km.token_status()
+                if status:
+                    block['token_ttl'] = status.get('ttl')
+                    block['token_renewable'] = status.get('renewable')
+                    ttl = status.get('ttl')
+                    if isinstance(ttl, int) and 0 <= ttl < 86400:
+                        block['status'] = 'warning'
+                        block['detail'] = 'Vault token expires in under 24h'
+            except Exception as e:
+                block['status'] = 'error'
+                block['detail'] = f'Vault token: {e}'
+            health['vault'] = block
+        else:
+            health['vault'] = {'status': 'not_configured', 'mode': _km.current_mode()}
+    except Exception as e:
+        health['vault'] = {'status': 'error', 'detail': str(e)}
     return jsonify(health)
 
 

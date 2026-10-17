@@ -152,6 +152,21 @@ def run_calendar_reminders():
         print(f"Error: The script at {script_path} was not found.")
 
 
+def run_renew_vault_token():
+    """
+    Renews the Vault token used for at-rest key custody (best-effort).
+    """
+    script_path = os.path.join(os.path.dirname(__file__), 'renew_vault_token.py')
+    try:
+        subprocess.run(['python', script_path], check=True, timeout=30)
+    except subprocess.CalledProcessError as e:
+        print(f"Vault token renewal exited non-zero: {e}")
+    except subprocess.TimeoutExpired:
+        print("Warning: renew_vault_token.py timed out after 30 seconds")
+    except FileNotFoundError:
+        print(f"Error: The script at {script_path} was not found.")
+
+
 if __name__ == '__main__':
     # ── Fixed-time jobs (no catchup risk) ──────────────────────────
     # These fire at a specific wall-clock time, so the schedule library
@@ -172,13 +187,16 @@ if __name__ == '__main__':
     cleanup_job = schedule.every().hour.do(run_cleanup_expired_auth)
     messages_job = schedule.every(1).minutes.do(run_scheduled_messages)
     calendar_job = schedule.every(5).minutes.do(run_calendar_reminders)
+    vault_job = schedule.every(12).hours.do(run_renew_vault_token)
 
     # Stagger first runs: backup in 2 min, cleanup in 5 min,
-    # scheduled messages in 1 min, calendar reminders in 1 min.
+    # scheduled messages in 1 min, calendar reminders in 1 min,
+    # Vault token renewal in 3 min.
     now = datetime.datetime.now()
     messages_job.next_run = now + datetime.timedelta(minutes=1)
     calendar_job.next_run = now + datetime.timedelta(minutes=1)
     backup_job.next_run = now + datetime.timedelta(minutes=2)
+    vault_job.next_run = now + datetime.timedelta(minutes=3)
     cleanup_job.next_run = now + datetime.timedelta(minutes=5)
 
     print("Scheduler started. Waiting for scheduled jobs...")
@@ -191,6 +209,7 @@ if __name__ == '__main__':
     print(f"  - Atlas backup: Every 30 minutes (first run in ~2 min)")
     print(f"  - Scheduled messages: Every minute (first run in ~1 min)")
     print(f"  - Calendar reminders: Every 5 minutes (first run in ~1 min)")
+    print(f"  - Vault token renewal: Every 12 hours (first run in ~3 min)")
     while True:
         schedule.run_pending()
         time.sleep(60)  # Check every 60 seconds

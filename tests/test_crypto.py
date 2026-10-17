@@ -806,6 +806,70 @@ class TestVaultOutageFailsFast:
                 security._MEDIA_FERNET_CACHE.clear()
 
 
+class TestVaultTokenLifecycle:
+    """Renewal/status helpers so a long-running Vault token can't expire silently."""
+
+    def test_renew_self_token_success(self, app, monkeypatch):
+        import key_management
+        monkeypatch.setenv('VAULT_ADDR', 'https://vault.example:8200')
+        monkeypatch.setenv('VAULT_TOKEN', 'scoped-token')
+        captured = {}
+
+        class _Resp:
+            status_code = 200
+            def raise_for_status(self):
+                pass
+            def json(self):
+                return {'auth': {'lease_duration': 2592000}}
+
+        def fake_post(url, headers=None, json=None, timeout=None):
+            captured['url'] = url
+            return _Resp()
+
+        monkeypatch.setattr(key_management.requests, 'post', fake_post)
+        assert key_management.renew_self_token() == 2592000
+        assert captured['url'].endswith('/v1/auth/token/renew-self')
+
+    def test_renew_self_token_rejected_returns_none(self, app, monkeypatch):
+        import key_management
+        monkeypatch.setenv('VAULT_ADDR', 'https://vault.example:8200')
+        monkeypatch.setenv('VAULT_TOKEN', 'scoped-token')
+
+        class _Resp:
+            status_code = 403
+            def raise_for_status(self):
+                pass
+            def json(self):
+                return {}
+
+        monkeypatch.setattr(key_management.requests, 'post', lambda *a, **k: _Resp())
+        assert key_management.renew_self_token() is None
+
+    def test_renew_self_token_unconfigured_returns_none(self, app, monkeypatch):
+        import key_management
+        monkeypatch.delenv('VAULT_ADDR', raising=False)
+        monkeypatch.delenv('VAULT_TOKEN', raising=False)
+        assert key_management.renew_self_token() is None
+
+    def test_token_status_parses_ttl(self, app, monkeypatch):
+        import key_management
+        monkeypatch.setenv('VAULT_ADDR', 'https://vault.example:8200')
+        monkeypatch.setenv('VAULT_TOKEN', 'scoped-token')
+
+        class _Resp:
+            status_code = 200
+            def raise_for_status(self):
+                pass
+            def json(self):
+                return {'data': {'ttl': 7200, 'renewable': True, 'policies': ['echowithin-app']}}
+
+        monkeypatch.setattr(key_management.requests, 'get', lambda *a, **k: _Resp())
+        status = key_management.token_status()
+        assert status['ttl'] == 7200
+        assert status['renewable'] is True
+        assert status['policies'] == ['echowithin-app']
+
+
 
 
 

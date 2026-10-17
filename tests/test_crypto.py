@@ -738,6 +738,74 @@ class TestObjectEnvelopeEncryption:
             assert decrypt_bond_data(ca, b) == '[Content unavailable \u2014 decryption error]'
 
 
+class TestVaultOutageFailsFast:
+    """When a v3 key exists but cannot be unwrapped, we fail fast instead of
+    silently downgrading to a SECRET_KEY-derived key (and the failure must not be
+    cached as ``__none__`` so recovery is immediate)."""
+
+    @staticmethod
+    def _vault_down(*args, **kwargs):
+        raise RuntimeError('Vault Transit unreachable')
+
+    def test_encrypt_raises_and_does_not_downgrade(self, app, monkeypatch):
+        import security, database
+        from main import encrypt_bond_data
+        from security import KeyUnavailableError
+        bond_id = '507f1f77bcf86cd799439012'
+        with app.app_context():
+            database._bond_fernet_v3_cache.clear()
+            monkeypatch.setattr(database.bonds_conf, 'find_one',
+                                lambda *a, **k: {'bond_key_enc': 'vault:v1:deadbeef'})
+            monkeypatch.setattr(security, 'transit_decrypt', self._vault_down)
+            with pytest.raises(KeyUnavailableError):
+                encrypt_bond_data('must not be written', bond_id)
+            # A transient unwrap failure is never cached as "no key".
+            assert database._bond_fernet_v3_cache.get(bond_id) != '__none__'
+
+    def test_recovery_not_blocked_by_negative_cache(self, app, monkeypatch):
+        import security, database
+        from security import _get_bond_fernet_v3
+        bond_id = '507f1f77bcf86cd799439012'
+        with app.app_context():
+            database._bond_fernet_v3_cache.clear()
+            monkeypatch.setattr(database.bonds_conf, 'find_one',
+                                lambda *a, **k: {'bond_key_enc': 'vault:v1:deadbeef'})
+            monkeypatch.setattr(security, 'transit_decrypt', self._vault_down)
+            try:
+                _get_bond_fernet_v3(bond_id)
+            except Exception:
+                pass
+            # Restore a working unwrap: the next lookup must succeed.
+            monkeypatch.setattr(security, '_unwrap_dek', lambda *a, **k: (b'\x00' * 32, False))
+            assert _get_bond_fernet_v3(bond_id) is not None
+
+    def test_decrypt_returns_unavailable_not_legacy(self, app, monkeypatch):
+        import security, database
+        from main import decrypt_bond_data
+        bond_id = '507f1f77bcf86cd799439012'
+        with app.app_context():
+            database._bond_fernet_v3_cache.clear()
+            monkeypatch.setattr(database.bonds_conf, 'find_one',
+                                lambda *a, **k: {'bond_key_enc': 'vault:v1:deadbeef'})
+            monkeypatch.setattr(security, 'transit_decrypt', self._vault_down)
+            out = decrypt_bond_data('gAAAAA' + 'x' * 60, bond_id)
+            assert out == '[Content unavailable \u2014 decryption error]'
+
+    def test_media_key_unavailable_fails_fast(self, app, monkeypatch):
+        import security, database
+        from security import KeyUnavailableError
+        with app.app_context():
+            security._MEDIA_FERNET_CACHE.clear()
+            monkeypatch.setattr(database.auth_conf, 'find_one',
+                                lambda *a, **k: {'encryption_key_enc': 'vault:v1:deadbeef'})
+            monkeypatch.setattr(security, 'transit_decrypt', self._vault_down)
+            try:
+                with pytest.raises(KeyUnavailableError):
+                    security.encrypt_media_bytes(b'secret bytes')
+            finally:
+                security._MEDIA_FERNET_CACHE.clear()
+
+
 
 
 

@@ -161,6 +161,7 @@ from security import (
     _get_bond_fernet_v3, _get_form_fernet_v3, _get_game_fernet_v3,
     _invalidate_bond_fernet_v3, _invalidate_form_fernet_v3, _invalidate_game_fernet_v3,
     _encrypt_dek, _decrypt_dek, limits, admin_required, owner_required,
+    KeyUnavailableError,
     parse_iso_utc, build_unified_diff_text, build_merge_preview_text,
     get_active_achievements, is_safe_url, is_same_origin_request
 )
@@ -200,6 +201,7 @@ __all__ = [
     '_invalidate_bond_fernet_v3', '_invalidate_form_fernet_v3', '_invalidate_game_fernet_v3',
     '_encrypt_dek', '_decrypt_dek', 'limits', 'admin_required', 'owner_required',
     'parse_iso_utc', 'build_unified_diff_text', 'build_merge_preview_text',
+    'KeyUnavailableError',
     'get_active_achievements', 'is_safe_url', 'is_same_origin_request',
     '_linkify_target_blank', 'cleanup_share_media', 'cleanup_post_media',
     'get_user_tier', 'get_limit', 'is_premium', 'is_on_trial', 'get_trial_days_remaining',

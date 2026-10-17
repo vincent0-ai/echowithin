@@ -41,6 +41,15 @@ def _get_app():
 _notes_fernet = None
 
 
+class KeyUnavailableError(RuntimeError):
+    """A data key exists but could not be unwrapped (e.g. Vault Transit unreachable).
+
+    Distinct from "no key configured". Encrypt paths must let this propagate so we
+    never silently downgrade to a SECRET_KEY-derived key; decrypt paths catch it and
+    fall back to legacy keys, because reads cannot downgrade anything.
+    """
+
+
 def is_safe_url(target):
     ref_url = urlparse(request.host_url)
     test_url = urlparse(urljoin(request.host_url, target))
@@ -665,23 +674,38 @@ def _get_object_fernet_v3(cache, collection, field_name, object_id_str, salt_pre
         return None
     try:
         doc = getattr(database, collection).find_one(query, {field_name: 1})
-    except Exception:
-        # Transient/unavailable lookup — do not cache a negative result.
-        return None
-    if not doc or not doc.get(field_name):
+    except Exception as e:
+        # Transient/unavailable lookup — never cache a negative result and never let
+        # callers treat this as "no key" (that would silently downgrade writes).
+        raise KeyUnavailableError(f"Could not read {field_name} for {object_id_str}: {e}") from e
+    enc_val = doc.get(field_name) if doc else None
+    if not isinstance(enc_val, str) or not enc_val:
         cache[object_id_str] = '__none__'
         return None
     try:
-        dek_raw, needs_migration = _unwrap_dek(doc[field_name])
+        dek_raw, needs_migration = _unwrap_dek(enc_val)
         if needs_migration:
             _rewrap_object_dek(collection, field_name, query, dek_raw)
         salt = f'{salt_prefix}{object_id_str}'.encode()
-        f = Fernet(_derive_fernet_key(dek_raw, salt, _NOTES_KDF_ITERATIONS))
-        cache[object_id_str] = f
-        return f
+        key = _derive_fernet_key(dek_raw, salt, _NOTES_KDF_ITERATIONS)
     except Exception as e:
         _get_app().logger.error(f"Failed to derive v3 Fernet for {field_name} {object_id_str}: {e}")
-        cache[object_id_str] = '__none__'
+        raise KeyUnavailableError(f"Could not unwrap v3 key for {field_name} {object_id_str}") from e
+    f = Fernet(key)
+    cache[object_id_str] = f
+    return f
+
+
+def _safe_v3(getter, *args):
+    """Return a v3 Fernet for read paths, or None if it cannot be obtained.
+
+    Decrypt paths stay resilient: if the key can't be unwrapped (e.g. Vault Transit
+    is unreachable) we skip v3 and try legacy keys instead of raising. Encrypt paths
+    call the getters directly so they fail fast rather than downgrading.
+    """
+    try:
+        return getter(*args)
+    except Exception:
         return None
 
 
@@ -738,7 +762,7 @@ def decrypt_bond_data(encrypted_content: str, bond_id: str) -> str:
     """Decrypts bond content (v3 envelope first, then legacy). Falls back to raw text."""
     if not encrypted_content:
         return encrypted_content
-    for f in (_get_bond_fernet_v3(str(bond_id)), _get_bond_fernet_legacy(str(bond_id))):
+    for f in (_safe_v3(_get_bond_fernet_v3, str(bond_id)), _get_bond_fernet_legacy(str(bond_id))):
         try:
             return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
         except Exception:
@@ -785,7 +809,7 @@ def decrypt_form_response(ciphertext: str, form_id: str) -> str:
         cached = database._decrypted_forms_cache.get(cache_key)
         if cached is not None:
             return cached
-    for f in (_get_form_fernet_v3(str(form_id)), _get_form_fernet_legacy(str(form_id))):
+    for f in (_safe_v3(_get_form_fernet_v3, str(form_id)), _get_form_fernet_legacy(str(form_id))):
         try:
             dec = f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
             if getattr(database, '_decrypted_forms_cache', None) is not None:
@@ -833,7 +857,7 @@ def decrypt_game_data(ciphertext: str, lobby_id: str) -> str:
         cached = database._decrypted_lobbies_cache.get(cache_key)
         if cached is not None:
             return cached
-    for f in (_get_game_fernet_v3(str(lobby_id)), _get_game_fernet_legacy(str(lobby_id))):
+    for f in (_safe_v3(_get_game_fernet_v3, str(lobby_id)), _get_game_fernet_legacy(str(lobby_id))):
         try:
             dec = f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
             if getattr(database, '_decrypted_lobbies_cache', None) is not None:
@@ -972,42 +996,50 @@ def _get_media_fernet():
     app = _get_app()
     secret = app.config["SECRET_KEY"].encode() if isinstance(app.config["SECRET_KEY"], str) else app.config["SECRET_KEY"]
     derived_key = _derive_fernet_key(secret, b'echowithin_media_at_rest_v1', _NOTES_KDF_ITERATIONS)
-    try:
-        if database.auth_conf is not None:
+
+    doc = None
+    if database.auth_conf is not None:
+        try:
             doc = database.auth_conf.find_one(
                 {'type': 'media_encryption_key'},
                 {'encryption_key_enc': 1, 'encryption_key_enc_prev': 1}
             )
-            if doc:
-                unwrapped_key = None
-                needs_migration = False
-                for field in ('encryption_key_enc', 'encryption_key_enc_prev'):
-                    enc_val = doc.get(field)
-                    if not enc_val:
-                        continue
-                    try:
-                        unwrapped_key, needs_migration = _unwrap_dek(enc_val)
-                        break
-                    except Exception:
-                        continue
-                if unwrapped_key and needs_migration:
-                    try:
-                        database.auth_conf.update_one(
-                            {'type': 'media_encryption_key'},
-                            {'$set': {'encryption_key_enc': _encrypt_dek(unwrapped_key)}}
-                        )
-                    except Exception as e:
-                        app.logger.warning(f"Could not re-wrap media key under current root key: {e}")
-                if unwrapped_key:
-                    from cryptography.fernet import MultiFernet
-                    fernets = [Fernet(unwrapped_key)]
-                    if unwrapped_key != derived_key:
-                        fernets.append(Fernet(derived_key))
-                    f = MultiFernet(fernets) if len(fernets) > 1 else fernets[0]
-                    _MEDIA_FERNET_CACHE['instance'] = f
-                    return f
-    except Exception as e:
-        app.logger.warning(f"Failed to unwrap envelope media key, falling back to derived key: {e}")
+        except Exception as e:
+            # Transient read failure — never fall back to the SECRET-derived key.
+            raise KeyUnavailableError(f"Could not read the media encryption key: {e}") from e
+
+    enc_fields = [doc.get(f) for f in ('encryption_key_enc', 'encryption_key_enc_prev')
+                  if doc and isinstance(doc.get(f), str) and doc.get(f)]
+    if enc_fields:
+        unwrapped_key = None
+        needs_migration = False
+        last_error = None
+        for enc_val in enc_fields:
+            try:
+                unwrapped_key, needs_migration = _unwrap_dek(enc_val)
+                break
+            except Exception as e:
+                last_error = e
+        if unwrapped_key is None:
+            # A key exists but cannot be unwrapped (e.g. Vault Transit unreachable).
+            app.logger.error(f"Failed to unwrap envelope media key: {last_error}")
+            raise KeyUnavailableError('Could not unwrap the media encryption key') from last_error
+        if needs_migration:
+            try:
+                database.auth_conf.update_one(
+                    {'type': 'media_encryption_key'},
+                    {'$set': {'encryption_key_enc': _encrypt_dek(unwrapped_key)}}
+                )
+            except Exception as e:
+                app.logger.warning(f"Could not re-wrap media key under current root key: {e}")
+        from cryptography.fernet import MultiFernet
+        fernets = [Fernet(unwrapped_key)]
+        if unwrapped_key != derived_key:
+            fernets.append(Fernet(derived_key))
+        f = MultiFernet(fernets) if len(fernets) > 1 else fernets[0]
+        _MEDIA_FERNET_CACHE['instance'] = f
+        return f
+
     f = Fernet(derived_key)
     _MEDIA_FERNET_CACHE['instance'] = f
     return f
@@ -1218,23 +1250,23 @@ def _get_user_fernet_v3(user_id: str):
         {'_id': ObjectId(user_id)},
         {'encryption_key_enc': 1, 'encryption_salt': 1, 'encryption_version': 1}
     )
-    if not user_doc or not user_doc.get('encryption_key_enc'):
+    enc_key = user_doc.get('encryption_key_enc') if user_doc else None
+    if not isinstance(enc_key, str) or not enc_key:
         database._user_fernet_v3_cache[user_id] = '__none__'
         return None
 
     try:
-        dek_raw, needs_migration = _unwrap_dek(user_doc['encryption_key_enc'])
+        dek_raw, needs_migration = _unwrap_dek(enc_key)
         if needs_migration:
             _rewrap_user_dek(user_id, dek_raw)
         salt = base64.urlsafe_b64decode(user_doc['encryption_salt'])
         key = _derive_fernet_key(dek_raw, salt, _NOTES_KDF_ITERATIONS)
-        f = Fernet(key)
-        database._user_fernet_v3_cache[user_id] = f
-        return f
     except Exception as e:
         _get_app().logger.error(f"Failed to derive v3 Fernet for user {user_id}: {e}")
-        database._user_fernet_v3_cache[user_id] = '__none__'
-        return None
+        raise KeyUnavailableError(f"Could not unwrap v3 key for user {user_id}") from e
+    f = Fernet(key)
+    database._user_fernet_v3_cache[user_id] = f
+    return f
 
 
 def _rewrap_user_dek(user_id: str, dek_raw: bytes):
@@ -1301,24 +1333,24 @@ def _get_dm_fernet_v3(user1_id: str, user2_id: str):
         },
         {'conversation_key_enc': 1, 'dm_encryption_version': 1}
     )
-    if not perm_doc or not perm_doc.get('conversation_key_enc'):
+    enc_key = perm_doc.get('conversation_key_enc') if perm_doc else None
+    if not isinstance(enc_key, str) or not enc_key:
         database._dm_fernet_v3_cache[conv_id] = '__none__'
         return None
 
     try:
-        dek_raw, needs_migration = _unwrap_dek(perm_doc['conversation_key_enc'])
+        dek_raw, needs_migration = _unwrap_dek(enc_key)
         if needs_migration:
             _rewrap_conversation_dek(uids, dek_raw)
         # Use a deterministic salt from the conversation ID for the Fernet key derivation
         salt = f'echowithin_dm_v3_{conv_id}'.encode()
         key = _derive_fernet_key(dek_raw, salt, _NOTES_KDF_ITERATIONS)
-        f = Fernet(key)
-        database._dm_fernet_v3_cache[conv_id] = f
-        return f
     except Exception as e:
         _get_app().logger.error(f"Failed to derive v3 DM Fernet for conversation {conv_id}: {e}")
-        database._dm_fernet_v3_cache[conv_id] = '__none__'
-        return None
+        raise KeyUnavailableError(f"Could not unwrap v3 DM key for conversation {conv_id}") from e
+    f = Fernet(key)
+    database._dm_fernet_v3_cache[conv_id] = f
+    return f
 
 
 def _rewrap_conversation_dek(uids, dek_raw: bytes):
@@ -1389,7 +1421,7 @@ def decrypt_dm(encrypted_content, user1_id, user2_id):
     if not isinstance(encrypted_content, str) or not encrypted_content.startswith('gAAAAA'):
         return encrypted_content
     # Try v3 first (envelope encryption)
-    f_v3 = _get_dm_fernet_v3(user1_id, user2_id)
+    f_v3 = _safe_v3(_get_dm_fernet_v3, user1_id, user2_id)
     if f_v3:
         try:
             return f_v3.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
@@ -1437,7 +1469,7 @@ def decrypt_note(encrypted_content, user_id=None):
         return encrypted_content
     # Try v3 envelope encryption first
     if user_id:
-        f_v3 = _get_user_fernet_v3(str(user_id))
+        f_v3 = _safe_v3(_get_user_fernet_v3, str(user_id))
         if f_v3:
             try:
                 return f_v3.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
@@ -1486,7 +1518,7 @@ def _decrypt_with_candidate_ids(encrypted_content, candidate_user_ids):
     # Phase 1: try the envelope (v3) key for every candidate first. This is the
     # current format, so a hit here avoids the expensive v2 PBKDF2 derivation.
     for candidate_user_id in candidate_user_ids:
-        f_v3 = _get_user_fernet_v3(str(candidate_user_id))
+        f_v3 = _safe_v3(_get_user_fernet_v3, str(candidate_user_id))
         if f_v3:
             try:
                 return f_v3.decrypt(token).decode('utf-8')

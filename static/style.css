@@ -424,7 +424,10 @@ body {
     flex-direction: column;
     min-height: 100vh;
     min-height: 100dvh;
+    /* `clip` keeps horizontal overflow contained without creating a scroll
+       container, so `position: sticky` children (e.g. the navbar) still work. */
     overflow-x: hidden;
+    overflow-x: clip;
     max-width: 100%;
 }
 
@@ -494,6 +497,93 @@ body {
     color: white;
     text-decoration: none;
     padding: 0.5rem 0.4rem;
+}
+
+/* Keeps navigation reachable while scrolling long feeds */
+.navbar-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 8px var(--shadow-color);
+}
+
+/* Back-to-top control for the infinitely scrolling blog feed */
+.feed-top-btn {
+    position: fixed;
+    right: 20px;
+    bottom: 24px;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--card-bg);
+    color: var(--primary-color);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    box-shadow: 0 4px 14px var(--shadow-color);
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(8px);
+    transition: opacity .18s ease, transform .18s ease, visibility .18s;
+    z-index: 900;
+}
+
+.feed-top-btn.is-visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.feed-top-btn:hover {
+    border-color: var(--primary-color);
+}
+
+.feed-top-btn:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.feed-top-btn i {
+    font-size: 0.95rem;
+    position: relative;
+    z-index: 1;
+}
+
+.feed-top-ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.feed-top-track,
+.feed-top-progress {
+    fill: none;
+    stroke-width: 2.5;
+}
+
+.feed-top-track {
+    stroke: var(--border-color);
+    opacity: 0.6;
+}
+
+.feed-top-progress {
+    stroke: var(--primary-color);
+    stroke-linecap: round;
+    transition: stroke-dashoffset .1s linear;
+}
+
+@media (max-width: 600px) {
+    .feed-top-btn {
+        right: 14px;
+        bottom: 18px;
+        width: 42px;
+        height: 42px;
+    }
 }
 
 .nav-brand {

@@ -350,6 +350,14 @@
         {% endif %}
     </div>
 
+    <button type="button" id="feed-top-btn" class="feed-top-btn" aria-label="Back to top" title="Back to top">
+        <svg class="feed-top-ring" viewBox="0 0 44 44" aria-hidden="true" focusable="false">
+            <circle class="feed-top-track" cx="22" cy="22" r="20.5"></circle>
+            <circle class="feed-top-progress" cx="22" cy="22" r="20.5"></circle>
+        </svg>
+        <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
+    </button>
+
     <div style="text-align:center; margin-top:2rem;">
         <a href="{{ url_for('blog.all_posts') }}" class="btn comment-btn">View All Posts →</a>
     </div>
@@ -525,6 +533,43 @@
                         loader.style.display = 'none';
                     });
             }
+        })();
+
+        // --- Back to top: appears after the feed scrolls; ring shows read progress ---
+        (function initFeedTopButton() {
+            const btn = document.getElementById('feed-top-btn');
+            if (!btn) return;
+            const ring = btn.querySelector('.feed-top-progress');
+            const radius = ring ? ring.r.baseVal.value : 0;
+            const circumference = 2 * Math.PI * radius;
+            if (ring) {
+                ring.style.strokeDasharray = circumference;
+                ring.style.strokeDashoffset = circumference;
+            }
+
+            const threshold = 600;
+            let ticking = false;
+
+            function update() {
+                ticking = false;
+                const scrolled = window.scrollY || document.documentElement.scrollTop || 0;
+                const max = document.documentElement.scrollHeight - window.innerHeight;
+                const ratio = max > 0 ? Math.min(scrolled / max, 1) : 0;
+                if (ring) ring.style.strokeDashoffset = circumference * (1 - ratio);
+                btn.classList.toggle('is-visible', scrolled > threshold);
+            }
+
+            window.addEventListener('scroll', function () {
+                if (ticking) return;
+                ticking = true;
+                window.requestAnimationFrame(update);
+            }, { passive: true });
+
+            btn.addEventListener('click', function () {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+
+            update();
         })();
 
         // Delete Post Handler (works in JS-rendered posts too)

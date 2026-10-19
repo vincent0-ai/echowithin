@@ -225,11 +225,14 @@ class TestBlogAlgorithmAndDiversity:
         assert author_score > base_score
 
     def test_bond_partner_lookup_supports_current_schema(self):
+        import blueprints.blog as blog
         from blueprints.blog import _get_bond_partner_ids
+        blog._bond_partners_memory_cache.clear()
         user_id = ObjectId('507f1f77bcf86cd799439011')
         partner_id = ObjectId('507f1f77bcf86cd799439022')
         user = MagicMock(is_authenticated=True, id=str(user_id))
         db = MagicMock()
+        db.redis_cache = None
         db.bonds_conf.find.return_value = [{
             'user_a_id': user_id,
             'user_b_id': partner_id,
@@ -239,6 +242,22 @@ class TestBlogAlgorithmAndDiversity:
         partner_ids = _get_bond_partner_ids(db, user)
 
         assert str(partner_id) in partner_ids
+
+    def test_bond_partner_lookup_is_cached(self):
+        import blueprints.blog as blog
+        from blueprints.blog import _get_bond_partner_ids
+        blog._bond_partners_memory_cache.clear()
+        user_id = ObjectId('507f1f77bcf86cd7994390aa')
+        partner_id = ObjectId('507f1f77bcf86cd7994390bb')
+        user = MagicMock(is_authenticated=True, id=str(user_id))
+        db = MagicMock()
+        db.redis_cache = None
+        db.bonds_conf.find.return_value = [{'user_a_id': user_id, 'user_b_id': partner_id, 'status': 'active'}]
+
+        _get_bond_partner_ids(db, user)
+        _get_bond_partner_ids(db, user)
+
+        assert db.bonds_conf.find.call_count == 1
 
     def test_apply_author_diversity(self):
         from blueprints.blog import apply_author_diversity
@@ -329,6 +348,159 @@ class TestBlogAlgorithmAndDiversity:
         import datetime as dt
         assert _get_recently_viewed_post_ids(MagicMock(), None, dt.datetime.now(dt.timezone.utc)) == set()
 
+    def test_visitor_viewed_post_ids_uses_visitor_cookie(self, app):
+        from blueprints.blog import _get_visitor_viewed_post_ids
+        import main as m
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        post_id = ObjectId('507f1f77bcf86cd799439055')
+        db = MagicMock()
+        db.logs_conf.find.return_value = [{'post_id': post_id}]
+
+        with app.test_request_context('/', headers={'X-Visitor-ID': 'visitor-abc'}):
+            ids = _get_visitor_viewed_post_ids(db, [post_id], now, 720)
+
+        assert str(post_id) in ids
+        query = db.logs_conf.find.call_args[0][0]
+        assert query['user_identifier'] == 'visitor:visitor-abc'
+        assert query['type'] == 'post_view'
+        assert query['timestamp']['$gte'] <= now
+
+    def test_visitor_viewed_post_ids_without_identity(self, app):
+        from blueprints.blog import _get_visitor_viewed_post_ids
+        import datetime as dt
+        db = MagicMock()
+        with app.test_request_context('/'):
+            assert _get_visitor_viewed_post_ids(db, [ObjectId()], dt.datetime.now(dt.timezone.utc), 720) == set()
+
+    def test_inject_comment_counts_sets_live_counts(self):
+        from blueprints.blog import _inject_comment_counts
+        db = MagicMock()
+        db.comments_conf.aggregate.return_value = [
+            {'_id': 'post-a', 'count': 4},
+            {'_id': 'post-b', 'count': 2},
+        ]
+        posts = [
+            {'slug': 'post-a', 'comment_count': 0},
+            {'slug': 'post-b', 'comment_count': 0},
+            {'slug': 'post-c', 'comment_count': 9},
+        ]
+
+        _inject_comment_counts(db, posts)
+
+        assert posts[0]['comment_count'] == 4
+        assert posts[1]['comment_count'] == 2
+        assert posts[2]['comment_count'] == 0
+
+    def test_inject_comment_counts_aggregate_failure_keeps_stored(self):
+        from blueprints.blog import _inject_comment_counts
+        db = MagicMock()
+        db.comments_conf.aggregate.side_effect = RuntimeError('boom')
+        posts = [{'slug': 'post-a', 'comment_count': 3}]
+
+        _inject_comment_counts(db, posts)
+
+        assert posts[0]['comment_count'] == 3
+
+    def test_feed_pool_shared_across_users_and_feeds(self, app, monkeypatch):
+        import blueprints.blog as blog
+        import main as m
+        from cachetools import TTLCache
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        posts = [
+            {
+                '_id': ObjectId(f'507f1f77bcf86cd79943905{i}'),
+                'slug': f'post-{i}', 'title': f'Post {i}', 'content': 'body',
+                'author': f'author{i}', 'author_id': ObjectId(f'507f1f77bcf86cd7994390{i:02d}'[:24]),
+                'timestamp': now - datetime.timedelta(hours=1),
+                'likes_count': 2, 'comment_count': 0, 'share_count': 0, 'view_count': 0,
+                'tags': [], 'is_pinned': False,
+            }
+            for i in range(4)
+        ]
+
+        class _Cursor:
+            def __init__(self, docs): self._docs = list(docs)
+            def sort(self, *a, **k): return self
+            def limit(self, n): self._docs = self._docs[:n]; return self
+            def __iter__(self): return iter(self._docs)
+
+        def fake_find(query=None, projection=None, *a, **k):
+            query = query or {}
+            if query.get('is_pinned') is True or 'likes_count' in query:
+                return _Cursor([])
+            return _Cursor(posts)
+
+        find_mock = MagicMock(side_effect=fake_find)
+        monkeypatch.setattr(m, 'posts_conf', MagicMock(find=find_mock))
+        monkeypatch.setattr(m, 'comments_conf', MagicMock())
+        monkeypatch.setattr(m, 'user_post_views_conf', MagicMock(find=lambda *a, **k: []))
+        monkeypatch.setattr(m, 'prepare_posts', lambda p: p)
+        monkeypatch.setattr(m, 'blog_feed_cache', TTLCache(maxsize=32, ttl=60))
+
+        user_a = MagicMock(is_authenticated=True, id=str(ObjectId('507f1f77bcf86cd799439091')))
+        user_b = MagicMock(is_authenticated=True, id=str(ObjectId('507f1f77bcf86cd799439092')))
+        with app.app_context():
+            blog.get_latest_posts_feed(feed_type='trending', user=user_a, limit=3)
+            pool_first = m.blog_feed_cache.get('feedpool_base')
+            assert pool_first is not None
+            blog.get_latest_posts_feed(feed_type='for_you', user=user_b, limit=3)
+
+        # The second request (different user + feed) reused the same cached pool
+        assert m.blog_feed_cache.get('feedpool_base') is pool_first
+
+    def test_viewed_pinned_post_drops_for_anonymous_visitor(self, app, monkeypatch):
+        import blueprints.blog as blog
+        import main as m
+        from cachetools import TTLCache
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        pinned = {
+            '_id': ObjectId('507f1f77bcf86cd799439077'),
+            'slug': 'pinned-post', 'title': 'Pinned', 'content': 'body',
+            'author': 'alice', 'author_id': ObjectId('507f1f77bcf86cd799439012'),
+            'timestamp': now, 'likes_count': 1, 'comment_count': 0, 'share_count': 0,
+            'view_count': 0, 'tags': [], 'is_pinned': True,
+        }
+        normal = {
+            '_id': ObjectId('507f1f77bcf86cd799439078'),
+            'slug': 'normal-post', 'title': 'Normal', 'content': 'body',
+            'author': 'bob', 'author_id': ObjectId('507f1f77bcf86cd799439022'),
+            'timestamp': now, 'likes_count': 1, 'comment_count': 0, 'share_count': 0,
+            'view_count': 0, 'tags': [], 'is_pinned': False,
+        }
+
+        class _Cursor:
+            def __init__(self, docs): self._docs = list(docs)
+            def sort(self, *a, **k): return self
+            def limit(self, n): self._docs = self._docs[:n]; return self
+            def __iter__(self): return iter(self._docs)
+
+        def fake_find(query=None, projection=None, *a, **k):
+            query = query or {}
+            if query.get('is_pinned') is True:
+                return _Cursor([pinned])
+            if 'likes_count' in query:
+                return _Cursor([])
+            return _Cursor([normal])
+
+        logs = MagicMock()
+        logs.find.return_value = [{'post_id': pinned['_id']}]
+        monkeypatch.setattr(m, 'posts_conf', MagicMock(find=fake_find))
+        monkeypatch.setattr(m, 'comments_conf', MagicMock())
+        monkeypatch.setattr(m, 'comments_conf', MagicMock())
+        monkeypatch.setattr(m, 'logs_conf', logs)
+        monkeypatch.setattr(m, 'prepare_posts', lambda p: p)
+        monkeypatch.setattr(m, 'blog_feed_cache', TTLCache(maxsize=32, ttl=60))
+
+        with app.test_request_context('/', headers={'X-Visitor-ID': 'visitor-xyz'}):
+            result = blog.get_latest_posts_feed(feed_type='trending', user=None, limit=5)
+
+        ids = [str(p['_id']) for p in result]
+        assert str(pinned['_id']) not in ids
+        assert str(normal['_id']) in ids
+
 
     def test_feed_limit_exclude_and_read_penalty(self, app, monkeypatch):
         import blueprints.blog as blog
@@ -368,6 +540,7 @@ class TestBlogAlgorithmAndDiversity:
             return sorted(candidates, key=lambda x: x.get('_feed_score', 0), reverse=True)[:target]
 
         monkeypatch.setattr(m, 'posts_conf', MagicMock(find=fake_find))
+        monkeypatch.setattr(m, 'comments_conf', MagicMock())
         monkeypatch.setattr(m, 'user_post_views_conf', MagicMock(
             find=lambda *a, **k: [{'post_id': posts[0]['_id']}]
         ))
@@ -422,6 +595,7 @@ class TestBlogAlgorithmAndDiversity:
             return _Cursor([normal])
 
         monkeypatch.setattr(m, 'posts_conf', MagicMock(find=fake_find))
+        monkeypatch.setattr(m, 'comments_conf', MagicMock())
         monkeypatch.setattr(m, 'user_post_views_conf', MagicMock(
             find=lambda *a, **k: [{'post_id': pinned['_id']}]
         ))
@@ -478,6 +652,7 @@ class TestBlogAlgorithmAndDiversity:
         monkeypatch.setattr(blog, '_weighted_rotation_sample', lambda cands, target, rng, max_per_author=2:
                             [p for p in cands if str(p['_id']) != str(fresh['_id'])][:target])
         monkeypatch.setattr(m, 'posts_conf', MagicMock(find=fake_find))
+        monkeypatch.setattr(m, 'comments_conf', MagicMock())
         monkeypatch.setattr(m, 'prepare_posts', lambda p: p)
         monkeypatch.setattr(m, 'blog_feed_cache', TTLCache(maxsize=32, ttl=60))
 
@@ -522,6 +697,7 @@ class TestBlogAlgorithmAndDiversity:
             return posts
 
         monkeypatch.setattr(m, 'posts_conf', MagicMock(find=fake_find))
+        monkeypatch.setattr(m, 'comments_conf', MagicMock())
         monkeypatch.setattr(m, 'prepare_posts', fake_prepare)
         monkeypatch.setattr(m, 'user_post_views_conf', MagicMock(find=lambda *a, **k: []))
         monkeypatch.setattr(m, 'blog_feed_cache', TTLCache(maxsize=32, ttl=60))

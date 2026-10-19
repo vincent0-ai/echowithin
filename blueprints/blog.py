@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, send_from_directory, abort, current_app, Response
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, send_from_directory, abort, current_app, Response, has_request_context
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, math, json, random, os, re, hashlib
@@ -6,6 +6,7 @@ from security import limits
 from cachetools import TTLCache
 
 _user_interests_memory_cache = TTLCache(maxsize=256, ttl=300)
+_bond_partners_memory_cache = TTLCache(maxsize=256, ttl=300)
 
 bp = Blueprint('blog', __name__, template_folder='templates')
 
@@ -93,7 +94,7 @@ def _get_user_interest_profile(m, user):
 
 
 def _get_bond_partner_ids(m, user):
-    """Return active bond partner IDs for feed personalization."""
+    """Return active bond partner IDs for feed personalization (cached 5 minutes)."""
     if not user or not getattr(user, 'is_authenticated', False) or not hasattr(user, 'id'):
         return set()
 
@@ -101,6 +102,20 @@ def _get_bond_partner_ids(m, user):
         user_oid = ObjectId(user.id)
     except Exception:
         return set()
+
+    cache_key = f"bond_partners:{user.id}"
+    cached = _bond_partners_memory_cache.get(cache_key)
+    if cached is not None:
+        return set(cached)
+    if getattr(m, 'redis_cache', None):
+        try:
+            cached_data = m.redis_cache.get(cache_key)
+            if cached_data is not None:
+                partner_ids = set(json.loads(cached_data))
+                _bond_partners_memory_cache[cache_key] = partner_ids
+                return partner_ids
+        except Exception:
+            pass
 
     partner_ids = set()
     try:
@@ -121,6 +136,13 @@ def _get_bond_partner_ids(m, user):
                 partner_ids.add(str(partner_id))
     except Exception:
         pass
+
+    _bond_partners_memory_cache[cache_key] = partner_ids
+    if getattr(m, 'redis_cache', None):
+        try:
+            m.redis_cache.setex(cache_key, 300, json.dumps(list(partner_ids)))
+        except Exception:
+            pass
 
     return partner_ids
 
@@ -194,8 +216,10 @@ FEED_EXPLORATION_EPSILON = 0.25
 FEED_AUTHOR_CAP_SOFTEN = 0.35
 FEED_READ_PENALTY = 0.2
 FEED_READ_WINDOW_HOURS = 48
+FEED_PINNED_READ_HOURS = 24 * 30
 FEED_FRESH_HOURS = 6
 FEED_ARCHIVE_SAMPLE = 40
+FEED_VIEW_LOOKUP_LIMIT = 1000
 
 
 def _weighted_rotation_sample(posts, target_count, rng, max_per_author=2):
@@ -237,36 +261,83 @@ def _weighted_rotation_sample(posts, target_count, rng, max_per_author=2):
     return picked
 
 
-def _get_recently_viewed_post_ids(m, user, now_utc):
-    """Ids of posts this user read within FEED_READ_WINDOW_HOURS, to de-prioritise repeats."""
+def _get_recently_viewed_post_ids(m, user, now_utc, hours=FEED_READ_WINDOW_HOURS):
+    """Ids of posts this logged-in user read within `hours`."""
     if not (user and getattr(user, 'is_authenticated', False) and hasattr(user, 'id')):
         return set()
     try:
         user_oid = ObjectId(user.id)
     except Exception:
         return set()
-    cutoff = now_utc - datetime.timedelta(hours=FEED_READ_WINDOW_HOURS)
+    cutoff = now_utc - datetime.timedelta(hours=hours)
     try:
-        return {
-            str(v.get('post_id'))
-            for v in m.user_post_views_conf.find(
-                {'user_id': user_oid, 'last_viewed': {'$gte': cutoff}},
-                {'post_id': 1}
-            )
-            if v.get('post_id')
-        }
+        cursor = m.user_post_views_conf.find(
+            {'user_id': user_oid, 'last_viewed': {'$gte': cutoff}},
+            {'post_id': 1}
+        )
+        try:
+            cursor = cursor.sort('last_viewed', -1).limit(FEED_VIEW_LOOKUP_LIMIT)
+        except (AttributeError, TypeError):
+            pass
+        return {str(v.get('post_id')) for v in cursor if v.get('post_id')}
     except Exception:
         return set()
 
 
-def _get_feed_candidate_pool(m, feed_type, user, now_utc):
-    """DB-heavy candidate gathering + scoring, cached briefly per feed/user.
+def _get_visitor_viewed_post_ids(m, post_ids, now_utc, hours):
+    """Ids from `post_ids` this anonymous visitor has already viewed.
 
-    Sampling happens per request, so each reload can surface different posts while
-    the expensive queries stay cached.
+    Uses the client-generated visitor id (echoed by the browser on the view
+    endpoint) recorded in the view logs; no personal data is stored or inferred.
     """
-    u_id_str = str(user.id) if (user and getattr(user, 'is_authenticated', False) and hasattr(user, 'id')) else 'anon'
-    cache_key = f"feedpool_{feed_type}_{u_id_str}"
+    if not post_ids or not has_request_context():
+        return set()
+    visitor_id = request.headers.get('X-Visitor-ID') or request.cookies.get('echowithin_visitor_id')
+    if not visitor_id:
+        return set()
+    cutoff = now_utc - datetime.timedelta(hours=hours)
+    try:
+        cursor = m.logs_conf.find(
+            {
+                'type': 'post_view',
+                'post_id': {'$in': list(post_ids)},
+                'user_identifier': f"visitor:{visitor_id}",
+                'timestamp': {'$gte': cutoff},
+            },
+            {'post_id': 1}
+        )
+        return {str(v.get('post_id')) for v in cursor if v.get('post_id')}
+    except Exception:
+        return set()
+
+
+def _inject_comment_counts(m, posts):
+    """Attach live comment counts so comment engagement ranks correctly."""
+    slugs = [p.get('slug') for p in posts if p.get('slug')]
+    if not slugs:
+        return
+    counts = {}
+    try:
+        for doc in m.comments_conf.aggregate([
+            {'$match': {'post_slug': {'$in': slugs}, 'is_deleted': {'$ne': True}}},
+            {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}},
+        ]):
+            counts[doc.get('_id')] = doc.get('count', 0)
+    except Exception:
+        return
+    for p in posts:
+        p['comment_count'] = counts.get(p.get('slug'), 0)
+
+
+def _get_feed_candidate_pool(m, now_utc):
+    """DB-heavy candidate gathering, cached briefly and shared across feeds/users.
+
+    Returns raw post documents (no scores): scoring and personalization happen per
+    request so every user gets a fresh ordering while the expensive queries stay
+    cached. Comment counts are joined here so comments influence ranking even when
+    a post's stored counter is stale.
+    """
+    cache_key = "feedpool_base"
     cached = m.blog_feed_cache.get(cache_key)
     if cached:
         return cached
@@ -274,13 +345,6 @@ def _get_feed_candidate_pool(m, feed_type, user, now_utc):
     public_filter = m.get_public_posts_filter()
     pinned_posts = list(m.posts_conf.find({'is_pinned': True, **public_filter}).sort('pinned_at', -1))
     pinned_ids = [p['_id'] for p in pinned_posts]
-
-    partner_ids = set()
-    user_tag_scores = {}
-    user_author_scores = {}
-    if user and getattr(user, 'is_authenticated', False) and hasattr(user, 'id') and feed_type == 'for_you':
-        partner_ids = _get_bond_partner_ids(m, user)
-        user_tag_scores, user_author_scores = _get_user_interest_profile(m, user)
 
     # Candidate pool: recent 60 posts plus active posts from last 60 days
     recent_candidates = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}, **public_filter}).sort('timestamp', -1).limit(60))
@@ -305,15 +369,10 @@ def _get_feed_candidate_pool(m, feed_type, user, now_utc):
     except Exception:
         archive_sample = []
 
-    for p in recent_candidates + top_engaged_older + archive_sample:
-        p['_feed_score'] = calculate_post_gravity_score(
-            p, now_utc,
-            partner_ids=partner_ids if feed_type == 'for_you' else None,
-            user_tag_scores=user_tag_scores if feed_type == 'for_you' else None,
-            user_author_scores=user_author_scores if feed_type == 'for_you' else None
-        )
+    candidates = recent_candidates + top_engaged_older + archive_sample
+    _inject_comment_counts(m, candidates)
 
-    payload = {'pinned_posts': pinned_posts, 'candidates': recent_candidates + top_engaged_older + archive_sample}
+    payload = {'pinned_posts': pinned_posts, 'candidates': candidates}
     m.blog_feed_cache[cache_key] = payload
     return payload
 
@@ -352,20 +411,46 @@ def get_latest_posts_feed(feed_type='trending', user=None, limit=FEED_PAGE_SIZE,
         with current_app.app_context():
             return m.prepare_posts([dict(p) for p in pinned_posts] + diverse_posts)
 
-    pool = _get_feed_candidate_pool(m, feed_type, user, now_utc)
-    viewed_ids = _get_recently_viewed_post_ids(m, user, now_utc)
+    pool = _get_feed_candidate_pool(m, now_utc)
 
-    # Pinned posts the user already read drop out so they don't repeat on every load.
-    pinned_posts = [
-        dict(p) for p in pool['pinned_posts']
-        if str(p['_id']) not in exclude_set and str(p['_id']) not in viewed_ids
-    ]
-    candidates = [dict(p) for p in pool['candidates'] if str(p['_id']) not in exclude_set]
+    is_logged_in = bool(user and getattr(user, 'is_authenticated', False) and hasattr(user, 'id'))
+    viewed_ids = _get_recently_viewed_post_ids(m, user, now_utc) if is_logged_in else set()
 
-    # De-prioritise posts the user already read so a reload surfaces new material.
-    for p in candidates:
-        if str(p['_id']) in viewed_ids:
-            p['_feed_score'] = max(p.get('_feed_score', 0.0), 0.0) * FEED_READ_PENALTY
+    # Pinned posts drop out for 30 days once read (logged-in history or the
+    # anonymous visitor id), so they don't repeat on every page load.
+    pinned_posts = [dict(p) for p in pool['pinned_posts'] if str(p['_id']) not in exclude_set]
+    if pinned_posts:
+        if is_logged_in:
+            pinned_read = _get_recently_viewed_post_ids(m, user, now_utc, FEED_PINNED_READ_HOURS)
+        else:
+            pinned_read = _get_visitor_viewed_post_ids(
+                m, [p['_id'] for p in pinned_posts], now_utc, FEED_PINNED_READ_HOURS
+            )
+        pinned_posts = [p for p in pinned_posts if str(p['_id']) not in pinned_read]
+
+    partner_ids = set()
+    user_tag_scores = {}
+    user_author_scores = {}
+    if feed_type == 'for_you' and is_logged_in:
+        partner_ids = _get_bond_partner_ids(m, user)
+        user_tag_scores, user_author_scores = _get_user_interest_profile(m, user)
+
+    # Score per request so personalization is never shared or stale between users.
+    candidates = []
+    for p in pool['candidates']:
+        if str(p['_id']) in exclude_set:
+            continue
+        candidate = dict(p)
+        score = calculate_post_gravity_score(
+            candidate, now_utc,
+            partner_ids=partner_ids or None,
+            user_tag_scores=user_tag_scores or None,
+            user_author_scores=user_author_scores or None
+        )
+        if str(candidate['_id']) in viewed_ids:
+            score *= FEED_READ_PENALTY
+        candidate['_feed_score'] = score
+        candidates.append(candidate)
 
     target_count = max(limit - len(pinned_posts), 1)
     sampled = _weighted_rotation_sample(candidates, target_count, random.Random())
@@ -2171,6 +2256,16 @@ def api_post_comments(slug):
         except Exception:
             pass
 
+        # Keep the stored counter and feed pool in sync with ranking signals
+        try:
+            m.posts_conf.update_one({'slug': slug}, {'$inc': {'comment_count': 1}})
+        except Exception:
+            pass
+        try:
+            m.blog_feed_cache.clear()
+        except Exception:
+            pass
+
         # Invalidate post author's badge cache so their unread count updates
         try:
             post_doc = m.posts_conf.find_one({'slug': slug}, {'author_id': 1})
@@ -2219,19 +2314,29 @@ def api_delete_comment(comment_id):
 
         # Absolute Hard-Delete Policy: All comments and their sub-replies are purged.
         from utils import backup_before_delete
-        for c in m.comments_conf.find({
+        delete_filter = {
             '$or': [
                 {'_id': ObjectId(comment_id)},
                 {'parent_id': ObjectId(comment_id)}
             ]
-        }):
+        }
+        docs_to_delete = list(m.comments_conf.find(delete_filter))
+        for c in docs_to_delete:
             backup_before_delete('comments', c, current_user.id)
-        m.comments_conf.delete_many({
-            '$or': [
-                {'_id': ObjectId(comment_id)},
-                {'parent_id': ObjectId(comment_id)}
-            ]
-        })
+        m.comments_conf.delete_many(delete_filter)
+
+        # Keep the stored counter and feed pool in sync with ranking signals
+        post_slug = comment.get('post_slug')
+        if post_slug and docs_to_delete:
+            try:
+                m.posts_conf.update_one({'slug': post_slug}, {'$inc': {'comment_count': -len(docs_to_delete)}})
+                m.posts_conf.update_one({'slug': post_slug, 'comment_count': {'$lt': 0}}, {'$set': {'comment_count': 0}})
+            except Exception:
+                pass
+        try:
+            m.blog_feed_cache.clear()
+        except Exception:
+            pass
 
         try:
             m.comment_count_cache.clear()
@@ -2560,6 +2665,12 @@ def delete_post(post_id):
     # Back up post itself before deleting
     backup_before_delete('posts', post_to_delete, current_user.id)
     m.posts_conf.delete_one({'_id': ObjectId(post_id)})
+
+    # Drop cached feed pools so the deleted post disappears immediately
+    try:
+        m.blog_feed_cache.clear()
+    except Exception:
+        pass
 
     flash('Post deleted successfully.', 'success')
     return redirect(url_for('blog.blog'))

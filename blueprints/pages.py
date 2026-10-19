@@ -53,7 +53,7 @@ def home():
     hot_posts = []
     try:
         from blueprints.blog import get_latest_posts_feed
-        hot_posts = get_latest_posts_feed()[:5]
+        hot_posts = get_latest_posts_feed(limit=5)[:5]
     except Exception as e:
         current_app.logger.error(f"Failed to load hot posts for homepage: {e}")
     user_oid = ObjectId(current_user.id)

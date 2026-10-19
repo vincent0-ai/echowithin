@@ -1032,6 +1032,7 @@ newsletter_conf.create_index('email', unique=True)
 email_suppressions_conf.create_index('email_hash', unique=True)
 users_conf.create_index('username')
 user_post_views_conf.create_index([('user_id', 1), ('post_id', 1)], unique=True)
+user_post_views_conf.create_index([('user_id', 1), ('last_viewed', -1)])
 
 # Personal space performance indexes — eliminates full-collection scans
 personal_posts_conf.create_index([('user_id', 1), ('created_at', -1)])

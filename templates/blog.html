@@ -325,6 +325,10 @@
             {% else %}
             <p>No posts found. {% if current_user.is_authenticated %}Why not create the first one?{% endif %}</p>
             {% endif %}
+            <div id="feed-loader" style="text-align:center; padding:1.5rem; display:none;">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <div id="feed-sentinel" aria-hidden="true"></div>
         </div>
 
         <div id="active-posts" class="tab-content">
@@ -464,6 +468,64 @@
                 }
             });
         });
+
+        // --- Infinite scroll for the Trending / For You feed ---
+        (function initFeedInfiniteScroll() {
+            const feed = document.getElementById('latest-posts');
+            const sentinel = document.getElementById('feed-sentinel');
+            const loader = document.getElementById('feed-loader');
+            if (!feed || !sentinel || !loader || !('IntersectionObserver' in window)) return;
+            if (!feed.querySelector('.post-item')) {
+                loader.style.display = 'none';
+                return;
+            }
+
+            const feedTab = '{{ feed_tab or "trending" }}';
+            const renderedIds = new Set();
+            function collectIds() {
+                feed.querySelectorAll('.auto-view-post').forEach(function (el) {
+                    if (el.dataset.postId) renderedIds.add(el.dataset.postId);
+                });
+            }
+            collectIds();
+
+            let loading = false;
+            let exhausted = false;
+            const observer = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (entry.isIntersecting) loadMore();
+                });
+            }, { rootMargin: '600px 0px' });
+            observer.observe(sentinel);
+
+            function loadMore() {
+                if (loading || exhausted) return;
+                loading = true;
+                loader.style.display = 'block';
+                const params = new URLSearchParams({
+                    tab: feedTab,
+                    limit: '10',
+                    exclude: Array.from(renderedIds).join(',')
+                });
+                fetch('{{ url_for("blog.api_blog_feed") }}?' + params.toString())
+                    .then(function (r) { return r.ok ? r.text() : ''; })
+                    .then(function (html) {
+                        if (!html || !html.trim()) {
+                            exhausted = true;
+                            observer.disconnect();
+                            return;
+                        }
+                        loader.insertAdjacentHTML('beforebegin', html);
+                        collectIds();
+                        if (window.observeAutoView) window.observeAutoView(feed);
+                    })
+                    .catch(function () { })
+                    .finally(function () {
+                        loading = false;
+                        loader.style.display = 'none';
+                    });
+            }
+        })();
 
         // Delete Post Handler (works in JS-rendered posts too)
         document.body.addEventListener('submit', function (e) {

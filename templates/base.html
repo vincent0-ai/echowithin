@@ -2006,6 +2006,14 @@
             document.querySelectorAll('.auto-view-post').forEach(function (el) {
                 autoViewObserver.observe(el);
             });
+
+            // Allow dynamically appended posts (infinite scroll) to register views too.
+            window.observeAutoView = function (root) {
+                if (!('IntersectionObserver' in window)) return;
+                (root || document).querySelectorAll('.auto-view-post').forEach(function (el) {
+                    autoViewObserver.observe(el);
+                });
+            };
         }
 
         // --- Custom Confirmation Modal Logic ---

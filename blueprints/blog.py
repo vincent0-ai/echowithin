@@ -188,43 +188,32 @@ def apply_author_diversity(posts, max_per_author=2, target_count=10):
     return selected
 
 
-FEED_ROTATION_WINDOW_SECONDS = 900
+FEED_PAGE_SIZE = 15
+FEED_BATCH_SIZE = 10
 FEED_EXPLORATION_EPSILON = 0.25
 FEED_AUTHOR_CAP_SOFTEN = 0.35
-FEED_HEAD_COUNT = 3
-
-
-def _feed_rotation_rng(feed_type, user_id_str, now_utc):
-    """Deterministic RNG per feed/user/15-minute bucket: stable within a window, rotates across days."""
-    bucket = int(now_utc.timestamp() // FEED_ROTATION_WINDOW_SECONDS)
-    payload = f"{feed_type}:{user_id_str}:{bucket}"
-    return random.Random(payload)
+FEED_READ_PENALTY = 0.2
+FEED_READ_WINDOW_HOURS = 48
+FEED_FRESH_HOURS = 6
+FEED_ARCHIVE_SAMPLE = 40
 
 
 def _weighted_rotation_sample(posts, target_count, rng, max_per_author=2):
-    """Quality-anchored feed sampling.
+    """Sample a feed page without replacement, weighted by score.
 
-    Keeps the top FEED_HEAD_COUNT posts (highest gravity score) fixed at the top,
-    then fills remaining slots by sampling without replacement, weighted by score + epsilon.
-    Authors over the soft cap get down-weighted (never excluded outright, so small
-    communities can still fill the feed). Quieter posts rotate in across time buckets
-    without the feed ever looking random within a single window.
+    Higher-scored posts are far more likely to appear, but every post holds at
+    least FEED_EXPLORATION_EPSILON of weight so quieter posts surface too. There is
+    no fixed head: the whole page can reshuffle between requests for variety. Authors
+    past the soft cap are down-weighted rather than excluded, so a feed dominated by
+    one author still fills.
     """
     if len(posts) <= target_count:
         return list(posts)
 
-    ranked = sorted(posts, key=lambda x: x.get('_feed_score', 0), reverse=True)
-    head = ranked[:FEED_HEAD_COUNT]
-    pool = ranked[FEED_HEAD_COUNT:]
-
-    author_counts = {}
-    for p in head:
-        aid = str(p.get('author_id') or p.get('author') or '')
-        author_counts[aid] = author_counts.get(aid, 0) + 1
-
+    pool = list(posts)
     picked = []
-    slots = target_count - len(head)
-    while pool and len(picked) < slots:
+    author_counts = {}
+    while pool and len(picked) < target_count:
         weights = []
         for p in pool:
             aid = str(p.get('author_id') or p.get('author') or '')
@@ -245,50 +234,56 @@ def _weighted_rotation_sample(posts, target_count, rng, max_per_author=2):
         author_counts[aid] = author_counts.get(aid, 0) + 1
         picked.append(chosen)
 
-    return head + picked
+    return picked
 
 
-def get_latest_posts_feed(feed_type='trending', user=None):
-    import main as m
-    if not feed_type:
-        feed_type = 'trending'
-    feed_type = feed_type.lower()
-    if feed_type not in ('trending', 'for_you', 'latest'):
-        feed_type = 'trending'
+def _get_recently_viewed_post_ids(m, user, now_utc):
+    """Ids of posts this user read within FEED_READ_WINDOW_HOURS, to de-prioritise repeats."""
+    if not (user and getattr(user, 'is_authenticated', False) and hasattr(user, 'id')):
+        return set()
+    try:
+        user_oid = ObjectId(user.id)
+    except Exception:
+        return set()
+    cutoff = now_utc - datetime.timedelta(hours=FEED_READ_WINDOW_HOURS)
+    try:
+        return {
+            str(v.get('post_id'))
+            for v in m.user_post_views_conf.find(
+                {'user_id': user_oid, 'last_viewed': {'$gte': cutoff}},
+                {'post_id': 1}
+            )
+            if v.get('post_id')
+        }
+    except Exception:
+        return set()
 
+
+def _get_feed_candidate_pool(m, feed_type, user, now_utc):
+    """DB-heavy candidate gathering + scoring, cached briefly per feed/user.
+
+    Sampling happens per request, so each reload can surface different posts while
+    the expensive queries stay cached.
+    """
     u_id_str = str(user.id) if (user and getattr(user, 'is_authenticated', False) and hasattr(user, 'id')) else 'anon'
-    cache_key = f"feed_{feed_type}_{u_id_str}"
-    cached_feed = m.blog_feed_cache.get(cache_key)
-    if cached_feed:
-        return cached_feed
+    cache_key = f"feedpool_{feed_type}_{u_id_str}"
+    cached = m.blog_feed_cache.get(cache_key)
+    if cached:
+        return cached
 
     public_filter = m.get_public_posts_filter()
     pinned_posts = list(m.posts_conf.find({'is_pinned': True, **public_filter}).sort('pinned_at', -1))
     pinned_ids = [p['_id'] for p in pinned_posts]
-    target_count = max(10 - len(pinned_posts), 1)
 
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
-
-    if feed_type == 'latest':
-        latest_pool = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}, **public_filter}).sort('timestamp', -1).limit(target_count * 3))
-        diverse_posts = apply_author_diversity(latest_pool, max_per_author=2, target_count=target_count)
-        combined_posts = pinned_posts + diverse_posts
-        with current_app.app_context():
-            latest_posts_prepared = m.prepare_posts(combined_posts)
-        m.blog_feed_cache[cache_key] = latest_posts_prepared
-        return latest_posts_prepared
-
-    # For 'trending' and 'for_you':
     partner_ids = set()
     user_tag_scores = {}
     user_author_scores = {}
-    if user and getattr(user, 'is_authenticated', False) and hasattr(user, 'id'):
-        if feed_type == 'for_you':
-            partner_ids = _get_bond_partner_ids(m, user)
-            user_tag_scores, user_author_scores = _get_user_interest_profile(m, user)
+    if user and getattr(user, 'is_authenticated', False) and hasattr(user, 'id') and feed_type == 'for_you':
+        partner_ids = _get_bond_partner_ids(m, user)
+        user_tag_scores, user_author_scores = _get_user_interest_profile(m, user)
 
-    # Candidate pool: recent 40 posts plus active posts from last 60 days
-    recent_candidates = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}, **public_filter}).sort('timestamp', -1).limit(40))
+    # Candidate pool: recent 60 posts plus active posts from last 60 days
+    recent_candidates = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}, **public_filter}).sort('timestamp', -1).limit(60))
     candidate_ids = {p['_id'] for p in recent_candidates}
     sixty_days_ago = now_utc - datetime.timedelta(days=60)
     top_engaged_older = list(m.posts_conf.find({
@@ -298,9 +293,19 @@ def get_latest_posts_feed(feed_type='trending', user=None):
         **public_filter
     }).sort('likes_count', -1).limit(20))
 
-    full_candidates = recent_candidates + top_engaged_older
+    # Random sample of the wider archive so older posts with no engagement can
+    # still surface instead of being permanently excluded from the feed.
+    archive_sample = []
+    known_ids = candidate_ids | set(pinned_ids) | {p['_id'] for p in top_engaged_older}
+    try:
+        archive_sample = list(m.posts_conf.aggregate([
+            {'$match': {'_id': {'$nin': list(known_ids)}, **public_filter}},
+            {'$sample': {'size': FEED_ARCHIVE_SAMPLE}},
+        ]))
+    except Exception:
+        archive_sample = []
 
-    for p in full_candidates:
+    for p in recent_candidates + top_engaged_older + archive_sample:
         p['_feed_score'] = calculate_post_gravity_score(
             p, now_utc,
             partner_ids=partner_ids if feed_type == 'for_you' else None,
@@ -308,22 +313,94 @@ def get_latest_posts_feed(feed_type='trending', user=None):
             user_author_scores=user_author_scores if feed_type == 'for_you' else None
         )
 
-    full_candidates.sort(key=lambda x: x.get('_feed_score', 0), reverse=True)
+    payload = {'pinned_posts': pinned_posts, 'candidates': recent_candidates + top_engaged_older + archive_sample}
+    m.blog_feed_cache[cache_key] = payload
+    return payload
 
-    # Seeded rotation: quality anchors stay near the top, quieter posts rotate in
-    # via score-weighted sampling so the feed changes across 15-minute buckets
-    # instead of repeating the same deterministic order day after day.
-    rotation_rng = _feed_rotation_rng(feed_type, u_id_str, now_utc)
-    diverse_candidates = _weighted_rotation_sample(full_candidates, target_count, rotation_rng)
-    for p in diverse_candidates:
+
+def get_latest_posts_feed(feed_type='trending', user=None, limit=FEED_PAGE_SIZE, exclude_ids=None):
+    """Prepare one page of the blog feed.
+
+    Each call re-samples the whole page by score-weighted rotation, so reloading
+    surfaces a different mix (no fixed top posts). Recent posts are guaranteed a
+    slot regardless of engagement, pinned posts drop out once the user has read
+    them, and posts the user already read are down-weighted.
+    """
+    import main as m
+    if not feed_type:
+        feed_type = 'trending'
+    feed_type = feed_type.lower()
+    if feed_type not in ('trending', 'for_you', 'latest'):
+        feed_type = 'trending'
+
+    try:
+        limit = max(int(limit), 1)
+    except (TypeError, ValueError):
+        limit = FEED_PAGE_SIZE
+    exclude_set = {str(x) for x in (exclude_ids or set())}
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+
+    if feed_type == 'latest':
+        public_filter = m.get_public_posts_filter()
+        pinned_posts = [p for p in m.posts_conf.find({'is_pinned': True, **public_filter}).sort('pinned_at', -1)
+                        if str(p['_id']) not in exclude_set]
+        latest_pool = [
+            dict(p) for p in m.posts_conf.find(public_filter).sort('timestamp', -1).limit(limit * 3)
+            if str(p['_id']) not in exclude_set and not p.get('is_pinned')
+        ]
+        diverse_posts = apply_author_diversity(latest_pool, max_per_author=2, target_count=max(limit - len(pinned_posts), 1))
+        with current_app.app_context():
+            return m.prepare_posts([dict(p) for p in pinned_posts] + diverse_posts)
+
+    pool = _get_feed_candidate_pool(m, feed_type, user, now_utc)
+    viewed_ids = _get_recently_viewed_post_ids(m, user, now_utc)
+
+    # Pinned posts the user already read drop out so they don't repeat on every load.
+    pinned_posts = [
+        dict(p) for p in pool['pinned_posts']
+        if str(p['_id']) not in exclude_set and str(p['_id']) not in viewed_ids
+    ]
+    candidates = [dict(p) for p in pool['candidates'] if str(p['_id']) not in exclude_set]
+
+    # De-prioritise posts the user already read so a reload surfaces new material.
+    for p in candidates:
+        if str(p['_id']) in viewed_ids:
+            p['_feed_score'] = max(p.get('_feed_score', 0.0), 0.0) * FEED_READ_PENALTY
+
+    target_count = max(limit - len(pinned_posts), 1)
+    sampled = _weighted_rotation_sample(candidates, target_count, random.Random())
+
+    # Guarantee genuinely recent posts are visible even when their engagement is low.
+    fresh_cutoff = now_utc - datetime.timedelta(hours=FEED_FRESH_HOURS)
+    fresh_ids = set()
+    for p in candidates:
+        ts = p.get('timestamp')
+        if ts is None:
+            continue
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=datetime.timezone.utc)
+        if ts >= fresh_cutoff:
+            fresh_ids.add(str(p['_id']))
+
+    sampled_ids = {str(p['_id']) for p in sampled}
+    missing_fresh = [p for p in candidates if str(p['_id']) in fresh_ids and str(p['_id']) not in sampled_ids]
+    if missing_fresh:
+        replaceable = sorted(
+            (p for p in sampled if str(p['_id']) not in fresh_ids),
+            key=lambda x: x.get('_feed_score', 0),
+        )
+        for fresh_post in missing_fresh:
+            if not replaceable:
+                break
+            swap_out = replaceable.pop(0)
+            sampled[[i for i, p in enumerate(sampled) if p is swap_out][0]] = fresh_post
+
+    for p in sampled:
         p.pop('_feed_score', None)
 
-    combined_posts = pinned_posts + diverse_candidates
+    combined_posts = [dict(p) for p in pinned_posts] + sampled
     with current_app.app_context():
-        latest_posts_prepared = m.prepare_posts(combined_posts)
-
-    m.blog_feed_cache[cache_key] = latest_posts_prepared
-    return latest_posts_prepared
+        return m.prepare_posts(combined_posts)
 
 
 
@@ -422,6 +499,30 @@ def blog():
         title=page_title,
         description=page_description
     )
+
+
+@bp.route("/api/blog/feed")
+@limits(calls=120, period=60)
+def api_blog_feed():
+    """Next batch of the blog feed as an HTML fragment, for infinite scroll."""
+    feed_tab = (request.args.get('tab') or 'trending').strip().lower()
+    if feed_tab not in ('trending', 'for_you'):
+        feed_tab = 'trending'
+    try:
+        limit = int(request.args.get('limit', FEED_BATCH_SIZE))
+    except (TypeError, ValueError):
+        limit = FEED_BATCH_SIZE
+    limit = max(1, min(limit, 30))
+    exclude_ids = {x.strip() for x in (request.args.get('exclude') or '').split(',') if x.strip()}
+    user_for_feed = current_user if (current_user.is_authenticated and not getattr(current_user, 'is_guest', False)) else None
+    posts = get_latest_posts_feed(feed_type=feed_tab, user=user_for_feed, limit=limit, exclude_ids=exclude_ids)
+    html = render_template(
+        "_feed_items.html",
+        posts=posts,
+        current_user=current_user,
+        now=datetime.datetime.now(datetime.timezone.utc),
+    )
+    return Response(html, mimetype='text/html')
 
 
 @bp.route("/blog/all")

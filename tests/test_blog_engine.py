@@ -151,6 +151,15 @@ class TestBlogEndpointsAccess:
         assert b'Trending' in res_latest.data
         assert b'Latest</a>' not in res_latest.data
 
+    def test_blog_feed_batch_endpoint(self, client):
+        res = client.get('/api/blog/feed?tab=trending&limit=5')
+        assert res.status_code == 200
+        assert res.mimetype == 'text/html'
+
+    def test_blog_feed_batch_endpoint_rejects_bad_params(self, client):
+        res = client.get('/api/blog/feed?tab=nonsense&limit=abc&exclude=, ,')
+        assert res.status_code == 200
+
 
 class TestBlogAlgorithmAndDiversity:
     """Tests for Hacker News gravity decay scoring, author diversity, and partner boosts."""
@@ -252,46 +261,274 @@ class TestBlogAlgorithmAndDiversity:
         assert len(diverse) == 5
 
 
-    def test_weighted_rotation_sample_stable_within_bucket(self):
-        from blueprints.blog import _weighted_rotation_sample, _feed_rotation_rng, FEED_HEAD_COUNT
-        import datetime as dt
-        now = lambda: dt.datetime(2026, 1, 1, 12, 0, 0, tzinfo=dt.timezone.utc)
+    def test_weighted_rotation_sample_stable_with_same_seed(self):
+        import random
+        from blueprints.blog import _weighted_rotation_sample
         posts = [{'_id': str(i), 'author_id': f'A{i}', '_feed_score': float(i)} for i in range(12)]
 
-        rng1 = _feed_rotation_rng('trending', 'user1', now())
-        r1 = _weighted_rotation_sample(posts, 10, rng1)
-        rng2 = _feed_rotation_rng('trending', 'user1', now())
-        r2 = _weighted_rotation_sample(posts, 10, rng2)
+        r1 = _weighted_rotation_sample(posts, 10, random.Random(42))
+        r2 = _weighted_rotation_sample(posts, 10, random.Random(42))
 
-        assert r1 == r2
+        assert [p['_id'] for p in r1] == [p['_id'] for p in r2]
         assert len(r1) == 10
-        # Quality anchors stay at the top
-        assert r1[:FEED_HEAD_COUNT] == sorted(posts, key=lambda p: p['_feed_score'], reverse=True)[:FEED_HEAD_COUNT]
+        assert len({p['_id'] for p in r1}) == 10
 
-    def test_weighted_rotation_sample_rotates_across_buckets(self):
-        from blueprints.blog import _weighted_rotation_sample, _feed_rotation_rng
-        import datetime as dt
+    def test_weighted_rotation_sample_has_no_fixed_head(self):
+        import random
+        from blueprints.blog import _weighted_rotation_sample
+        # Highest-scored post is not permanently anchored at position 0.
+        posts = [{'_id': str(i), 'author_id': f'A{i}', '_feed_score': 10.0 - i} for i in range(8)]
+
+        first_positions = {
+            _weighted_rotation_sample(posts, 6, random.Random(seed))[0]['_id']
+            for seed in range(40)
+        }
+
+        assert len(first_positions) > 1
+
+    def test_weighted_rotation_sample_varies_across_seeds(self):
+        import random
+        from blueprints.blog import _weighted_rotation_sample
         posts = [{'_id': str(i), 'author_id': f'A{i}', '_feed_score': 10.0 - i} for i in range(12)]
-        t0 = dt.datetime(2026, 1, 1, 12, 0, 0, tzinfo=dt.timezone.utc)
 
-        orderings = set()
-        for bucket in range(20):
-            t = t0 + dt.timedelta(seconds=900 * bucket)
-            rng = _feed_rotation_rng('trending', 'user1', t)
-            orderings.add(tuple(p['_id'] for p in _weighted_rotation_sample(posts, 10, rng)))
+        orderings = {
+            tuple(p['_id'] for p in _weighted_rotation_sample(posts, 10, random.Random(seed)))
+            for seed in range(30)
+        }
 
-        # A single frozen ordering would defeat discovery; rotation must vary across buckets
+        # A single frozen ordering would defeat discovery; sampling must vary per request
         assert len(orderings) > 1
 
     def test_weighted_rotation_sample_small_pool_returns_all(self):
-        from blueprints.blog import _weighted_rotation_sample, _feed_rotation_rng
-        import datetime as dt
-        now = dt.datetime(2026, 1, 1, 12, 0, 0, tzinfo=dt.timezone.utc)
+        import random
+        from blueprints.blog import _weighted_rotation_sample
         posts = [{'_id': str(i), 'author_id': f'A{i}', '_feed_score': float(i)} for i in range(4)]
 
-        rng = _feed_rotation_rng('trending', 'user1', now)
-        result = _weighted_rotation_sample(posts, 10, rng)
+        result = _weighted_rotation_sample(posts, 10, random.Random(1))
         assert {p['_id'] for p in result} == {str(i) for i in range(4)}
+
+    def test_recently_viewed_post_ids(self):
+        from blueprints.blog import _get_recently_viewed_post_ids
+        import datetime as dt
+        user_id = ObjectId('507f1f77bcf86cd799439011')
+        viewed_id = ObjectId('507f1f77bcf86cd799439022')
+        user = MagicMock(is_authenticated=True, id=str(user_id))
+        db = MagicMock()
+        db.user_post_views_conf.find.return_value = [{'post_id': viewed_id}]
+
+        now = dt.datetime.now(dt.timezone.utc)
+        ids = _get_recently_viewed_post_ids(db, user, now)
+
+        assert str(viewed_id) in ids
+        query = db.user_post_views_conf.find.call_args[0][0]
+        assert query['user_id'] == user_id
+        assert 'last_viewed' in query
+
+    def test_recently_viewed_post_ids_anon(self):
+        from blueprints.blog import _get_recently_viewed_post_ids
+        import datetime as dt
+        assert _get_recently_viewed_post_ids(MagicMock(), None, dt.datetime.now(dt.timezone.utc)) == set()
+
+
+    def test_feed_limit_exclude_and_read_penalty(self, app, monkeypatch):
+        import blueprints.blog as blog
+        import main as m
+        from cachetools import TTLCache
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        user_oid = ObjectId('507f1f77bcf86cd799439011')
+        posts = [
+            {
+                '_id': ObjectId(f'507f1f77bcf86cd79943901{i}'),
+                'slug': f'post-{i}', 'title': f'Post {i}', 'content': 'body',
+                'author': f'author{i}', 'author_id': ObjectId(f'507f1f77bcf86cd7994390{i:02d}'[:24]),
+                'timestamp': now - datetime.timedelta(hours=1),
+                'likes_count': 2, 'comment_count': 0, 'share_count': 0, 'view_count': 0,
+                'tags': [], 'is_pinned': False,
+            }
+            for i in range(5)
+        ]
+
+        class _Cursor:
+            def __init__(self, docs): self._docs = list(docs)
+            def sort(self, *a, **k): return self
+            def limit(self, n): self._docs = self._docs[:n]; return self
+            def __iter__(self): return iter(self._docs)
+
+        def fake_find(query=None, projection=None, *a, **k):
+            query = query or {}
+            if query.get('is_pinned') is True or 'likes_count' in query:
+                return _Cursor([])
+            return _Cursor(posts)
+
+        captured = {}
+
+        def fake_sample(candidates, target, rng, max_per_author=2):
+            captured['scores'] = {str(p['_id']): p.get('_feed_score') for p in candidates}
+            return sorted(candidates, key=lambda x: x.get('_feed_score', 0), reverse=True)[:target]
+
+        monkeypatch.setattr(m, 'posts_conf', MagicMock(find=fake_find))
+        monkeypatch.setattr(m, 'user_post_views_conf', MagicMock(
+            find=lambda *a, **k: [{'post_id': posts[0]['_id']}]
+        ))
+        monkeypatch.setattr(m, 'prepare_posts', lambda p: p)
+        monkeypatch.setattr(m, 'blog_feed_cache', TTLCache(maxsize=32, ttl=60))
+        monkeypatch.setattr(blog, '_weighted_rotation_sample', fake_sample)
+
+        user = MagicMock(is_authenticated=True, id=str(user_oid))
+        with app.app_context():
+            result = blog.get_latest_posts_feed(feed_type='trending', user=user, limit=4, exclude_ids={str(posts[1]['_id'])})
+
+        ids = [str(p['_id']) for p in result]
+        assert len(result) == 4
+        assert str(posts[1]['_id']) not in ids
+        # Viewed post is down-weighted relative to an identical unviewed post
+        assert captured['scores'][str(posts[0]['_id'])] < captured['scores'][str(posts[2]['_id'])]
+
+    def test_viewed_pinned_post_drops_from_feed(self, app, monkeypatch):
+        import blueprints.blog as blog
+        import main as m
+        from cachetools import TTLCache
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        user_oid = ObjectId('507f1f77bcf86cd799439011')
+        pinned = {
+            '_id': ObjectId('507f1f77bcf86cd799439099'),
+            'slug': 'pinned-post', 'title': 'Pinned', 'content': 'body',
+            'author': 'alice', 'author_id': ObjectId('507f1f77bcf86cd799439012'),
+            'timestamp': now, 'likes_count': 1, 'comment_count': 0, 'share_count': 0,
+            'view_count': 0, 'tags': [], 'is_pinned': True,
+        }
+        normal = {
+            '_id': ObjectId('507f1f77bcf86cd799439021'),
+            'slug': 'normal-post', 'title': 'Normal', 'content': 'body',
+            'author': 'bob', 'author_id': ObjectId('507f1f77bcf86cd799439022'),
+            'timestamp': now, 'likes_count': 1, 'comment_count': 0, 'share_count': 0,
+            'view_count': 0, 'tags': [], 'is_pinned': False,
+        }
+
+        class _Cursor:
+            def __init__(self, docs): self._docs = list(docs)
+            def sort(self, *a, **k): return self
+            def limit(self, n): self._docs = self._docs[:n]; return self
+            def __iter__(self): return iter(self._docs)
+
+        def fake_find(query=None, projection=None, *a, **k):
+            query = query or {}
+            if query.get('is_pinned') is True:
+                return _Cursor([pinned])
+            if 'likes_count' in query:
+                return _Cursor([])
+            return _Cursor([normal])
+
+        monkeypatch.setattr(m, 'posts_conf', MagicMock(find=fake_find))
+        monkeypatch.setattr(m, 'user_post_views_conf', MagicMock(
+            find=lambda *a, **k: [{'post_id': pinned['_id']}]
+        ))
+        monkeypatch.setattr(m, 'prepare_posts', lambda p: p)
+        monkeypatch.setattr(m, 'blog_feed_cache', TTLCache(maxsize=32, ttl=60))
+
+        user = MagicMock(is_authenticated=True, id=str(user_oid))
+        with app.app_context():
+            result = blog.get_latest_posts_feed(feed_type='trending', user=user, limit=5)
+
+        ids = [str(p['_id']) for p in result]
+        assert str(pinned['_id']) not in ids
+        assert str(normal['_id']) in ids
+
+    def test_feed_guarantees_recent_posts(self, app, monkeypatch):
+        import blueprints.blog as blog
+        import main as m
+        from cachetools import TTLCache
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        fresh = {
+            '_id': ObjectId('507f1f77bcf86cd799439031'),
+            'slug': 'fresh-post', 'title': 'Fresh', 'content': 'body',
+            'author': 'carol', 'author_id': ObjectId('507f1f77bcf86cd799439032'),
+            'timestamp': now, 'likes_count': 0, 'comment_count': 0, 'share_count': 0,
+            'view_count': 0, 'tags': [], 'is_pinned': False,
+        }
+        old_posts = [
+            {
+                '_id': ObjectId(f'507f1f77bcf86cd7994391{i:02d}'),
+                'slug': f'old-{i}', 'title': f'Old {i}', 'content': 'body',
+                'author': f'author{i}', 'author_id': ObjectId(f'507f1f77bcf86cd7994392{i:02d}'),
+                'timestamp': now - datetime.timedelta(days=2),
+                'likes_count': 20, 'comment_count': 3, 'share_count': 1, 'view_count': 100,
+                'tags': [], 'is_pinned': False,
+            }
+            for i in range(10)
+        ]
+        all_posts = [fresh] + old_posts
+
+        class _Cursor:
+            def __init__(self, docs): self._docs = list(docs)
+            def sort(self, *a, **k): return self
+            def limit(self, n): self._docs = self._docs[:n]; return self
+            def __iter__(self): return iter(self._docs)
+
+        def fake_find(query=None, projection=None, *a, **k):
+            query = query or {}
+            if query.get('is_pinned') is True or 'likes_count' in query:
+                return _Cursor([])
+            return _Cursor(all_posts)
+
+        # Simulate a sampler that never selects the fresh, low-engagement post
+        monkeypatch.setattr(blog, '_weighted_rotation_sample', lambda cands, target, rng, max_per_author=2:
+                            [p for p in cands if str(p['_id']) != str(fresh['_id'])][:target])
+        monkeypatch.setattr(m, 'posts_conf', MagicMock(find=fake_find))
+        monkeypatch.setattr(m, 'prepare_posts', lambda p: p)
+        monkeypatch.setattr(m, 'blog_feed_cache', TTLCache(maxsize=32, ttl=60))
+
+        with app.app_context():
+            result = blog.get_latest_posts_feed(feed_type='trending', user=None, limit=3)
+
+        assert str(fresh['_id']) in [str(p['_id']) for p in result]
+        assert len(result) == 3
+
+
+
+    def test_blog_feed_batch_renders_posts(self, client, monkeypatch):
+        import main as m
+        from cachetools import TTLCache
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        post = {
+            '_id': ObjectId('507f1f77bcf86cd799439011'),
+            'slug': 'hello-world', 'title': 'Hello World Post', 'content': 'Some body text here',
+            'author': 'alice', 'author_id': ObjectId('507f1f77bcf86cd799439012'),
+            'timestamp': now, 'likes_count': 3, 'comment_count': 1, 'share_count': 0,
+            'view_count': 5, 'tags': [], 'is_pinned': False, 'status': 'published',
+            'reactions': {}, 'image_url': None, 'image_urls': [], 'video_url': None,
+        }
+
+        class _Cursor:
+            def __init__(self, docs): self._docs = list(docs)
+            def sort(self, *a, **k): return self
+            def limit(self, n): self._docs = self._docs[:n]; return self
+            def __iter__(self): return iter(self._docs)
+
+        def fake_find(query=None, projection=None, *a, **k):
+            query = query or {}
+            if query.get('is_pinned') is True or 'likes_count' in query:
+                return _Cursor([])
+            return _Cursor([post])
+
+        def fake_prepare(posts):
+            for p in posts:
+                p['url'] = '/blog/post/' + p.get('slug', '')
+                p.setdefault('comment_count', 0)
+            return posts
+
+        monkeypatch.setattr(m, 'posts_conf', MagicMock(find=fake_find))
+        monkeypatch.setattr(m, 'prepare_posts', fake_prepare)
+        monkeypatch.setattr(m, 'user_post_views_conf', MagicMock(find=lambda *a, **k: []))
+        monkeypatch.setattr(m, 'blog_feed_cache', TTLCache(maxsize=32, ttl=60))
+
+        res = client.get('/api/blog/feed?tab=trending&limit=5')
+        assert res.status_code == 200
+        assert b'Hello World Post' in res.data
 
 
 class TestCoopGamesApi:

@@ -1,0 +1,2 @@
+{% from '_macros.html' import render_post_item %}
+{% for post in posts %}{{ render_post_item(post, current_user, now) }}{% endfor %}

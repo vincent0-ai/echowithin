@@ -252,6 +252,48 @@ class TestBlogAlgorithmAndDiversity:
         assert len(diverse) == 5
 
 
+    def test_weighted_rotation_sample_stable_within_bucket(self):
+        from blueprints.blog import _weighted_rotation_sample, _feed_rotation_rng, FEED_HEAD_COUNT
+        import datetime as dt
+        now = lambda: dt.datetime(2026, 1, 1, 12, 0, 0, tzinfo=dt.timezone.utc)
+        posts = [{'_id': str(i), 'author_id': f'A{i}', '_feed_score': float(i)} for i in range(12)]
+
+        rng1 = _feed_rotation_rng('trending', 'user1', now())
+        r1 = _weighted_rotation_sample(posts, 10, rng1)
+        rng2 = _feed_rotation_rng('trending', 'user1', now())
+        r2 = _weighted_rotation_sample(posts, 10, rng2)
+
+        assert r1 == r2
+        assert len(r1) == 10
+        # Quality anchors stay at the top
+        assert r1[:FEED_HEAD_COUNT] == sorted(posts, key=lambda p: p['_feed_score'], reverse=True)[:FEED_HEAD_COUNT]
+
+    def test_weighted_rotation_sample_rotates_across_buckets(self):
+        from blueprints.blog import _weighted_rotation_sample, _feed_rotation_rng
+        import datetime as dt
+        posts = [{'_id': str(i), 'author_id': f'A{i}', '_feed_score': 10.0 - i} for i in range(12)]
+        t0 = dt.datetime(2026, 1, 1, 12, 0, 0, tzinfo=dt.timezone.utc)
+
+        orderings = set()
+        for bucket in range(20):
+            t = t0 + dt.timedelta(seconds=900 * bucket)
+            rng = _feed_rotation_rng('trending', 'user1', t)
+            orderings.add(tuple(p['_id'] for p in _weighted_rotation_sample(posts, 10, rng)))
+
+        # A single frozen ordering would defeat discovery; rotation must vary across buckets
+        assert len(orderings) > 1
+
+    def test_weighted_rotation_sample_small_pool_returns_all(self):
+        from blueprints.blog import _weighted_rotation_sample, _feed_rotation_rng
+        import datetime as dt
+        now = dt.datetime(2026, 1, 1, 12, 0, 0, tzinfo=dt.timezone.utc)
+        posts = [{'_id': str(i), 'author_id': f'A{i}', '_feed_score': float(i)} for i in range(4)]
+
+        rng = _feed_rotation_rng('trending', 'user1', now)
+        result = _weighted_rotation_sample(posts, 10, rng)
+        assert {p['_id'] for p in result} == {str(i) for i in range(4)}
+
+
 class TestCoopGamesApi:
     """Tests for cooperative games dynamic prompt and word generation endpoints."""
 

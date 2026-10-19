@@ -188,6 +188,66 @@ def apply_author_diversity(posts, max_per_author=2, target_count=10):
     return selected
 
 
+FEED_ROTATION_WINDOW_SECONDS = 900
+FEED_EXPLORATION_EPSILON = 0.25
+FEED_AUTHOR_CAP_SOFTEN = 0.35
+FEED_HEAD_COUNT = 3
+
+
+def _feed_rotation_rng(feed_type, user_id_str, now_utc):
+    """Deterministic RNG per feed/user/15-minute bucket: stable within a window, rotates across days."""
+    bucket = int(now_utc.timestamp() // FEED_ROTATION_WINDOW_SECONDS)
+    payload = f"{feed_type}:{user_id_str}:{bucket}"
+    return random.Random(payload)
+
+
+def _weighted_rotation_sample(posts, target_count, rng, max_per_author=2):
+    """Quality-anchored feed sampling.
+
+    Keeps the top FEED_HEAD_COUNT posts (highest gravity score) fixed at the top,
+    then fills remaining slots by sampling without replacement, weighted by score + epsilon.
+    Authors over the soft cap get down-weighted (never excluded outright, so small
+    communities can still fill the feed). Quieter posts rotate in across time buckets
+    without the feed ever looking random within a single window.
+    """
+    if len(posts) <= target_count:
+        return list(posts)
+
+    ranked = sorted(posts, key=lambda x: x.get('_feed_score', 0), reverse=True)
+    head = ranked[:FEED_HEAD_COUNT]
+    pool = ranked[FEED_HEAD_COUNT:]
+
+    author_counts = {}
+    for p in head:
+        aid = str(p.get('author_id') or p.get('author') or '')
+        author_counts[aid] = author_counts.get(aid, 0) + 1
+
+    picked = []
+    slots = target_count - len(head)
+    while pool and len(picked) < slots:
+        weights = []
+        for p in pool:
+            aid = str(p.get('author_id') or p.get('author') or '')
+            weight = max(p.get('_feed_score', 0.0), 0.0) + FEED_EXPLORATION_EPSILON
+            if author_counts.get(aid, 0) >= max_per_author:
+                weight *= FEED_AUTHOR_CAP_SOFTEN
+            weights.append(max(weight, 1e-6))
+        r = rng.random() * sum(weights)
+        acc = 0.0
+        idx = len(pool) - 1
+        for i, w in enumerate(weights):
+            acc += w
+            if acc >= r:
+                idx = i
+                break
+        chosen = pool.pop(idx)
+        aid = str(chosen.get('author_id') or chosen.get('author') or '')
+        author_counts[aid] = author_counts.get(aid, 0) + 1
+        picked.append(chosen)
+
+    return head + picked
+
+
 def get_latest_posts_feed(feed_type='trending', user=None):
     import main as m
     if not feed_type:
@@ -250,7 +310,11 @@ def get_latest_posts_feed(feed_type='trending', user=None):
 
     full_candidates.sort(key=lambda x: x.get('_feed_score', 0), reverse=True)
 
-    diverse_candidates = apply_author_diversity(full_candidates, max_per_author=2, target_count=target_count)
+    # Seeded rotation: quality anchors stay near the top, quieter posts rotate in
+    # via score-weighted sampling so the feed changes across 15-minute buckets
+    # instead of repeating the same deterministic order day after day.
+    rotation_rng = _feed_rotation_rng(feed_type, u_id_str, now_utc)
+    diverse_candidates = _weighted_rotation_sample(full_candidates, target_count, rotation_rng)
     for p in diverse_candidates:
         p.pop('_feed_score', None)
 
@@ -1486,6 +1550,13 @@ def post():
             }
             result = m.posts_conf.insert_one(new_post_data)
             post_id_str = str(result.inserted_id)
+
+            # New post should surface immediately in trending/for_you feeds
+            try:
+                if m.blog_feed_cache:
+                    m.blog_feed_cache.clear()
+            except Exception:
+                pass
 
             # Enqueue media processing
             if temp_image_paths or temp_video_path:

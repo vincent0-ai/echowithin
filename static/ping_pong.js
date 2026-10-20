@@ -1152,6 +1152,8 @@
       pongDebug('room joined', data);
 
       const hasOpponent = !data.is_host || !!data.guest_name;
+      const lobbySection = document.getElementById('online-opponents-section');
+      if (lobbySection) lobbySection.style.display = hasOpponent ? 'none' : '';
       const statusEl = document.getElementById('online-status');
       if (statusEl) {
         if (hasOpponent) {
@@ -1309,6 +1311,8 @@
         findBtn.disabled = true;
         findBtn.style.opacity = '0.7';
       }
+      const lobbySection = document.getElementById('online-opponents-section');
+      if (lobbySection) lobbySection.style.display = 'none';
       state.isPaused = false;
       if (typeof window.__updatePongPauseBtn === 'function') {
         window.__updatePongPauseBtn(false);
@@ -1391,6 +1395,8 @@
         findBtn.style.opacity = '1';
         findBtn.classList.remove('ew-btn--active');
       }
+      const lobbySection = document.getElementById('online-opponents-section');
+      if (lobbySection) lobbySection.style.display = '';
     });
 
     window.addEventListener('beforeunload', () => {

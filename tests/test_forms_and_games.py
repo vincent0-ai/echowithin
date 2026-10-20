@@ -477,6 +477,8 @@ class TestSlimeVolleyball:
                 # Guest joins, then guest input relay (side-gated: only the
                 # seated guest's input is relayed to the host sim)
                 mock_req.sid = 'sid_guest_456'
+                m.current_user.id = 'test-guest'
+                m.current_user.username = 'Guest'
                 join_handler({'room_id': room_id})
                 assert m.active_slime_rooms[room_id]['guest_sid'] == 'sid_guest_456'
                 input_payload = {
@@ -490,6 +492,8 @@ class TestSlimeVolleyball:
                 # remote-triggered restart never re-emits, so an echo would
                 # ping-pong forever)
                 mock_req.sid = 'sid_host_123'
+                m.current_user.id = 'test-host'
+                m.current_user.username = 'Host'
                 restart_handler({'room_id': room_id})
                 assert mock_emit.call_args[0][0] == 'slime_restart'
                 assert 'serving' in mock_emit.call_args[0][1]
@@ -1423,6 +1427,8 @@ class TestArcadeMatchmakingAndLeaderboards:
 
                 # Simulate guest joining
                 mock_req.sid = 'sid_pong_guest'
+                m.current_user.id = 'test-guest'
+                m.current_user.username = 'Guest'
                 join_handler({'room_id': 'pong_test_1'})
                 assert m.active_pong_rooms['pong_test_1']['guest_sid'] == 'sid_pong_guest'
 

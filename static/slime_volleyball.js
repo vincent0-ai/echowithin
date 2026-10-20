@@ -1250,6 +1250,8 @@
         }
 
         // When opponent enters the game room, reset scores so both players start fresh
+        const lobbySection = document.getElementById('online-opponents-section');
+        if (lobbySection) lobbySection.style.display = data.guest_name ? 'none' : '';
         if (data.guest_name) {
           GameState.p1.score = 0;
           GameState.p2.score = 0;
@@ -1379,6 +1381,8 @@
       });
 
       GameState.socket.on('slime_player_left', () => {
+        const lobbySection = document.getElementById('online-opponents-section');
+        if (lobbySection) lobbySection.style.display = '';
         GameState.isPaused = true;
         GameState.roomId = null;
         if (typeof window.__updateSlimePauseBtn === 'function') {
@@ -1501,6 +1505,8 @@
           matchBtn.style.opacity = '0.7';
           matchBtn.classList.remove('ew-btn--active');
         }
+        const lobbySection = document.getElementById('online-opponents-section');
+        if (lobbySection) lobbySection.style.display = 'none';
       });
 
       GameState.socket.on('slime_queue_updated', (data) => {

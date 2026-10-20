@@ -708,6 +708,8 @@ class TestCoopSeatSteal:
         rooms.pop('sim_duet_int', None)
         xrooms = m.active_crossword_rooms
         xrooms.pop('sim_xw_int', None)
+        erooms = m.active_emoji_rooms
+        erooms.pop('sim_emoji_int', None)
         try:
             _as_sid(m, 'sid_host', h['handle_join_duet_room'], {'room_id': 'sim_duet_int'},
                     user=_authed('u_host', 'Host'))
@@ -729,12 +731,15 @@ class TestCoopSeatSteal:
             e4 = _as_sid(m, 'sid_host', h['handle_crossword_cell_update'],
                          {'room_id': 'sim_xw_int', 'r': 'a', 'c': 'b', 'char': 'Q'})
             assert _emits_to(e4, 'crossword_cell_update', room='sim_xw_int') == []
+            _as_sid(m, 'sid_host', h['handle_emoji_join_room'],
+                    {'room_id': 'sim_emoji_int'}, user=_authed('u_host', 'Host'))
             e5 = _as_sid(m, 'sid_host', h['handle_emoji_start_round'],
-                         {'room': 'sim_xw_int', 'round': 'zzz'})
+                         {'room': 'sim_emoji_int', 'round': 'zzz'})
             assert _emits_to(e5, 'emoji_round_started') != []
         finally:
             rooms.pop('sim_duet_int', None)
             xrooms.pop('sim_xw_int', None)
+            erooms.pop('sim_emoji_int', None)
 
     def test_restart_requires_membership_no_ghost_broadcast(self):
         """FIXED (BUG-011): duet_restart drops non-members and unknown rooms;
@@ -954,10 +959,16 @@ class TestSudokuCoopPaths:
             _as_sid(m, 'sid_host', h['handle_sudoku_puzzle_share'],
                     {'room_id': 'sim_done', 'puzzle': board['puzzle'],
                      'solution': board['solution'], 'difficulty': 'easy'})
+            room = m.active_sudoku_rooms['sim_done']
+            assert room['grid'] == [x for row in board['puzzle'] for x in row]
             early = _as_sid(m, 'sid_host', h['handle_sudoku_solved'], {'room_id': 'sim_done'})
             assert len(_emits_to(early, 'sudoku_solved', room='sim_done')) == 0
-            room = m.active_sudoku_rooms['sim_done']
-            room['grid'] = [board['solution'][r][c] for r in range(9) for c in range(9)]
+            for r in range(9):
+                for c in range(9):
+                    if board['puzzle'][r][c] == 0:
+                        _as_sid(m, 'sid_host', h['handle_sudoku_cell_update'],
+                                {'room_id': 'sim_done', 'r': r, 'c': c,
+                                 'v': board['solution'][r][c]})
             done = _as_sid(m, 'sid_host', h['handle_sudoku_solved'], {'room_id': 'sim_done'})
             assert len(_emits_to(done, 'sudoku_solved', room='sim_done')) == 1
         finally:
@@ -1036,3 +1047,97 @@ class TestChainRulesEnforced:
                 assert res and res[0][0][1]['winner'] is None
         finally:
             _restore_rooms(m, saved)
+
+
+class TestCoopAuthHardening:
+    def test_crossword_membership_gates_writes_and_restart(self):
+        """Strangers cannot write cells or claim solved; only the host restarts."""
+        import main as m
+        h = _handlers()
+        rooms = m.active_crossword_rooms
+        rooms.pop('sim_xw_auth', None)
+        try:
+            _as_sid(m, 'sid_host', h['handle_join_crossword_room'],
+                    {'room_id': 'sim_xw_auth', 'puzzle_idx': 0},
+                    user=_authed('u_host', 'Host'))
+            _as_sid(m, 'sid_guest', h['handle_join_crossword_room'],
+                    {'room_id': 'sim_xw_auth', 'puzzle_idx': 0},
+                    user=_authed('u_guest', 'Guest'))
+            stranger = _as_sid(m, 'sid_stranger', h['handle_crossword_cell_update'],
+                               {'room_id': 'sim_xw_auth', 'r': 0, 'c': 0, 'char': 'A'},
+                               user=_authed('u_str', 'Stranger'))
+            assert _emits_to(stranger, 'crossword_cell_update', room='sim_xw_auth') == []
+            assert rooms['sim_xw_auth']['grid'][0] == ''
+            solved = _as_sid(m, 'sid_stranger', h['handle_crossword_solved'],
+                             {'room_id': 'sim_xw_auth'}, user=_authed('u_str', 'Stranger'))
+            assert _emits_to(solved, 'crossword_solved', room='sim_xw_auth') == []
+            guest_restart = _as_sid(m, 'sid_guest', h['handle_crossword_restart'],
+                                    {'room_id': 'sim_xw_auth', 'puzzle_idx': 2},
+                                    user=_authed('u_guest', 'Guest'))
+            assert _emits_to(guest_restart, 'crossword_restarted', room='sim_xw_auth') == []
+            assert rooms['sim_xw_auth']['puzzle_idx'] == 0
+            host_restart = _as_sid(m, 'sid_host', h['handle_crossword_restart'],
+                                   {'room_id': 'sim_xw_auth', 'puzzle_idx': 2},
+                                   user=_authed('u_host', 'Host'))
+            assert _emits_to(host_restart, 'crossword_restarted', room='sim_xw_auth') != []
+            assert rooms['sim_xw_auth']['puzzle_idx'] == 2
+            assert rooms['sim_xw_auth']['grid'] == [''] * 25
+        finally:
+            rooms.pop('sim_xw_auth', None)
+
+    def test_emoji_guess_checked_against_started_round(self):
+        """The server re-checks a guess against the giver's stored word."""
+        import main as m
+        h = _handlers()
+        rooms = m.active_emoji_rooms
+        rooms.pop('sim_emoji_auth', None)
+        try:
+            _as_sid(m, 'sid_host', h['handle_emoji_join_room'],
+                    {'room_id': 'sim_emoji_auth'}, user=_authed('u_host', 'Host'))
+            _as_sid(m, 'sid_guest', h['handle_emoji_join_room'],
+                    {'room_id': 'sim_emoji_auth'}, user=_authed('u_guest', 'Guest'))
+            _as_sid(m, 'sid_host', h['handle_emoji_start_round'],
+                    {'room': 'sim_emoji_auth', 'round': 1, 'word': 'Sun'},
+                    user=_authed('u_host', 'Host'))
+            forged = _as_sid(m, 'sid_guest', h['handle_emoji_submit_guess'],
+                             {'room': 'sim_emoji_auth', 'guess': 'moon', 'correct': True},
+                             user=_authed('u_guest', 'Guest'))
+            out = _emits_to(forged, 'emoji_guess_result', room='sim_emoji_auth')
+            assert out and out[0][0][1]['correct'] is False
+            honest = _as_sid(m, 'sid_guest', h['handle_emoji_submit_guess'],
+                             {'room': 'sim_emoji_auth', 'guess': 'sun', 'correct': False},
+                             user=_authed('u_guest', 'Guest'))
+            out = _emits_to(honest, 'emoji_guess_result', room='sim_emoji_auth')
+            assert out and out[0][0][1]['correct'] is True
+        finally:
+            rooms.pop('sim_emoji_auth', None)
+
+    def test_ttt_guest_joins_socket_room(self):
+        """Both seats must be subscribed so moves reach the guest."""
+        import main as m
+        h = _handlers()
+        rooms = m.active_ttt_rooms
+        rooms.pop('sim_ttt_sub', None)
+
+        def call(sid, fn, data, user, joined):
+            req = MagicMock()
+            req.sid = sid
+            with patch.object(m, 'request', req), \
+                    patch.object(m, 'current_user', user), \
+                    patch.object(m, 'emit'), \
+                    patch.object(m, 'leave_room'), \
+                    patch.object(m, 'join_room', joined):
+                fn(data)
+
+        try:
+            with patch.object(m, 'join_room') as joined:
+                joined.reset_mock()
+                call('sid_host', h['handle_join_ttt_room'], {'room_id': 'sim_ttt_sub'},
+                     _authed('u_host', 'Host'), joined)
+                call('sid_guest', h['handle_join_ttt_room'], {'room_id': 'sim_ttt_sub'},
+                     _authed('u_guest', 'Guest'), joined)
+                assert [c.args[0] for c in joined.call_args_list if c.args] == \
+                    ['sim_ttt_sub', 'sim_ttt_sub']
+                assert rooms['sim_ttt_sub']['guest_sid'] == 'sid_guest'
+        finally:
+            rooms.pop('sim_ttt_sub', None)

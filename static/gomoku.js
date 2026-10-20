@@ -350,6 +350,8 @@
       if (d.turn !== undefined) state.turn = d.turn;
       resetBoardSilent();
       setStatus(d.guest_name ? 'Opponent joined. ' + (state.turn === state.player ? 'Your turn.' : 'Waiting.') : 'Share the room code with a friend.');
+      var lobby = document.getElementById('online-opponents-section');
+      if (lobby) lobby.style.display = d.guest_name ? 'none' : '';
     });
     socket.on('gomoku_move_made', function (d) {
       state.board[d.idx] = d.player; state.moves++;
@@ -374,9 +376,16 @@
       state.pendingEcho = null;
       state.turn = d.turn; state.board = new Array(CELLS).fill(-1); state.moves = 0; state.over = false; winLine = null;
       hideResult(); draw(); setStatus('Matched! ' + (state.turn === state.player ? 'Your turn.' : 'Waiting.'));
+      var lobby = document.getElementById('online-opponents-section');
+      if (lobby) lobby.style.display = 'none';
     });
     socket.on('gomoku_matchmaking_waiting', function () { setStatus('Waiting for an opponent…'); });
-    socket.on('gomoku_player_left', function () { setStatus('Opponent left.'); showResult('OPPONENT LEFT', 'Share the room code to play again.'); });
+    socket.on('gomoku_player_left', function () {
+      setStatus('Opponent left.');
+      var lobby = document.getElementById('online-opponents-section');
+      if (lobby) lobby.style.display = '';
+      showResult('OPPONENT LEFT', 'Share the room code to play again.');
+    });
     socket.on('gomoku_room_error', function (d) { setStatus(d.message || 'Room full.'); });
   }
 

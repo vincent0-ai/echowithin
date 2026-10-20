@@ -648,6 +648,8 @@
       state.player = d.player; state.isHost = d.is_host;
       resetMatch();
       setStatus(d.guest_name ? 'Opponent joined. Rally!' : 'Share the room code.');
+      var lobby = document.getElementById('online-opponents-section');
+      if (lobby) lobby.style.display = d.guest_name ? 'none' : '';
     });
     socket.on('air_state', function (d) {
       if (!d) return;
@@ -683,10 +685,14 @@
     socket.on('air_match_found', function (d) {
       state.roomId = d.room_id; state.player = d.player; state.isHost = d.is_host;
       resetMatch(); setStatus('Matched! Rally!');
+      var lobby = document.getElementById('online-opponents-section');
+      if (lobby) lobby.style.display = 'none';
     });
     socket.on('air_matchmaking_waiting', function () { setStatus('Waiting for opponent…'); });
     socket.on('air_player_left', function () {
       setStatus('Opponent left.');
+      var lobby = document.getElementById('online-opponents-section');
+      if (lobby) lobby.style.display = '';
       document.getElementById('air-result-title').textContent = 'OPPONENT LEFT';
       document.getElementById('air-result-overlay').style.display = 'flex';
       state.over = true;

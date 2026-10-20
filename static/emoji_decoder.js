@@ -439,9 +439,9 @@ document.getElementById('btn-submit-guess').onclick = () => {
         }
     } else if (mode === 'online') {
         if (isCorrect) {
-            socket.emit('emoji_submit_guess', { room, bond_id: bondId, correct: true, points: calculatePoints() });
+            socket.emit('emoji_submit_guess', { room, bond_id: bondId, correct: true, guess: guess, points: calculatePoints() });
         } else {
-            socket.emit('emoji_submit_guess', { room, bond_id: bondId, correct: false, attempts_left: attemptsLeft - 1 });
+            socket.emit('emoji_submit_guess', { room, bond_id: bondId, correct: false, guess: guess, attempts_left: attemptsLeft - 1 });
         }
     }
 };

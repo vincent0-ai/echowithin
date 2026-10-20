@@ -271,3 +271,24 @@ class TestGameInviteDM:
             assert 'game_data' in item
             assert item['game_data']['lobby_id'] == 'lobby_xyz'
             assert item['game_data']['title'] == 'Friday Trivia'
+
+class TestLocalTimeFilter:
+    """Coarse client-side time formats must not be expanded to full timestamps."""
+
+    def test_month_year_format_emits_client_format_attribute(self):
+        from utils import localtime_filter
+
+        dt = datetime.datetime(2026, 1, 17, 19, 48, 14, tzinfo=datetime.timezone.utc)
+        html = str(localtime_filter(dt, '%B %Y', 'month-year'))
+
+        assert 'data-time-format="month-year"' in html
+        assert '>January 2026</time>' in html
+
+    def test_default_format_has_no_client_format_attribute(self):
+        from utils import localtime_filter
+
+        dt = datetime.datetime(2026, 1, 17, 19, 48, 14, tzinfo=datetime.timezone.utc)
+        html = str(localtime_filter(dt))
+
+        assert 'data-time-format' not in html
+        assert ' UTC</time>' in html

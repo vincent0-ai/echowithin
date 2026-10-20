@@ -105,7 +105,8 @@
             <div class="profile-meta" style="text-align: center;">
                 {% if user.join_date %}
                 <div class="profile-meta-item">
-                    Member since {{ user.join_date|localtime('%B %Y') }}
+                    <span>Member since</span>
+                    {{ user.join_date|localtime('%B %Y', 'month-year') }}
                 </div>
                 {% endif %}
             </div>

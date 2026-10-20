@@ -573,13 +573,17 @@ def cleanup_post_media(post):
             _get_app().logger.error(f"Failed to cleanup post media: {e}")
 
 
-def localtime_filter(dt, fmt='%b %d, %Y at %I:%M %p'):
+def localtime_filter(dt, fmt='%b %d, %Y at %I:%M %p', client_format=None):
     """Render a <time> element with an ISO datetime for client-side
     conversion. The fallback text (before JS runs / for no-JS clients /
     inside emails) is the UTC-formatted time with an explicit ' UTC' suffix
     so users never see an ambiguous timestamp that *looks* like local time
     but is actually server time. The browser's JS will replace this with
-    the user's local timezone via the `time.local-time` converter."""
+    the user's local timezone via the `time.local-time` converter.
+
+    `client_format` opts into a coarser client-side rendering
+    (e.g. 'month-year') so a date-only label is not expanded to a full
+    timestamp by the JS converter."""
     try:
         if isinstance(dt, datetime.datetime):
             if dt.tzinfo is None:
@@ -591,7 +595,8 @@ def localtime_filter(dt, fmt='%b %d, %Y at %I:%M %p'):
             # (avoids "Jan 2026 UTC" on month-only formats like %B %Y).
             if any(tok in fmt for tok in ('%H', '%I', '%M', '%S', '%p', '%X')):
                 fallback = f"{fallback} UTC"
-            return Markup(f'<time class="local-time" datetime="{escape(iso)}">{escape(fallback)}</time>')  # nosec B704
+            format_attr = f' data-time-format="{escape(client_format)}"' if client_format else ''
+            return Markup(f'<time class="local-time" datetime="{escape(iso)}"{format_attr}>{escape(fallback)}</time>')  # nosec B704
         return str(dt)
     except (ValueError, TypeError, AttributeError):
         return str(dt)

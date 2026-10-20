@@ -67,19 +67,35 @@ function convertToLocalTime() {
         try {
             const date = parseServerTime(isoString);
             if (!date) return; // Invalid date
-            
-            // Format options for display
-            const options = {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-            };
-            
-            // Format to user's local timezone
-            const localTimeString = date.toLocaleDateString('en-US', options);
+
+            // Coarser formats (set via data-time-format) must not be expanded
+            // into a full timestamp by the client-side converter.
+            const formatKind = el.getAttribute('data-time-format');
+            let localTimeString;
+            if (formatKind === 'month-year') {
+                localTimeString = date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long'
+                });
+            } else if (formatKind === 'date') {
+                localTimeString = date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+            } else {
+                // Format options for display
+                const options = {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                };
+                localTimeString = date.toLocaleDateString('en-US', options);
+            }
+
             el.textContent = localTimeString;
             el.title = date.toLocaleString(); // Full date on hover
             el.setAttribute('data-converted', 'true'); // Mark as converted

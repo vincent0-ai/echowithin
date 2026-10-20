@@ -438,8 +438,7 @@
 
         /* Prevent horizontal overflow.
            `clip` (rather than `hidden`) contains overflow without turning
-           html/body into scroll containers, which would break `position: sticky`
-           on descendants such as the blog navbar. */
+           html/body into scroll containers. */
         html,
         body {
             overflow-x: hidden;
@@ -803,7 +802,7 @@
     <div class="page-container">
         {% block extra_body_js %}{% endblock %}
 
-        <div class="navbar{% if active_page == 'blog' %} navbar-sticky{% endif %}">
+        <div class="navbar">
             <div class="nav-left">
                 <a href="{{ url_for('pages.dashboard') }}" class="nav-brand">
                     <picture>

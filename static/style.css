@@ -425,7 +425,7 @@ body {
     min-height: 100vh;
     min-height: 100dvh;
     /* `clip` keeps horizontal overflow contained without creating a scroll
-       container, so `position: sticky` children (e.g. the navbar) still work. */
+       container that would break fixed-position descendants. */
     overflow-x: hidden;
     overflow-x: clip;
     max-width: 100%;
@@ -497,14 +497,6 @@ body {
     color: white;
     text-decoration: none;
     padding: 0.5rem 0.4rem;
-}
-
-/* Keeps navigation reachable while scrolling long feeds */
-.navbar-sticky {
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-    box-shadow: 0 2px 8px var(--shadow-color);
 }
 
 /* Back-to-top control for the infinitely scrolling blog feed */

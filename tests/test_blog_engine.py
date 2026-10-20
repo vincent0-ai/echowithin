@@ -156,11 +156,11 @@ class TestBlogEndpointsAccess:
         assert res.status_code == 200
         assert res.mimetype == 'text/html'
 
-    def test_blog_feed_has_back_to_top_and_sticky_nav(self, client):
+    def test_blog_feed_has_back_to_top_and_no_sticky_nav(self, client):
         res = client.get('/blog')
         assert res.status_code == 200
         assert b'feed-top-btn' in res.data
-        assert b'navbar-sticky' in res.data
+        assert b'navbar-sticky' not in res.data
 
     def test_blog_feed_batch_endpoint_rejects_bad_params(self, client):
         res = client.get('/api/blog/feed?tab=nonsense&limit=abc&exclude=, ,')

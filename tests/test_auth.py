@@ -269,6 +269,125 @@ class TestGuestExpiration:
             assert u_active.is_guest_expired is False
             assert u_regular.is_guest_expired is False
 
+    def test_guest_expires_at_utc_property(self, app):
+        """guest_expires_at_utc should always be timezone-aware UTC for the banner countdown"""
+        from main import User
+        from bson.objectid import ObjectId
+        import datetime
+        naive = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
+        with app.app_context():
+            u = User({'_id': ObjectId(), 'username': 'Guest_Naive',
+                      'is_guest': True, 'guest_expires_at': naive})
+            exp = u.guest_expires_at_utc
+            assert exp is not None
+            assert exp.tzinfo is not None
+            assert exp.utcoffset() == datetime.timedelta(0)
+
+            u_none = User({'_id': ObjectId(), 'username': 'Guest_NoExpiry', 'is_guest': True})
+            assert u_none.guest_expires_at_utc is None
+
+
+class TestGuestTourPurge:
+    """purge_guest_user_data must clear guest-keyed AND demo-partner/bond residue."""
+
+    @staticmethod
+    def _stub(monkeypatch, name):
+        conf = mock.MagicMock()
+        monkeypatch.setattr('main.' + name, conf)
+        return conf
+
+    @staticmethod
+    def _stub_remaining(monkeypatch, exclude=()):
+        for name in (
+            'personal_posts_conf', 'note_shares_conf', 'note_versions_conf',
+            'bond_goals_conf', 'bond_journal_conf', 'bond_moods_conf',
+            'bond_qotd_conf', 'bond_habits_conf', 'bond_countdowns_conf',
+            'bond_events_conf', 'bond_album_photos_conf', 'bond_album_music_conf',
+            'bond_bucketlist_conf', 'bond_recommendations_conf', 'bond_pulses_conf',
+            'direct_messages_conf', 'dm_permissions_conf', 'community_memberships_conf',
+            'whisper_sessions_conf', 'whisper_messages_conf', 'consent_records_conf',
+        ):
+            if name not in exclude:
+                TestGuestTourPurge._stub(monkeypatch, name)
+
+    def test_purge_clears_bond_scoped_and_demo_partner_data(self, monkeypatch):
+        import main as m
+        from bson.objectid import ObjectId
+
+        g_oid, p_oid, bond_id = ObjectId(), ObjectId(), ObjectId()
+
+        users = self._stub(monkeypatch, 'users_conf')
+        users.find_one.side_effect = [
+            {'_id': g_oid, 'is_guest': True},          # guest lookup
+            {'_id': p_oid, 'is_demo_bot': True},        # demo partner check
+        ]
+        bonds = self._stub(monkeypatch, 'bonds_conf')
+        bonds.find.return_value = [
+            {'_id': bond_id, 'user_a_id': g_oid, 'user_b_id': p_oid}
+        ]
+        self._stub_remaining(monkeypatch)
+        monkeypatch.setattr(m, 'redis_cache', None)
+
+        m.purge_guest_user_data(str(g_oid))
+
+        # bond-scoped records (goal/journal/habit seeded under the bond) are purged
+        m.bond_goals_conf.delete_many.assert_any_call({'bond_id': {'$in': [bond_id]}})
+        m.bond_journal_conf.delete_many.assert_any_call({'bond_id': {'$in': [bond_id]}})
+        m.bond_habits_conf.delete_many.assert_any_call({'bond_id': {'$in': [bond_id]}})
+        # note version history no longer leaks
+        m.note_versions_conf.delete_many.assert_any_call(
+            {'$or': [{'content_owner_id': g_oid}, {'editor_id': g_oid}]})
+        # demo partner user doc + guest user doc both removed
+        deleted_users = [c.args[0] for c in m.users_conf.delete_one.call_args_list]
+        assert {'_id': p_oid, 'is_demo_bot': True} in deleted_users
+        assert {'_id': g_oid} in deleted_users
+        # DMs cleared for guest and partner
+        dm_filter = m.direct_messages_conf.delete_many.call_args[0][0]
+        assert {'sender_id': {'$in': [p_oid]}} in dm_filter['$or']
+        m.community_memberships_conf.delete_many.assert_any_call({'user_id': g_oid})
+        m.consent_records_conf.delete_many.assert_any_call({'user_id': g_oid})
+
+    def test_purge_keeps_real_partner_data(self, monkeypatch):
+        import main as m
+        from bson.objectid import ObjectId
+
+        g_oid, p_oid, bond_id = ObjectId(), ObjectId(), ObjectId()
+
+        users = self._stub(monkeypatch, 'users_conf')
+        users.find_one.side_effect = [
+            {'_id': g_oid, 'is_guest': True},
+            None,  # real (non-demo) partner: must be kept
+        ]
+        bonds = self._stub(monkeypatch, 'bonds_conf')
+        bonds.find.return_value = [
+            {'_id': bond_id, 'user_a_id': g_oid, 'user_b_id': p_oid}
+        ]
+        self._stub_remaining(monkeypatch)
+        monkeypatch.setattr(m, 'redis_cache', None)
+
+        m.purge_guest_user_data(str(g_oid))
+
+        deleted_users = [c.args[0] for c in m.users_conf.delete_one.call_args_list]
+        assert deleted_users == [{'_id': g_oid}]
+        assert m.personal_posts_conf.delete_many.call_args_list == [
+            mock.call({'user_id': g_oid})]
+        bonds.delete_many.assert_called_once_with(
+            {'$or': [{'user_a_id': g_oid}, {'user_b_id': g_oid}]})
+
+    def test_purge_skips_when_not_guest(self, monkeypatch):
+        import main as m
+        from bson.objectid import ObjectId
+
+        oid = ObjectId()
+        users = self._stub(monkeypatch, 'users_conf')
+        users.find_one.return_value = None
+
+        m.purge_guest_user_data(str(oid))
+
+        users.find_one.assert_called_once_with({'_id': oid, 'is_guest': True})
+        users.delete_one.assert_not_called()
+
 
 class TestActiveSessionsAndRevocation:
     """Tests for session management and token revocation."""

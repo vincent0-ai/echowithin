@@ -57,6 +57,21 @@ class User(UserMixin):
         return exp <= now if exp else False
 
     @property
+    def guest_expires_at_utc(self):
+        """Timezone-aware UTC expiry of a guest tour session (for countdowns)."""
+        exp = self.guest_expires_at
+        if not exp:
+            return None
+        if isinstance(exp, str):
+            from security import parse_iso_utc
+            exp = parse_iso_utc(exp)
+        if not isinstance(exp, datetime.datetime):
+            return None
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=datetime.timezone.utc)
+        return exp.astimezone(datetime.timezone.utc)
+
+    @property
     def is_active(self):
         return self._is_active
 

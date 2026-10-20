@@ -99,6 +99,64 @@ class TestNewGameSocketHandlers:
         assert {sol[0][c] for c in range(9)} == set(range(1, 10))
         assert {sol[r][0] for r in range(9)} == set(range(1, 10))
 
+    def test_sudoku_valid_board_guard(self):
+        from blueprints.game import _sudoku_fallback_board, _sudoku_valid_board
+        board = _sudoku_fallback_board(seed=3, difficulty='easy')
+        assert _sudoku_valid_board(board['puzzle'], board['solution'])
+        assert not _sudoku_valid_board([[1] * 9] * 9, [[1] * 9] * 9)
+        bad_solution = [row[:] for row in board['solution']]
+        bad_solution[0][0] = bad_solution[0][1]
+        assert not _sudoku_valid_board(board['puzzle'], bad_solution)
+        riddled = [row[:] for row in board['puzzle']]
+        r, c = next((r, c) for r in range(9) for c in range(9) if riddled[r][c])
+        riddled[r][c] = (riddled[r][c] % 9) + 1
+        assert not _sudoku_valid_board(riddled, board['solution'])
+
+    def test_sudoku_cache_rotates_and_expires(self):
+        import blueprints.game as g
+        saved = dict(g._SUDOKU_CACHE)
+        g._SUDOKU_CACHE.clear()
+        try:
+            a = g._sudoku_fallback_board(seed=1, difficulty='easy')
+            b = g._sudoku_fallback_board(seed=2, difficulty='easy')
+            g._sudoku_store(a, 1000.0)
+            g._sudoku_store(b, 1000.0)
+            first = g._sudoku_take_cached('easy', 1001.0)
+            second = g._sudoku_take_cached('easy', 1001.0)
+            assert first['puzzle'] != second['puzzle']
+            assert g._sudoku_take_cached('easy', 1001.0) is None
+            g._sudoku_store(a, 1000.0)
+            expired = 1000.0 + g._SUDOKU_CACHE_TTL + 1
+            assert g._sudoku_take_cached('easy', expired) is None
+        finally:
+            g._SUDOKU_CACHE.clear()
+            g._SUDOKU_CACHE.update(saved)
+
+    def test_sudoku_difficulty_normalization(self):
+        from blueprints.game import _sudoku_norm_difficulty
+        assert _sudoku_norm_difficulty('Expert') == 'hard'
+        assert _sudoku_norm_difficulty('Beginner') == 'easy'
+        assert _sudoku_norm_difficulty('weird') == 'medium'
+        assert _sudoku_norm_difficulty(None) == 'medium'
+
+    def test_sudoku_api_serves_cached_board_uncached(self, client):
+        import time
+        import blueprints.game as g
+        saved = dict(g._SUDOKU_CACHE)
+        g._SUDOKU_CACHE.clear()
+        board = g._sudoku_fallback_board(seed=5, difficulty='easy')
+        g._sudoku_store(board, time.time())
+        try:
+            res = client.get('/api/games/sudoku/new?difficulty=easy')
+            data = res.get_json()
+            assert res.status_code == 200
+            assert data['success'] is True and data['source'] == 'cache'
+            assert data['difficulty'] == 'easy'
+            assert res.headers.get('Cache-Control') == 'no-store'
+        finally:
+            g._SUDOKU_CACHE.clear()
+            g._SUDOKU_CACHE.update(saved)
+
     def test_sudoku_cursor_move_relayed_without_echo(self):
         """Partner taps relay to the room (not back to sender) with cell coords."""
         h = self._handlers()['handle_sudoku_cursor_move']
@@ -106,10 +164,14 @@ class TestNewGameSocketHandlers:
         req.sid = 'sid_a'
         guest = MagicMock()
         guest.is_authenticated = False
-        with patch.object(m, 'request', req), \
-                patch.object(m, 'current_user', guest), \
-                patch.object(m, 'emit') as mock_emit:
-            h({'room_id': 'r1', 'r': 8, 'c': 0})
+        m.active_sudoku_rooms['r1'] = {'host_sid': 'sid_a', 'guest_sid': None}
+        try:
+            with patch.object(m, 'request', req), \
+                    patch.object(m, 'current_user', guest), \
+                    patch.object(m, 'emit') as mock_emit:
+                h({'room_id': 'r1', 'r': 8, 'c': 0})
+        finally:
+            m.active_sudoku_rooms.pop('r1', None)
         assert mock_emit.call_count == 1
         args, kwargs = mock_emit.call_args
         assert args[0] == 'sudoku_cursor_move'

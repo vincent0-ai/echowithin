@@ -1074,7 +1074,7 @@ def start_guest_tour():
         ],
         'check_ins': [
             {'user_id': str(partner_id), 'value': 250, 'note': 'Saved initial deposit', 'at': (now - datetime.timedelta(days=5)).isoformat()},
-            {'user_id': guest_id_str, 'value': 200, 'note': 'Added my contribution!', 'at': (now - datetime.timedelta(days=2)).isoformat()}
+            {'user_id': guest_id_str, 'value': 200, 'note': 'Sample contribution', 'at': (now - datetime.timedelta(days=2)).isoformat()}
         ]
     })
     
@@ -1131,7 +1131,8 @@ def start_guest_tour():
     session['is_guest_tour'] = True
     
     flash("Welcome to Tour Mode. You are in an isolated demo session.", "success")
-    return redirect(url_for('notes.personal_space'))
+    # tour_fresh=1 lets the client reset any previously dismissed tour tips
+    return redirect(url_for('notes.personal_space', tour_fresh=1))
 
 
 # --- Active Sessions API ---

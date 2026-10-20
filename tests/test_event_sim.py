@@ -824,18 +824,23 @@ class TestEmojiBondScoreForgery:
 
 
 class TestSudokuCoopPaths:
+    @staticmethod
+    def _board():
+        from blueprints.game import _sudoku_fallback_board
+        return _sudoku_fallback_board(seed=7, difficulty='easy')
+
     def test_late_joiner_gets_shared_puzzle(self):
         """GOOD: first-share-wins puzzle is handed to late joiners directly."""
         import main as m
         saved = _save_rooms(m, 'active_sudoku_rooms')
         try:
             h = _handlers()
+            board = self._board()
             _as_sid(m, 'sid_host', h['handle_join_sudoku_room'], {'room_id': 'sim_sudo'},
                     user=_authed('u_host', 'Host'))
-            grid = [[1] * 9 for _ in range(9)]
             _as_sid(m, 'sid_host', h['handle_sudoku_puzzle_share'],
-                    {'room_id': 'sim_sudo', 'puzzle': grid, 'solution': grid,
-                     'difficulty': 'easy'})
+                    {'room_id': 'sim_sudo', 'puzzle': board['puzzle'],
+                     'solution': board['solution'], 'difficulty': 'easy'})
             mock_emit = _as_sid(m, 'sid_guest', h['handle_join_sudoku_room'],
                                 {'room_id': 'sim_sudo'}, user=_authed('u_guest', 'Guest'))
             puzzles = [c for c in mock_emit.call_args_list if c[0][0] == 'sudoku_puzzle']
@@ -843,9 +848,24 @@ class TestSudokuCoopPaths:
         finally:
             _restore_rooms(m, saved)
 
-    def test_stranger_cell_write_relayed(self):
-        """OBSERVED: sudoku cells are bounds-checked but not membership-checked;
-        any socket can write a partner's grid."""
+    def test_invalid_shared_board_rejected(self):
+        """GOOD: a bogus solution can never mark correct digits as mistakes."""
+        import main as m
+        saved = _save_rooms(m, 'active_sudoku_rooms')
+        try:
+            h = _handlers()
+            _as_sid(m, 'sid_host', h['handle_join_sudoku_room'], {'room_id': 'sim_bad'},
+                    user=_authed('u_host', 'Host'))
+            grid = [[1] * 9 for _ in range(9)]
+            _as_sid(m, 'sid_host', h['handle_sudoku_puzzle_share'],
+                    {'room_id': 'sim_bad', 'puzzle': grid, 'solution': grid,
+                     'difficulty': 'easy'})
+            assert m.active_sudoku_rooms['sim_bad']['puzzle'] is None
+        finally:
+            _restore_rooms(m, saved)
+
+    def test_stranger_cell_write_rejected(self):
+        """GOOD: cell writes need a seated member and a legal move."""
         import main as m
         saved = _save_rooms(m, 'active_sudoku_rooms')
         try:
@@ -854,8 +874,111 @@ class TestSudokuCoopPaths:
                     user=_authed('u_host', 'Host'))
             mock_emit = _as_sid(m, 'sid_stranger', h['handle_sudoku_cell_update'],
                                 {'room_id': 'sim_sudo', 'r': 0, 'c': 0, 'v': 9})
-            assert m.active_sudoku_rooms['sim_sudo']['grid'][0] == 9
-            assert len(_emits_to(mock_emit, 'sudoku_cell_update', room='sim_sudo')) == 1
+            assert m.active_sudoku_rooms['sim_sudo']['grid'][0] == 0
+            assert len(_emits_to(mock_emit, 'sudoku_cell_update', room='sim_sudo')) == 0
+        finally:
+            _restore_rooms(m, saved)
+
+    def test_seated_correct_cell_write_relayed(self):
+        """GOOD: the partner's legal digit reaches the room."""
+        import main as m
+        saved = _save_rooms(m, 'active_sudoku_rooms')
+        try:
+            h = _handlers()
+            board = self._board()
+            _as_sid(m, 'sid_host', h['handle_join_sudoku_room'], {'room_id': 'sim_sudo2'},
+                    user=_authed('u_host', 'Host'))
+            _as_sid(m, 'sid_host', h['handle_sudoku_puzzle_share'],
+                    {'room_id': 'sim_sudo2', 'puzzle': board['puzzle'],
+                     'solution': board['solution'], 'difficulty': 'easy'})
+            r, c = next((r, c) for r in range(9) for c in range(9)
+                        if board['puzzle'][r][c] == 0)
+            v = board['solution'][r][c]
+            mock_emit = _as_sid(m, 'sid_host', h['handle_sudoku_cell_update'],
+                                {'room_id': 'sim_sudo2', 'r': r, 'c': c, 'v': v})
+            assert m.active_sudoku_rooms['sim_sudo2']['grid'][r * 9 + c] == v
+            assert len(_emits_to(mock_emit, 'sudoku_cell_update', room='sim_sudo2')) == 1
+        finally:
+            _restore_rooms(m, saved)
+
+    def test_wrong_digit_not_relayed_to_partner(self):
+        """GOOD: wrong taps stay on the sender's screen, never hit the board."""
+        import main as m
+        saved = _save_rooms(m, 'active_sudoku_rooms')
+        try:
+            h = _handlers()
+            board = self._board()
+            _as_sid(m, 'sid_host', h['handle_join_sudoku_room'], {'room_id': 'sim_wrong'},
+                    user=_authed('u_host', 'Host'))
+            _as_sid(m, 'sid_host', h['handle_sudoku_puzzle_share'],
+                    {'room_id': 'sim_wrong', 'puzzle': board['puzzle'],
+                     'solution': board['solution'], 'difficulty': 'easy'})
+            r, c = next((r, c) for r in range(9) for c in range(9)
+                        if board['puzzle'][r][c] == 0)
+            wrong = (board['solution'][r][c] % 9) + 1
+            mock_emit = _as_sid(m, 'sid_host', h['handle_sudoku_cell_update'],
+                                {'room_id': 'sim_wrong', 'r': r, 'c': c, 'v': wrong})
+            assert m.active_sudoku_rooms['sim_wrong']['grid'][r * 9 + c] == 0
+            assert len(_emits_to(mock_emit, 'sudoku_cell_update', room='sim_wrong')) == 0
+        finally:
+            _restore_rooms(m, saved)
+
+    def test_reconnect_reclaims_guest_seat(self):
+        """GOOD: a refreshed guest keeps their seat instead of becoming a third player."""
+        import main as m
+        saved = _save_rooms(m, 'active_sudoku_rooms')
+        try:
+            h = _handlers()
+            _as_sid(m, 'sid_host', h['handle_join_sudoku_room'],
+                    {'room_id': 'sim_reconnect'}, user=_authed('u_host', 'Host'))
+            token = {'client_token': 'g_tok:sudoku_x'}
+            _as_sid(m, 'sid_guest_old', h['handle_join_sudoku_room'],
+                    dict(token, room_id='sim_reconnect'), user=_guest())
+            mock_emit = _as_sid(m, 'sid_guest_new', h['handle_join_sudoku_room'],
+                                dict(token, room_id='sim_reconnect'), user=_guest())
+            assert m.active_sudoku_rooms['sim_reconnect']['guest_sid'] == 'sid_guest_new'
+            assert len(_emits_to(mock_emit, 'sudoku_room_error')) == 0
+            assert len(_emits_to(mock_emit, 'sudoku_room_joined')) >= 1
+        finally:
+            _restore_rooms(m, saved)
+
+    def test_solved_broadcast_requires_complete_board(self):
+        """GOOD: only a genuinely finished shared board ends the partner's game."""
+        import main as m
+        saved = _save_rooms(m, 'active_sudoku_rooms')
+        try:
+            h = _handlers()
+            board = self._board()
+            _as_sid(m, 'sid_host', h['handle_join_sudoku_room'], {'room_id': 'sim_done'},
+                    user=_authed('u_host', 'Host'))
+            _as_sid(m, 'sid_host', h['handle_sudoku_puzzle_share'],
+                    {'room_id': 'sim_done', 'puzzle': board['puzzle'],
+                     'solution': board['solution'], 'difficulty': 'easy'})
+            early = _as_sid(m, 'sid_host', h['handle_sudoku_solved'], {'room_id': 'sim_done'})
+            assert len(_emits_to(early, 'sudoku_solved', room='sim_done')) == 0
+            room = m.active_sudoku_rooms['sim_done']
+            room['grid'] = [board['solution'][r][c] for r in range(9) for c in range(9)]
+            done = _as_sid(m, 'sid_host', h['handle_sudoku_solved'], {'room_id': 'sim_done'})
+            assert len(_emits_to(done, 'sudoku_solved', room='sim_done')) == 1
+        finally:
+            _restore_rooms(m, saved)
+
+    def test_host_leaving_promotes_guest(self):
+        """GOOD: the remaining solver keeps a working room and the shared board."""
+        import main as m
+        saved = _save_rooms(m, 'active_sudoku_rooms')
+        try:
+            h = _handlers()
+            _as_sid(m, 'sid_host', h['handle_join_sudoku_room'],
+                    {'room_id': 'sim_leave'}, user=_authed('u_host', 'Host'))
+            _as_sid(m, 'sid_guest', h['handle_join_sudoku_room'],
+                    {'room_id': 'sim_leave'}, user=_guest())
+            mock_emit = _as_sid(m, 'sid_host', h['handle_leave_sudoku_room'],
+                                {'room_id': 'sim_leave'})
+            room = m.active_sudoku_rooms.get('sim_leave')
+            assert room is not None and room['host_sid'] == 'sid_guest'
+            assert room['guest_sid'] is None
+            assert len(_emits_to(mock_emit, 'sudoku_partner_left', room='sim_leave')) == 1
         finally:
             _restore_rooms(m, saved)
 

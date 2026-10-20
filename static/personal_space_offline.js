@@ -693,11 +693,12 @@
 
     // --- Share Feature Promo & Onboarding Logic ---
     (function initSharePromo() {
-        // 1. For temporary promos (other pages), honor persisted dismissal.
-        // Personal Space uses data-promo-mode="permanent" and always shows on reload.
+        // Show until dismissed; never shown for guest tour sessions (tour.js owns those).
         const promoCard = document.getElementById('share-promo-card');
-        if (promoCard && promoCard.dataset.promoMode === 'temporary' && localStorage.getItem('ew_share_promo_dismissed') === '1') {
-            promoCard.style.display = 'none';
+        if (promoCard) {
+            const dismissed = localStorage.getItem('ew_share_promo_dismissed') === '1';
+            const isGuest = !!(window.EW_CONFIG && window.EW_CONFIG.isGuest);
+            promoCard.style.display = (dismissed || isGuest) ? 'none' : 'block';
         }
 
         // Alternate promotion between surprise links and standard collaboration notes.
@@ -731,30 +732,6 @@
                 variantIndex = (variantIndex + 1) % variants.length;
                 applyVariant(variantIndex);
             }, 9000);
-        }
-
-        // 2. Show tooltip on the FIRST note's share button (once per user)
-        if (!localStorage.getItem('ew_share_tooltip_seen')) {
-            const firstTip = document.querySelector('.share-onboard-tip');
-            if (firstTip) {
-                firstTip.style.display = 'block';
-
-                // Dismiss tooltip on any share button click
-                document.querySelectorAll('.share-note-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        document.querySelectorAll('.share-onboard-tip').forEach(t => t.style.display = 'none');
-                        localStorage.setItem('ew_share_tooltip_seen', '1');
-                    }, { once: true });
-                });
-
-                // Auto-dismiss after 8 seconds
-                setTimeout(() => {
-                    if (firstTip.style.display !== 'none') {
-                        firstTip.style.display = 'none';
-                        localStorage.setItem('ew_share_tooltip_seen', '1');
-                    }
-                }, 8000);
-            }
         }
     })();
 
@@ -1013,161 +990,6 @@
                 });
             }
         }
-    })();
-
-    // --- Step-by-Step Onboarding Tooltip for New Users ---
-    (function initOnboardingTour() {
-        // Only show for new users (fewer than 5 notes)
-        if (localStorage.getItem('ew_onboarding_complete')) return;
-
-        const firstNoteCard = document.querySelector('.note-card[data-note-id]');
-        if (!firstNoteCard) return;
-
-        const steps = [
-            { selector: '.note-actions .copy-btn', text: 'Copy note text to clipboard' },
-            { selector: '.note-actions .edit-note-btn', text: 'Edit note with full markdown formatting' },
-            { selector: '.note-actions .export-note-btn', text: 'Export note as Plain Text or Word document' },
-            { selector: '.note-actions .share-note-btn', text: 'Share note link or choose a surprise theme with music and photos' },
-            { selector: '.note-actions .lock-note-btn', text: 'Lock note behind 4-digit PIN for privacy' },
-            { selector: '.note-actions .version-history-btn', text: 'View edit history and restore previous versions' },
-            { selector: '.note-actions .sync-note-btn', text: 'Sync changes from original shared note' },
-            { selector: '.note-actions .delete-btn', text: 'Delete note from your personal space' }
-        ];
-
-        let currentStep = 0;
-
-        // Create tooltip element
-        const tooltip = document.createElement('div');
-        tooltip.id = 'onboarding-tooltip';
-        tooltip.style.cssText = `
-            position: absolute;
-            background: var(--card-bg, #ffffff);
-            color: var(--text-dark-color, #333);
-            padding: 0.8rem 1rem;
-            border-radius: 12px;
-            font-size: 0.82rem;
-            max-width: 260px;
-            z-index: 10000;
-            box-shadow: 0 4px 18px var(--shadow-color, rgba(0,0,0,0.1));
-            pointer-events: auto;
-            transition: opacity 0.2s, transform 0.2s;
-            opacity: 0;
-            border: 1px solid var(--primary-color, #3e2217);
-            font-family: var(--font-family, 'Poppins', sans-serif);
-        `;
-        document.body.appendChild(tooltip);
-
-        function repositionTooltip() {
-            if (currentStep >= steps.length) return;
-            const step = steps[currentStep];
-            const target = firstNoteCard.querySelector(step.selector);
-            if (!target) return;
-
-            const rect = target.getBoundingClientRect();
-            const scrollX = window.scrollX || window.pageXOffset;
-            const scrollY = window.scrollY || window.pageYOffset;
-
-            // Position tooltip below the target, ensuring horizontal fit in viewport
-            tooltip.style.top = (rect.bottom + scrollY + 12) + 'px';
-            tooltip.style.left = Math.max(10, Math.min(window.innerWidth - 270, rect.left + scrollX + rect.width / 2 - 130)) + 'px';
-        }
-
-        function showStep(index) {
-            if (index >= steps.length) {
-                cleanUpTour();
-                localStorage.setItem('ew_onboarding_complete', '1');
-                return;
-            }
-
-            // Remove previous highlights
-            document.querySelectorAll('.onboarding-highlight').forEach(el => {
-                el.classList.remove('onboarding-highlight');
-                el.style.outline = '';
-                el.style.outlineOffset = '';
-            });
-
-            const step = steps[index];
-            const target = firstNoteCard.querySelector(step.selector);
-            if (!target) {
-                // Skip missing buttons
-                currentStep++;
-                showStep(currentStep);
-                return;
-            }
-
-            // Highlight target
-            target.classList.add('onboarding-highlight');
-            target.style.outline = '2px solid var(--primary-color, #3e2217)';
-            target.style.outlineOffset = '3px';
-            target.style.borderRadius = '6px';
-
-            tooltip.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.4rem; gap: 0.5rem;">
-                    <div style="line-height: 1.45; color: var(--text-dark-color, #333);">${step.text}</div>
-                    <button id="onboarding-exit" style="background: transparent; border: none; color: var(--text-muted, #999); font-size: 0.9rem; cursor: pointer; padding: 0; line-height: 1;" title="Exit tour" aria-label="Exit tour">✕</button>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.6rem; border-top: 1px solid var(--border-color, #ddd); padding-top: 0.45rem;">
-                    <span style="font-size: 0.7rem; color: var(--text-muted, #999);">${index + 1} of ${steps.length}</span>
-                    <div style="display: flex; gap: 0.35rem;">
-                        <button id="onboarding-skip" style="background: transparent; border: 1px solid var(--border-color, #ddd); color: var(--text-secondary, #555); padding: 0.2rem 0.55rem; border-radius: 6px; font-size: 0.72rem; cursor: pointer; font-weight: 600;">Skip</button>
-                        <button id="onboarding-next" style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); border: none; padding: 0.2rem 0.7rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-weight: 600;">
-                            ${index === steps.length - 1 ? 'Done' : 'Next'}
-                        </button>
-                    </div>
-                </div>
-            `;
-
-            repositionTooltip();
-            tooltip.style.opacity = '1';
-
-            // Wire action buttons
-            const exitBtn = document.getElementById('onboarding-exit');
-            if (exitBtn) {
-                exitBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    cleanUpTour();
-                    localStorage.setItem('ew_onboarding_complete', '1');
-                });
-            }
-
-            const skipBtn = document.getElementById('onboarding-skip');
-            if (skipBtn) {
-                skipBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    cleanUpTour();
-                    localStorage.setItem('ew_onboarding_complete', '1');
-                });
-            }
-
-            const nextBtn = document.getElementById('onboarding-next');
-            if (nextBtn) {
-                nextBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    currentStep++;
-                    showStep(currentStep);
-                });
-            }
-        }
-
-        function cleanUpTour() {
-            tooltip.remove();
-            window.removeEventListener('scroll', repositionTooltip);
-            window.removeEventListener('resize', repositionTooltip);
-            document.querySelectorAll('.onboarding-highlight').forEach(el => {
-                el.classList.remove('onboarding-highlight');
-                el.style.outline = '';
-                el.style.outlineOffset = '';
-            });
-        }
-
-        // Keep tooltip aligned during scroll or viewport resizing
-        window.addEventListener('scroll', repositionTooltip);
-        window.addEventListener('resize', repositionTooltip);
-
-        // Start tour after window load and brief settle to get correct DOM layout positions
-        window.addEventListener('load', () => {
-            setTimeout(() => showStep(0), 1000);
-        });
     })();
 
     // Clear notifications — defined globally so the button always works

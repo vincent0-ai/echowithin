@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 from pymongo.errors import DuplicateKeyError
-import datetime, secrets, hashlib
+import datetime, secrets, hashlib, time
 from security import limits
 import database
 from cachetools import TTLCache
@@ -319,10 +319,15 @@ def air_hockey():
 _SUDOKU_API_URL = 'https://sudoku-api.vercel.app/api/dosuku'
 _SUDOKU_CACHE = {}
 _SUDOKU_CACHE_TTL = 600
+_SUDOKU_CACHE_MAX = 6
 
 
-def _sudoku_count_solutions(grid, cap=2):
-    """Count completions of a partial grid, stopping early at cap."""
+def _sudoku_count_solutions(grid, cap=2, max_nodes=200000, deadline=None):
+    """Count completions of a partial grid, stopping early at cap.
+
+    Node- and time-budgeted: a pathological board is reported as ambiguous
+    instead of stalling the worker, and the grid is always restored.
+    """
     target = cap
 
     def _valid(g, r, c, n):
@@ -334,10 +339,19 @@ def _sudoku_count_solutions(grid, cap=2):
         return all(g[br + i][bc + j] != n for i in range(3) for j in range(3))
 
     count = 0
+    nodes = 0
+    aborted = False
 
     def _solve(pos=0):
-        nonlocal count
-        if count >= target:
+        nonlocal count, nodes, aborted
+        if count >= target or aborted:
+            return
+        nodes += 1
+        if nodes > max_nodes:
+            aborted = True
+            return
+        if deadline is not None and (nodes & 4095) == 0 and time.monotonic() > deadline:
+            aborted = True
             return
         while pos < 81 and grid[pos // 9][pos % 9]:
             pos += 1
@@ -350,11 +364,103 @@ def _sudoku_count_solutions(grid, cap=2):
                 grid[r][c] = n
                 _solve(pos + 1)
                 grid[r][c] = 0
-                if count >= target:
+                if count >= target or aborted:
                     return
 
     _solve()
-    return count
+    return target if aborted else count
+
+
+def _sudoku_norm_difficulty(label):
+    """Map upstream/sudoku vocabulary onto the three levels we offer."""
+    value = str(label or '').strip().lower()
+    if value in ('easy', 'beginner', 'kids', 'simple'):
+        return 'easy'
+    if value in ('hard', 'expert', 'evil', 'difficult'):
+        return 'hard'
+    if value in ('medium', 'moderate', 'intermediate'):
+        return 'medium'
+    return 'medium'
+
+
+def _sudoku_valid_board(puzzle, solution):
+    """True when `solution` completes a real sudoku and `puzzle` is a subset
+    of it with exactly one solution. Rejecting bad upstream boards keeps the
+    game honest: a wrong solution would mark correct digits as mistakes."""
+    try:
+        p = [[int(v) for v in row] for row in puzzle]
+        s = [[int(v) for v in row] for row in solution]
+    except (TypeError, ValueError):
+        return False
+    if len(p) != 9 or len(s) != 9:
+        return False
+    if any(len(row) != 9 for row in p + s):
+        return False
+    if any(not (0 <= v <= 9) for row in p for v in row):
+        return False
+    if any(not (1 <= v <= 9) for row in s for v in row):
+        return False
+    groups = []
+    for i in range(9):
+        groups.append(s[i])
+        groups.append([s[r][i] for r in range(9)])
+    for br in range(0, 9, 3):
+        for bc in range(0, 9, 3):
+            groups.append([s[br + i][bc + j] for i in range(3) for j in range(3)])
+    if any(sorted(g) != list(range(1, 10)) for g in groups):
+        return False
+    for r in range(9):
+        for c in range(9):
+            if p[r][c] and p[r][c] != s[r][c]:
+                return False
+    return _sudoku_count_solutions([row[:] for row in p], cap=2) == 1
+
+
+def _sudoku_take_cached(difficulty, now_ts):
+    """Pop one cached board for this difficulty; expired pools are dropped."""
+    pool = [(ts, b) for ts, b in _SUDOKU_CACHE.get(difficulty, [])
+            if now_ts - ts < _SUDOKU_CACHE_TTL]
+    _SUDOKU_CACHE[difficulty] = pool
+    if not pool:
+        return None
+    return pool.pop(0)[1]
+
+
+def _sudoku_store(board, now_ts):
+    pool = _SUDOKU_CACHE.setdefault(board['difficulty'], [])
+    pool.append((now_ts, board))
+    del pool[:-_SUDOKU_CACHE_MAX]
+
+
+def _sudoku_fetch_remote():
+    """Fetch a small batch from Dosuku and keep only verified boards.
+
+    Returns [] on any failure; callers then generate locally.
+    """
+    import urllib.request
+    import urllib.parse
+    import json as _json
+    try:
+        query = '{newboard(limit:4){grids{value solution difficulty}}}'
+        url = _SUDOKU_API_URL + '?query=' + urllib.parse.quote(query)
+        req = urllib.request.Request(url, headers={'User-Agent': 'EchoWithin/1.0'})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            payload = _json.loads(resp.read().decode('utf-8'))
+        grids = (payload.get('newboard') or {}).get('grids') or []
+    except Exception:
+        return []
+    boards = []
+    for entry in grids[:6]:
+        if not isinstance(entry, dict):
+            continue
+        if not _sudoku_valid_board(entry.get('value'), entry.get('solution')):
+            continue
+        boards.append({
+            'puzzle': [[int(v) for v in row] for row in entry['value']],
+            'solution': [[int(v) for v in row] for row in entry['solution']],
+            'difficulty': _sudoku_norm_difficulty(entry.get('difficulty')),
+        })
+    return boards
 
 
 def _sudoku_fallback_board(seed=None, difficulty='medium'):
@@ -396,13 +502,14 @@ def _sudoku_fallback_board(seed=None, difficulty='medium'):
     cells = [(r, c) for r in range(9) for c in range(9)]
     rng.shuffle(cells)
     holes = 0
+    deadline = time.monotonic() + 2.0
     for r, c in cells:
-        if holes >= target_holes:
+        if holes >= target_holes or time.monotonic() > deadline:
             break
         backup = grid[r][c]
         grid[r][c] = 0
         trial = [row[:] for row in grid]
-        if _sudoku_count_solutions(trial) == 1:
+        if _sudoku_count_solutions(trial, deadline=deadline) == 1:
             holes += 1
         else:
             grid[r][c] = backup
@@ -412,32 +519,26 @@ def _sudoku_fallback_board(seed=None, difficulty='medium'):
 @bp.route('/api/games/sudoku/new', methods=['GET'])
 @limits(calls=30, period=60)
 def api_sudoku_new():
-    """Fresh Sudoku board: free Dosuku API first, local generator fallback."""
-    import time
-    import urllib.request
-    import urllib.parse
-    import json as _json
+    """Fresh Sudoku board: verified Dosuku batch first, local generator fallback."""
     difficulty = (request.args.get('difficulty') or 'medium').strip().lower()
     if difficulty not in ('easy', 'medium', 'hard'):
         difficulty = 'medium'
     now_ts = time.time()
-    cached = _SUDOKU_CACHE.get(difficulty)
-    if cached and now_ts - cached[0] < _SUDOKU_CACHE_TTL:
-        return jsonify({'success': True, 'source': 'cache', **cached[1]})
-    try:
-        query = '{newboard(limit:1){grids{value solution difficulty}}}'
-        url = _SUDOKU_API_URL + '?query=' + urllib.parse.quote(query)
-        req = urllib.request.Request(url, headers={'User-Agent': 'EchoWithin/1.0'})
-        with urllib.request.urlopen(req, timeout=6) as resp:
-            payload = _json.loads(resp.read().decode('utf-8'))
-        grid = payload['newboard']['grids'][0]
-        board = {'puzzle': grid['value'], 'solution': grid['solution'],
-                 'difficulty': str(grid.get('difficulty') or difficulty).lower()}
-    except Exception:
-        board = _sudoku_fallback_board(seed=int(now_ts), difficulty=difficulty)
-        return jsonify({'success': True, 'source': 'local', **board})
-    _SUDOKU_CACHE[difficulty] = (now_ts, board)
-    return jsonify({'success': True, 'source': 'api', **board})
+    board = _sudoku_take_cached(difficulty, now_ts)
+    source = 'cache'
+    if board is None:
+        for candidate in _sudoku_fetch_remote():
+            if candidate['difficulty'] == difficulty and board is None:
+                board = candidate
+                source = 'api'
+            else:
+                _sudoku_store(candidate, now_ts)
+    if board is None:
+        board = _sudoku_fallback_board(seed=secrets.randbelow(2 ** 31), difficulty=difficulty)
+        source = 'local'
+    resp = jsonify({'success': True, 'source': source, **board})
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
 
 @bp.route('/games/create', methods=['GET', 'POST'])
 @login_required

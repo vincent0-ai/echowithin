@@ -33,7 +33,11 @@ auth_conf = db['auth']
 
 
 def _purge_guest_data_standalone(db, guest_id_str):
-    """Standalone database purge for an expired guest tour session."""
+    """Standalone database purge for an expired guest tour session.
+
+    Mirrors main.purge_guest_user_data: also removes demo-partner- and
+    bond-scoped tour records so no encrypted tour residue survives.
+    """
     from bson.objectid import ObjectId
     try:
         g_oid = ObjectId(guest_id_str)
@@ -44,15 +48,27 @@ def _purge_guest_data_standalone(db, guest_id_str):
     if not user_doc:
         return
 
-    # 1. Notes & shares
+    # 1. Notes, shares & version history
     db['personal_posts'].delete_many({'user_id': g_oid})
     db['note_shares'].delete_many({'$or': [{'owner_id': g_oid}, {'user_id': g_oid}]})
+    db['note_versions'].delete_many({'$or': [{'content_owner_id': g_oid}, {'editor_id': g_oid}]})
 
     # 2. Bonds & partner demo bot
     bonds = list(db['bonds'].find({'$or': [{'user_a_id': g_oid}, {'user_b_id': g_oid}]}))
+    partner_ids = []
     for b in bonds:
         p_id = b['user_b_id'] if b['user_a_id'] == g_oid else b['user_a_id']
-        db['users'].delete_one({'_id': p_id, 'is_demo_bot': True})
+        if db['users'].find_one({'_id': p_id, 'is_demo_bot': True}, {'_id': 1}):
+            partner_ids.append(p_id)
+            db['users'].delete_one({'_id': p_id, 'is_demo_bot': True})
+
+    bond_ids = [b['_id'] for b in bonds]
+    if bond_ids:
+        by_bond = {'bond_id': {'$in': bond_ids}}
+        for coll in ('bond_goals', 'bond_journal', 'bond_moods', 'bond_qotd', 'bond_habits',
+                     'bond_countdowns', 'bond_events', 'bond_album_photos', 'bond_album_music',
+                     'bond_bucketlist', 'bond_recommendations', 'bond_pulses'):
+            db[coll].delete_many(by_bond)
 
     db['bonds'].delete_many({'$or': [{'user_a_id': g_oid}, {'user_b_id': g_oid}]})
     db['bond_goals'].delete_many({'proposed_by': g_oid})
@@ -60,11 +76,39 @@ def _purge_guest_data_standalone(db, guest_id_str):
     db['bond_moods'].delete_many({'user_id': g_oid})
     db['bond_habits'].delete_many({'created_by': g_oid})
     db['bond_countdowns'].delete_many({'created_by': g_oid})
+    db['bond_events'].delete_many({'created_by': g_oid})
+    db['bond_album_photos'].delete_many({'uploaded_by': g_oid})
+    db['bond_bucketlist'].delete_many({'proposed_by': g_oid})
+    db['bond_recommendations'].delete_many({'recommended_by': g_oid})
+    db['bond_pulses'].delete_many({'user_id': g_oid})
 
-    # 3. Messages & Communities
-    db['direct_messages'].delete_many({'$or': [{'sender_id': g_oid}, {'recipient_id': g_oid}]})
-    db['dm_permissions'].delete_many({'$or': [{'requester_id': g_oid}, {'target_id': g_oid}]})
+    # 3. Messages & Communities (guest- and demo-partner-keyed)
+    db['direct_messages'].delete_many({'$or': [
+        {'sender_id': g_oid}, {'recipient_id': g_oid},
+        {'sender_id': {'$in': partner_ids}}, {'recipient_id': {'$in': partner_ids}},
+    ]})
+    db['dm_permissions'].delete_many({'$or': [
+        {'requester_id': g_oid}, {'target_id': g_oid},
+        {'requester_id': {'$in': partner_ids}}, {'target_id': {'$in': partner_ids}},
+    ]})
     db['community_memberships'].delete_many({'user_id': g_oid})
+
+    # Demo partner's own records (bot user doc already removed above)
+    for p_id in partner_ids:
+        db['personal_posts'].delete_many({'user_id': p_id})
+        db['note_shares'].delete_many({'$or': [{'owner_id': p_id}, {'user_id': p_id}]})
+        db['note_versions'].delete_many({'$or': [{'content_owner_id': p_id}, {'editor_id': p_id}]})
+
+    # Whisper sessions between guest/partner
+    w_or = [{'initiator_id': g_oid}, {'recipient_id': g_oid}]
+    if partner_ids:
+        w_or += [{'initiator_id': {'$in': partner_ids}}, {'recipient_id': {'$in': partner_ids}}]
+    w_sessions = list(db['whisper_sessions'].find({'$or': w_or}, {'_id': 1}))
+    w_ids = [s['_id'] for s in w_sessions]
+    if w_ids:
+        db['whisper_messages'].delete_many({'session_id': {'$in': w_ids}})
+        db['whisper_sessions'].delete_many({'_id': {'$in': w_ids}})
+    db['whisper_messages'].delete_many({'sender_id': guest_id_str})
 
     # 4. User record
     db['users'].delete_one({'_id': g_oid})

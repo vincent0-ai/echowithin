@@ -115,7 +115,8 @@
         <div id="pending-notes-container"></div>
 
         <!-- Share promo (hidden by default, shown via JS only for first-time users) -->
-        <div class="share-promo-card" id="share-promo-card" data-promo-mode="permanent" style="display: none;">
+        {% if not (current_user.is_authenticated and current_user.is_guest) %}
+        <div class="share-promo-card" id="share-promo-card" data-promo-mode="temporary" style="display: none;">
             <div class="share-promo-icon">🎁</div>
             <div class="share-promo-body">
                 <h4 id="share-promo-title">Surprise someone special!</h4>
@@ -128,71 +129,15 @@
                 <i class="fas fa-times"></i>
             </button>
         </div>
-
-        {% if current_user.is_authenticated and current_user.is_guest %}
-        <div class="floating-tour-tooltip" id="tour-tooltip-notes" style="position: relative; margin-bottom: 1rem; background: var(--surface-bg, #ffffff); border: 1px solid var(--primary-color, #3e2217); border-radius: 12px; padding: 1rem 1.2rem; box-shadow: 0 4px 18px rgba(0,0,0,0.08); z-index: 100;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-dark-color, #222); font-weight: 700;">Notes: Your Private Encrypted Space</h4>
-                    <span style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 600;">Guest Session</span>
-                </div>
-                <button type="button" onclick="dismissTourTooltip('tour-tooltip-notes')" style="background: transparent; border: none; font-size: 1.1rem; color: var(--text-muted, #999); cursor: pointer; padding: 0;" title="Dismiss" aria-label="Dismiss">&times;</button>
-            </div>
-            <p style="margin: 0 0 0.6rem 0; font-size: 0.84rem; color: var(--text-secondary, #555); line-height: 1.45;">
-                Try writing a note below — use <code style="font-size: 0.78rem; background: var(--card-bg, #f5f5f5); padding: 0.1rem 0.3rem; border-radius: 3px;">**bold**</code> or <code style="font-size: 0.78rem; background: var(--card-bg, #f5f5f5); padding: 0.1rem 0.3rem; border-radius: 3px;"># heading</code> for formatting. Your pre-seeded notes show what's possible.
-            </p>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; font-size: 0.78rem; background: var(--card-bg, #fafafa); padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--border-color, #eee);">
-                <div><strong>Try Writing:</strong> Use the form below to create your first note.</div>
-                <div><strong>Try Locking:</strong> Click the lock icon on any note to set a PIN.</div>
-                <div><strong>Try Editing:</strong> Click the edit icon to modify a note with markdown.</div>
-                <div><strong>Export:</strong> Download any note as plain text or Word document.</div>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap;">
-                <button type="button" onclick="openInteractiveShareLesson()" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); border: 1px solid var(--primary-color, #3e2217); border-radius: 6px; font-size: 0.78rem; padding: 0.35rem 0.85rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem; box-shadow: 0 2px 6px rgba(62,34,23,0.15);">
-                    How Sharing Works
-                </button>
-                <button type="button" onclick="dismissTourTooltip('tour-tooltip-notes')" class="btn btn-sm" style="background: transparent; color: var(--text-dark-color, #222); border: 1px solid var(--border-color, #ccc); border-radius: 6px; font-size: 0.75rem; padding: 0.35rem 0.75rem; font-weight: 600;">Got it</button>
-            </div>
-        </div>
-        <!-- Explore Next: Bonds -->
-        <div id="explore-next-bonds" style="display: none; position: relative; margin-bottom: 1rem; background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #eee); border-radius: 12px; padding: 0.85rem 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-                <div>
-                    <p style="margin: 0 0 0.15rem 0; font-size: 0.82rem; color: var(--text-secondary, #555);">You've explored Notes.</p>
-                    <p style="margin: 0; font-size: 0.88rem; color: var(--text-dark-color, #333); font-weight: 600;">Next: Meet Maya, your demo bond partner</p>
-                </div>
-                <a href="/bonds" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); border-radius: 6px; font-size: 0.78rem; padding: 0.35rem 0.85rem; font-weight: 600; text-decoration: none; white-space: nowrap;">Go to Bonds</a>
-            </div>
-        </div>
-        <script>
-            function dismissTourTooltip(id) {
-                const el = document.getElementById(id);
-                if (el) el.style.display = 'none';
-                try { localStorage.setItem('dismissed_' + id, '1'); } catch(e) {}
-                if (id === 'tour-tooltip-notes') {
-                    var next = document.getElementById('explore-next-bonds');
-                    if (next) next.style.display = 'block';
-                }
-            }
-            (function() {
-                try {
-                    if (localStorage.getItem('dismissed_tour-tooltip-notes') === '1') {
-                        var el = document.getElementById('tour-tooltip-notes');
-                        if (el) el.style.display = 'none';
-                        var next = document.getElementById('explore-next-bonds');
-                        if (next) next.style.display = 'block';
-                    }
-                } catch(e) {}
-            })();
-        </script>
         {% endif %}
 
-        <!-- Feature Tips Card for new users (hidden for guests who already have the tour tooltip) -->
+        <!-- Feature Tips Card for new users (guest tour tips are rendered by tour.js) -->
         <div class="feature-tips-card" id="feature-tips-card" {% if current_user.is_authenticated and current_user.is_guest %}style="display: none;"{% endif %}>
             <div class="feature-tips-header">
                 <span>💡</span>
                 <strong>Quick Tips</strong>
-                <button class="feature-tips-dismiss" id="dismiss-feature-tips" aria-label="Dismiss">&times;</button>
+                <a href="{{ url_for('notes.personal_space', tour=1) }}" id="replay-tour-link" style="margin-left: auto; font-size: 0.72rem; font-weight: 600; color: var(--primary-color); text-decoration: underline;">Replay tour</a>
+                <button class="feature-tips-dismiss" id="dismiss-feature-tips" aria-label="Dismiss" style="margin-left: 0.35rem;">&times;</button>
             </div>
             <div class="feature-tips-body">
                 <div class="feature-tip-row">
@@ -1119,7 +1064,8 @@
         csrfToken: '{{ csrf_token() }}',
         userId: '{{ current_user.id }}',
         isPremium: {{ 'true' if user_is_premium else 'false' }},
-        isGuest: {{ 'true' if current_user.is_authenticated and current_user.is_guest else 'false' }}
+        isGuest: {{ 'true' if current_user.is_authenticated and current_user.is_guest else 'false' }},
+        isNewUser: {{ 'true' if total_notes_count < 5 else 'false' }}
     };
 
     // --- On-Demand Math & Markdown Loader ---
@@ -4447,6 +4393,7 @@
         promoDismiss.addEventListener('click', () => {
             const promoCard = document.getElementById('share-promo-card');
             if (promoCard) promoCard.style.display = 'none';
+            try { localStorage.setItem('ew_share_promo_dismissed', '1'); } catch (e) { }
         });
     }
 

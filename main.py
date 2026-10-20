@@ -1403,7 +1403,12 @@ def record_match_result(game, room_id, players, winner_id, score=None, metadata=
     return match_doc
 
 def purge_guest_user_data(guest_id_str):
-    """Purge all ephemeral data for a guest tour session."""
+    """Purge all ephemeral data for a guest tour session.
+
+    Covers guest-keyed records AND demo-partner/bond-scoped records seeded by
+    the tour (goal/journal/habit/DMs are created under the partner's id), so no
+    encrypted tour residue survives in the database.
+    """
     try:
         g_oid = safe_object_id(guest_id_str)
         if not g_oid:
@@ -1420,16 +1425,36 @@ def purge_guest_user_data(guest_id_str):
             except Exception:
                 pass
         
-        # 1. Notes & shares
+        # 1. Notes, shares & version history
         personal_posts_conf.delete_many({'user_id': g_oid})
         note_shares_conf.delete_many({'$or': [{'owner_id': g_oid}, {'user_id': g_oid}]})
+        note_versions_conf.delete_many({'$or': [{'content_owner_id': g_oid}, {'editor_id': g_oid}]})
         
-        # 2. Bonds & partner data
+        # 2. Bonds & partner data (demo partner is ephemeral too)
         bonds = list(bonds_conf.find({'$or': [{'user_a_id': g_oid}, {'user_b_id': g_oid}]}))
+        partner_ids = []
         for b in bonds:
             p_id = b['user_b_id'] if b['user_a_id'] == g_oid else b['user_a_id']
-            users_conf.delete_one({'_id': p_id, 'is_demo_bot': True})
+            if users_conf.find_one({'_id': p_id, 'is_demo_bot': True}, {'_id': 1}):
+                partner_ids.append(p_id)
+                users_conf.delete_one({'_id': p_id, 'is_demo_bot': True})
             user_loader_cache.pop(f"user:{str(p_id)}", None)
+
+        bond_ids = [b['_id'] for b in bonds]
+        if bond_ids:
+            by_bond = {'bond_id': {'$in': bond_ids}}
+            bond_goals_conf.delete_many(by_bond)
+            bond_journal_conf.delete_many(by_bond)
+            bond_moods_conf.delete_many(by_bond)
+            bond_qotd_conf.delete_many(by_bond)
+            bond_habits_conf.delete_many(by_bond)
+            bond_countdowns_conf.delete_many(by_bond)
+            bond_events_conf.delete_many(by_bond)
+            bond_album_photos_conf.delete_many(by_bond)
+            bond_album_music_conf.delete_many(by_bond)
+            bond_bucketlist_conf.delete_many(by_bond)
+            bond_recommendations_conf.delete_many(by_bond)
+            bond_pulses_conf.delete_many(by_bond)
 
         bonds_conf.delete_many({'$or': [{'user_a_id': g_oid}, {'user_b_id': g_oid}]})
         bond_goals_conf.delete_many({'proposed_by': g_oid})
@@ -1443,10 +1468,32 @@ def purge_guest_user_data(guest_id_str):
         bond_recommendations_conf.delete_many({'recommended_by': g_oid})
         bond_pulses_conf.delete_many({'user_id': g_oid})
 
-        # 3. Messages & Communities
-        direct_messages_conf.delete_many({'$or': [{'sender_id': g_oid}, {'recipient_id': g_oid}]})
-        dm_permissions_conf.delete_many({'$or': [{'requester_id': g_oid}, {'target_id': g_oid}]})
+        # 3. Messages & Communities (guest- and demo-partner-keyed)
+        ids_or = [{'sender_id': g_oid}, {'recipient_id': g_oid},
+                  {'sender_id': {'$in': partner_ids}}, {'recipient_id': {'$in': partner_ids}}]
+        direct_messages_conf.delete_many({'$or': ids_or})
+        dm_permissions_conf.delete_many({'$or': [
+            {'requester_id': g_oid}, {'target_id': g_oid},
+            {'requester_id': {'$in': partner_ids}}, {'target_id': {'$in': partner_ids}},
+        ]})
         community_memberships_conf.delete_many({'user_id': g_oid})
+
+        # Demo partner's own records (bot user doc already removed above)
+        for p_id in partner_ids:
+            personal_posts_conf.delete_many({'user_id': p_id})
+            note_shares_conf.delete_many({'$or': [{'owner_id': p_id}, {'user_id': p_id}]})
+            note_versions_conf.delete_many({'$or': [{'content_owner_id': p_id}, {'editor_id': p_id}]})
+
+        # Whisper (self-destructing chat) sessions between guest/partner
+        w_or = [{'initiator_id': g_oid}, {'recipient_id': g_oid}]
+        if partner_ids:
+            w_or += [{'initiator_id': {'$in': partner_ids}}, {'recipient_id': {'$in': partner_ids}}]
+        w_sessions = list(whisper_sessions_conf.find({'$or': w_or}, {'_id': 1}))
+        w_ids = [s['_id'] for s in w_sessions]
+        if w_ids:
+            whisper_messages_conf.delete_many({'session_id': {'$in': w_ids}})
+            whisper_sessions_conf.delete_many({'_id': {'$in': w_ids}})
+        whisper_messages_conf.delete_many({'sender_id': guest_id_str})
 
         # 4. User record
         users_conf.delete_one({'_id': g_oid})
@@ -4134,6 +4181,21 @@ def handle_cancel_whack_matchmaking(data=None, *args, **kwargs):
 
 # --- Sudoku Together Co-op Handlers (shared grid, mirrors Team Crossword) ---
 active_sudoku_rooms = {}
+SUDOKU_ROOM_TTL_HOURS = 6
+
+
+def _prune_sudoku_rooms():
+    """Drop rooms nobody has touched for a long while (crashed tabs, lost links)."""
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=SUDOKU_ROOM_TTL_HOURS)
+    for room_id, info in list(active_sudoku_rooms.items()):
+        touched = info.get('touched_at') or info.get('created_at')
+        try:
+            stale = bool(touched) and touched < cutoff
+        except TypeError:
+            stale = False  # mixed naive/aware timestamps: leave the room alone
+        if stale:
+            active_sudoku_rooms.pop(room_id, None)
+
 
 @socketio.on('join_sudoku_room')
 def handle_join_sudoku_room(data=None, *args, **kwargs):
@@ -4148,88 +4210,104 @@ def handle_join_sudoku_room(data=None, *args, **kwargs):
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Partner'
     user_uid = str(current_user.id) if current_user.is_authenticated else None
-    join_room(room_id)
+    client_token = str(data.get('client_token') or '')[:96]
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    _prune_sudoku_rooms()
     room_info = active_sudoku_rooms.get(room_id)
-    if not _room_creation_allowed(room_info):
-        return
     if not room_info:
+        if not _room_creation_allowed(room_info):
+            emit('sudoku_room_error', {'message': 'Log in to start a room.'}, room=sid)
+            return
         room_info = {
             'host_sid': sid, 'host_name': user_name, 'host_user_id': user_uid,
+            'host_token': client_token or None,
             'guest_sid': None, 'guest_name': None, 'guest_user_id': None,
+            'guest_token': None,
             'grid': [0] * 81, 'puzzle': None, 'restarter_sid': None,
             'bond_id': data.get('bond_id'),
-            'created_at': datetime.datetime.now(datetime.timezone.utc),
+            'created_at': now_utc, 'touched_at': now_utc,
         }
         active_sudoku_rooms[room_id] = room_info
+        join_room(room_id)
         emit('sudoku_room_joined', {'room_id': room_id, 'is_host': True, 'grid': room_info['grid'],
                                     'partner_name': None, 'has_puzzle': False}, room=sid)
-    elif room_info.get('guest_sid') == sid:
-        emit('sudoku_room_joined', {'room_id': room_id, 'is_host': False,
-                                    'grid': room_info['grid'], 'has_puzzle': bool(room_info.get('puzzle')),
-                                    'partner_name': room_info.get('host_name')}, room=sid)
-        if room_info.get('puzzle'):
-            emit('sudoku_puzzle', room_info['puzzle'], room=sid)
-    elif room_info.get('guest_sid') is not None:
-        emit('sudoku_room_error', {'message': 'Room is already full.'}, room=sid)
-    else:
+        return
+    # A stable per-room token reclaims a seat after a reconnect, which changes
+    # the sid; without it a refreshed guest would look like a third player.
+    seat = None
+    if client_token and client_token == room_info.get('host_token'):
+        seat = 'host'
+    elif client_token and client_token == room_info.get('guest_token'):
+        seat = 'guest'
+    if seat is None:
         seat = _seat_status(room_info, sid, user_uid)
-        if seat == 'full':
-            emit('sudoku_room_error', {'message': 'Room is already full.'}, room=sid)
-            return
-        if seat == 'host' and room_info.get('host_sid') != sid:
-            room_info['host_sid'] = sid
-        if seat in ('guest', 'new_guest'):
-            if seat == 'new_guest' or room_info.get('guest_sid') != sid:
-                room_info['guest_sid'] = sid
-                room_info['guest_name'] = user_name
-                room_info['guest_user_id'] = user_uid
-        emit('sudoku_room_joined', {'room_id': room_id, 'is_host': seat == 'host',
-                                    'grid': room_info['grid'], 'has_puzzle': bool(room_info.get('puzzle')),
-                                    'partner_name': room_info['host_name'] if sid != room_info.get('host_sid') else room_info.get('guest_name')}, room=sid)
-        if room_info.get('host_sid') and sid != room_info.get('host_sid'):
-            emit('sudoku_room_joined', {'room_id': room_id, 'is_host': True, 'grid': room_info['grid'],
+    if seat == 'full':
+        emit('sudoku_room_error', {'message': 'Room is already full.'}, room=sid)
+        return
+    room_info['touched_at'] = now_utc
+    if seat == 'host':
+        room_info['host_sid'] = sid
+        room_info['host_name'] = user_name
+        room_info['host_user_id'] = user_uid
+        if client_token:
+            room_info['host_token'] = client_token
+    else:
+        is_new_partner = room_info.get('guest_sid') != sid
+        room_info['guest_sid'] = sid
+        room_info['guest_name'] = user_name
+        room_info['guest_user_id'] = user_uid
+        if client_token:
+            room_info['guest_token'] = client_token
+        if is_new_partner and room_info.get('host_sid'):
+            emit('sudoku_room_joined', {'room_id': room_id, 'is_host': True,
+                                        'grid': room_info['grid'],
                                         'has_puzzle': bool(room_info.get('puzzle')),
                                         'partner_name': user_name}, room=room_info['host_sid'])
-        # Late joiner sync: hand them the room's shared puzzle directly.
-        if room_info.get('puzzle'):
-            emit('sudoku_puzzle', room_info['puzzle'], room=sid)
+    join_room(room_id)
+    partner_name = room_info.get('guest_name') if seat == 'host' else room_info.get('host_name')
+    emit('sudoku_room_joined', {'room_id': room_id, 'is_host': seat == 'host',
+                                'grid': room_info['grid'],
+                                'has_puzzle': bool(room_info.get('puzzle')),
+                                'partner_name': partner_name}, room=sid)
+    if room_info.get('puzzle'):
+        emit('sudoku_puzzle', room_info['puzzle'], room=sid)
 
 @socketio.on('sudoku_puzzle_share')
 def handle_sudoku_puzzle_share(data=None, *args, **kwargs):
-    """First share wins: one shared puzzle per room so partners never diverge."""
+    """First share wins: one shared puzzle per room so partners never diverge.
+
+    The board must be a real sudoku with exactly one solution — a bogus
+    solution would mark a partner's correct digits as mistakes.
+    """
     if not isinstance(data, dict):
         return
     room_id = data.get('room_id')
     room_info = active_sudoku_rooms.get(room_id)
-    if not room_info:
+    if not room_info or not _duel_member(room_info, request.sid):
         return
-    sid = request.sid
-    if sid != room_info.get('host_sid') and sid != room_info.get('guest_sid'):
+    if room_info.get('puzzle') is not None:
         return
-    try:
-        puzzle = data.get('puzzle')
-        solution = data.get('solution')
-        if (not isinstance(puzzle, list) or len(puzzle) != 9
-                or not isinstance(solution, list) or len(solution) != 9):
-            return
-        flat_p = [int(x) for row in puzzle for x in (row if isinstance(row, list) else [])]
-        flat_s = [int(x) for row in solution for x in (row if isinstance(row, list) else [])]
-        if len(flat_p) != 81 or len(flat_s) != 81:
-            return
-        if any(not (0 <= v <= 9) for v in flat_p + flat_s):
-            return
-    except (ValueError, TypeError):
+    from blueprints.game import _sudoku_valid_board
+    puzzle = data.get('puzzle')
+    solution = data.get('solution')
+    if not _sudoku_valid_board(puzzle, solution):
         return
-    if room_info.get('puzzle') is not None and sid != room_info.get('restarter_sid'):
-        return
+    flat_p = [int(x) for row in puzzle for x in row]
+    flat_s = [int(x) for row in solution for x in row]
     room_info['puzzle'] = {
         'puzzle': [flat_p[i * 9:(i + 1) * 9] for i in range(9)],
         'solution': [flat_s[i * 9:(i + 1) * 9] for i in range(9)],
-        'difficulty': str(data.get('difficulty') or 'medium')[:16],
+        'difficulty': _sudoku_normalized_difficulty(data.get('difficulty')),
         'source': 'partner',
     }
     room_info['grid'] = [0] * 81
+    room_info['touched_at'] = datetime.datetime.now(datetime.timezone.utc)
     emit('sudoku_puzzle', room_info['puzzle'], room=room_id, include_self=False)
+
+
+def _sudoku_normalized_difficulty(value):
+    label = str(value or 'medium').strip().lower()
+    return label if label in ('easy', 'medium', 'hard') else 'medium'
 
 @socketio.on('sudoku_cell_update')
 def handle_sudoku_cell_update(data=None, *args, **kwargs):
@@ -4242,10 +4320,21 @@ def handle_sudoku_cell_update(data=None, *args, **kwargs):
         return
     if not (0 <= r < 9 and 0 <= c < 9 and 0 <= v <= 9):
         return
-    if room_id in active_sudoku_rooms:
-        active_sudoku_rooms[room_id]['grid'][r * 9 + c] = v
-    if room_id:
-        emit('sudoku_cell_update', {'r': r, 'c': c, 'v': v}, room=room_id, include_self=False)
+    room_info = active_sudoku_rooms.get(room_id)
+    if not room_info or not _duel_member(room_info, request.sid):
+        return
+    # Only accept edits on playable cells, and only the correct digit: the
+    # sender keeps wrong taps local, so a relayed write must be a real move.
+    shared = room_info.get('puzzle')
+    if not shared:
+        return
+    if shared['puzzle'][r][c] != 0:
+        return
+    if v != 0 and v != shared['solution'][r][c]:
+        return
+    room_info['grid'][r * 9 + c] = v
+    room_info['touched_at'] = datetime.datetime.now(datetime.timezone.utc)
+    emit('sudoku_cell_update', {'r': r, 'c': c, 'v': v}, room=room_id, include_self=False)
 
 @socketio.on('sudoku_cursor_move')
 def handle_sudoku_cursor_move(data=None, *args, **kwargs):
@@ -4256,7 +4345,8 @@ def handle_sudoku_cursor_move(data=None, *args, **kwargs):
         r, c = int(data.get('r', -1)), int(data.get('c', -1))
     except (ValueError, TypeError):
         return
-    if room_id and 0 <= r < 9 and 0 <= c < 9:
+    room_info = active_sudoku_rooms.get(room_id)
+    if room_info and _duel_member(room_info, request.sid) and 0 <= r < 9 and 0 <= c < 9:
         emit('sudoku_cursor_move', {'r': r, 'c': c}, room=room_id, include_self=False)
 
 @socketio.on('sudoku_restart')
@@ -4264,21 +4354,36 @@ def handle_sudoku_restart(data=None, *args, **kwargs):
     if not isinstance(data, dict):
         return
     room_info = active_sudoku_rooms.get(data.get('room_id'))
-    if not room_info:
+    if not room_info or not _duel_member(room_info, request.sid):
         return
-    if room_info.get('guest_sid') and room_info.get('host_sid') != request.sid:
+    if room_info.get('host_sid') != request.sid:
         return
     room_info['grid'] = [0] * 81
     room_info['puzzle'] = None
     room_info['restarter_sid'] = request.sid
+    room_info['touched_at'] = datetime.datetime.now(datetime.timezone.utc)
     emit('sudoku_restarted', {'restarter': request.sid}, room=data.get('room_id'))
 
 @socketio.on('sudoku_solved')
 def handle_sudoku_solved(data=None, *args, **kwargs):
     if not isinstance(data, dict):
         return
-    if data.get('room_id'):
-        emit('sudoku_solved', {}, room=data.get('room_id'), include_self=False)
+    room_info = active_sudoku_rooms.get(data.get('room_id'))
+    if not room_info or not _duel_member(room_info, request.sid):
+        return
+    shared = room_info.get('puzzle')
+    if not shared:
+        return
+    # The room grid is the shared truth; only announce a genuinely finished board.
+    grid = room_info.get('grid') or []
+    solution = shared.get('solution') or []
+    if len(grid) != 81 or len(solution) != 9:
+        return
+    for r in range(9):
+        for c in range(9):
+            if grid[r * 9 + c] != solution[r][c]:
+                return
+    emit('sudoku_solved', {}, room=data.get('room_id'), include_self=False)
 
 @socketio.on('leave_sudoku_room')
 def handle_leave_sudoku_room(data=None, *args, **kwargs):
@@ -4291,9 +4396,37 @@ def handle_leave_sudoku_room(data=None, *args, **kwargs):
     except Exception:
         pass
     room_info = active_sudoku_rooms.get(room_id)
-    if room_info and (room_info.get('host_sid') == sid or room_info.get('guest_sid') == sid):
+    if not room_info:
+        return
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    if room_info.get('host_sid') == sid:
+        guest_sid = room_info.get('guest_sid')
+        if not guest_sid:
+            active_sudoku_rooms.pop(room_id, None)
+            return
+        # Promote the remaining player instead of deleting the room, otherwise
+        # their writes would be rejected and the shared board would be gone.
+        room_info['host_sid'] = guest_sid
+        room_info['host_name'] = room_info.get('guest_name') or 'Host'
+        room_info['host_user_id'] = room_info.get('guest_user_id')
+        room_info['host_token'] = room_info.get('guest_token')
+        room_info['guest_sid'] = None
+        room_info['guest_name'] = None
+        room_info['guest_user_id'] = None
+        room_info['guest_token'] = None
+        room_info['touched_at'] = now_utc
         emit('sudoku_partner_left', {'room_id': room_id, 'reason': 'left'}, room=room_id)
-        active_sudoku_rooms.pop(room_id, None)
+        emit('sudoku_room_joined', {'room_id': room_id, 'is_host': True,
+                                    'grid': room_info['grid'],
+                                    'has_puzzle': bool(room_info.get('puzzle')),
+                                    'partner_name': None}, room=guest_sid)
+    elif room_info.get('guest_sid') == sid:
+        room_info['guest_sid'] = None
+        room_info['guest_name'] = None
+        room_info['guest_user_id'] = None
+        room_info['guest_token'] = None
+        room_info['touched_at'] = now_utc
+        emit('sudoku_partner_left', {'room_id': room_id, 'reason': 'left'}, room=room_id)
 
 
 # --- Air Hockey 1v1 Handlers (host-authoritative relay, mirrors Pong) ---

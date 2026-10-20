@@ -5,8 +5,9 @@
     mode: 'solo', puzzle: null, solution: null, grid: new Array(81).fill(0),
     givens: new Array(81).fill(false), selected: -1, mistakes: 0, over: false,
     seconds: 0, timerId: null, difficulty: 'medium', source: '',
-    roomId: null, partnerCursor: -1, guestToken: null,
-    pendingValue: 0, wrongIdx: -1, wrongVal: 0, wrongTimer: null
+    roomId: null, partnerCursor: -1, guestToken: null, isHost: true,
+    wrongCells: {}, hasShared: false, roomGrid: null, seatToken: null,
+    entries: 0
   };
   var gridEl = document.getElementById('sudoku-grid');
   var padEl = document.getElementById('sudoku-pad');
@@ -27,34 +28,21 @@
       gridEl.appendChild(d); cells.push(d);
     })(i);
   }
-  var padBtns = [];
   for (var n = 1; n <= 9; n++) {
     (function (v) {
       var b = document.createElement('button');
       b.type = 'button'; b.textContent = v; b.dataset.value = v;
       b.addEventListener('click', function () { padTap(v); });
-      padEl.appendChild(b); padBtns.push(b);
+      padEl.appendChild(b);
     })(n);
   }
 
-  function paintPad() {
-    for (var i = 0; i < padBtns.length; i++) {
-      var on = state.pendingValue === parseInt(padBtns[i].dataset.value, 10);
-      padBtns[i].classList.toggle('active', on);
-      padBtns[i].setAttribute('aria-pressed', on ? 'true' : 'false');
-    }
-  }
-
-  // Number pad: works with a selected cell AND standalone (number-first paint mode).
+  // Two-step input: tap a cell to select it, then tap a digit. The pad never
+  // stays armed, so exploring the board can't drop numbers by accident.
   function padTap(v) {
     if (state.over) return;
-    if (state.selected >= 0 && !state.givens[state.selected]) {
-      enterNumber(v);
-      state.pendingValue = v; paintPad();
-    } else {
-      state.pendingValue = (state.pendingValue === v) ? 0 : v;
-      paintPad();
-    }
+    if (state.selected < 0 || state.givens[state.selected]) return;
+    enterNumber(v);
   }
 
   function fmt(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
@@ -77,30 +65,34 @@
       }
       return false;
     }
-    // Count completions, stopping early at 2. Operates on a copy.
-    function countSolutions(board) {
+    // Count completions, stopping early at 2 and at the shared deadline so a
+    // slow phone never freezes on a fallback board. Aborted => treat as
+    // ambiguous and keep the given cell.
+    function countSolutions(board, deadline) {
       var bd = board.map(function (row) { return row.slice(); });
-      var count = 0;
+      var count = 0, nodes = 0, aborted = false;
       function solve(pos) {
-        if (count >= 2) return;
+        if (count >= 2 || aborted) return;
+        nodes += 1;
+        if ((nodes & 511) === 0 && Date.now() > deadline) { aborted = true; return; }
         while (pos < 81 && bd[Math.floor(pos / 9)][pos % 9]) pos++;
         if (pos === 81) { count++; return; }
         var r = Math.floor(pos / 9), c = pos % 9;
         for (var n = 1; n <= 9; n++) {
           if (valid(bd, r, c, n)) {
             bd[r][c] = n; solve(pos + 1); bd[r][c] = 0;
-            if (count >= 2) return;
+            if (count >= 2 || aborted) return;
           }
         }
       }
       solve(0);
-      return count;
+      return aborted ? 2 : count;
     }
     fill(0);
     // Greedy dig with a time budget: keep a hole only while the board stays
     // uniquely solvable. Fewer holes just means an easier (but always fair) board.
     var target = state.difficulty === 'easy' ? 36 : (state.difficulty === 'hard' ? 50 : 44);
-    var deadline = Date.now() + 1500;
+    var deadline = Date.now() + 1200;
     var order = Array.from({ length: 81 }, (_, i) => i).sort(() => rng() - 0.5);
     var puzzle = g.map(r => r.slice());
     var holes = 0;
@@ -109,20 +101,41 @@
       var i = order[q], rr = Math.floor(i / 9), cc = i % 9;
       var backup = puzzle[rr][cc];
       puzzle[rr][cc] = 0;
-      if (countSolutions(puzzle) === 1) holes++;
+      if (countSolutions(puzzle, deadline) === 1) holes++;
       else puzzle[rr][cc] = backup;
     }
     return { puzzle: puzzle, solution: g, difficulty: state.difficulty };
   }
 
+  function usableBoard(data) {
+    if (!data || !Array.isArray(data.puzzle) || !Array.isArray(data.solution)) return false;
+    if (data.puzzle.length !== 9 || data.solution.length !== 9) return false;
+    for (var r = 0; r < 9; r++) {
+      if (!Array.isArray(data.puzzle[r]) || data.puzzle[r].length !== 9) return false;
+      if (!Array.isArray(data.solution[r]) || data.solution[r].length !== 9) return false;
+    }
+    return true;
+  }
+
+  var loadSeq = 0;
   async function loadPuzzle() {
+    var seq = ++loadSeq;
     setStatus('Loading…');
     var data = null;
+    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 12000) : null;
     try {
-      var res = await fetch('/api/games/sudoku/new?difficulty=' + encodeURIComponent(state.difficulty));
+      var res = await fetch('/api/games/sudoku/new?difficulty=' + encodeURIComponent(state.difficulty),
+        ctrl ? { signal: ctrl.signal, cache: 'no-store' } : { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       var payload = await res.json();
-      if (payload && payload.success && payload.puzzle) data = payload;
+      if (payload && payload.success && usableBoard(payload)) data = payload;
     } catch (e) { data = null; }
+    if (timer) clearTimeout(timer);
+    // Ignore stale responses (rapid New Puzzle taps) and never stomp a board
+    // the partner just shared with us.
+    if (seq !== loadSeq) return;
+    if (state.mode === 'coop' && state.hasShared) return;
     if (!data) {
       var fb = localFallback(Date.now() % 2147483647);
       data = { puzzle: fb.puzzle, solution: fb.solution, difficulty: fb.difficulty, source: 'local' };
@@ -135,9 +148,33 @@
     }
   }
 
+  function sameBoard(a, b) {
+    if (!a || !b) return false;
+    for (var r = 0; r < 9; r++) for (var c = 0; c < 9; c++) {
+      if (((a[r] && a[r][c]) || 0) !== ((b[r] && b[r][c]) || 0)) return false;
+    }
+    return true;
+  }
+
+  // Restore the room's entries (late join or reconnect). The room is
+  // authoritative for every non-given cell, including cleared ones.
+  function mergeRoomGrid() {
+    if (!state.roomGrid) return;
+    for (var i = 0; i < 81; i++) {
+      if (state.givens[i]) continue;
+      var v = state.roomGrid[i] || 0;
+      state.grid[i] = v;
+      if (v) delete state.wrongCells[i];
+    }
+    state.roomGrid = null;
+    syncMistakes();
+    render();
+  }
+
   function applyPuzzle(data, fromShare) {
     state.puzzle = data.puzzle; state.solution = data.solution;
-    state.difficulty = (data.difficulty || state.difficulty).toLowerCase();
+    var requested = String(data.difficulty || '').toLowerCase();
+    if (requested === 'easy' || requested === 'medium' || requested === 'hard') state.difficulty = requested;
     state.source = data.source || '';
     state.grid = []; state.givens = [];
     for (var r = 0; r < 9; r++) for (var c = 0; c < 9; c++) {
@@ -145,23 +182,23 @@
       state.grid.push(v); state.givens.push(v !== 0);
     }
     state.selected = -1; state.mistakes = 0; state.over = false; state.seconds = 0;
-    state.pendingValue = 0; state.wrongIdx = -1; state.partnerCursor = -1;
-    if (state.wrongTimer) { clearTimeout(state.wrongTimer); state.wrongTimer = null; }
-    paintPad();
+    state.wrongCells = {}; state.partnerCursor = -1; state.entries = 0;
     document.getElementById('sudoku-mistakes').textContent = '0';
     document.getElementById('sudoku-diff-badge').textContent = state.difficulty.charAt(0).toUpperCase() + state.difficulty.slice(1);
     var diffSel = document.getElementById('sudoku-diff-select');
     if (diffSel) diffSel.value = state.difficulty;
-    hideResult(); render(); startTimer();
-    setStatus('Ready.');
+    hideResult(); render();
+    if (fromShare) mergeRoomGrid();
+    startTimer();
+    setStatus(fromShare ? 'Partner board.' : 'Ready.');
   }
 
   function render() {
     for (var i = 0; i < 81; i++) {
       var el = cells[i], v = state.grid[i];
-      var showWrong = (i === state.wrongIdx);
-      el.textContent = showWrong ? state.wrongVal : (v === 0 ? '' : v);
-      el.className = 'sudoku-cell' + (state.givens[i] ? ' given' : (showWrong ? ' error' : (v === 0 ? '' : ' entry')));
+      var wrong = state.wrongCells[i];
+      el.textContent = wrong ? wrong : (v === 0 ? '' : v);
+      el.className = 'sudoku-cell' + (state.givens[i] ? ' given' : (wrong ? ' error' : (v === 0 ? '' : ' entry')));
       if (i === state.selected) el.classList.add('selected');
       if (i === state.partnerCursor) el.classList.add('partner');
     }
@@ -178,43 +215,36 @@
   function select(idx) {
     if (state.over) return;
     state.selected = idx;
-    // Number-first paint mode: tapping a cell applies the armed digit.
-    if (state.pendingValue && !state.givens[idx]) {
-      enterNumber(state.pendingValue);
-      if (state.mode === 'coop' && socket && state.roomId) {
-        socket.emit('sudoku_cursor_move', { room_id: state.roomId, r: Math.floor(idx / 9), c: idx % 9 });
-      }
-      return;
-    }
     render();
     if (state.mode === 'coop' && socket && state.roomId) {
       socket.emit('sudoku_cursor_move', { room_id: state.roomId, r: Math.floor(idx / 9), c: idx % 9 });
     }
   }
 
+  // Mistakes live on cells: a wrong digit stays red on that cell until it is
+  // corrected or erased, and the count is simply how many cells are wrong now.
+  function syncMistakes() {
+    state.mistakes = Object.keys(state.wrongCells).length;
+    var el = document.getElementById('sudoku-mistakes');
+    if (el) el.textContent = state.mistakes;
+  }
+
   function enterNumber(v) {
     if (state.over || state.selected < 0 || state.givens[state.selected]) return;
     var idx = state.selected;
     if (v === 0) {
-      state.grid[idx] = 0; render(); pushCell(idx, 0); return;
+      delete state.wrongCells[idx];
+      state.grid[idx] = 0; syncMistakes(); render(); pushCell(idx, 0); return;
     }
     if (state.solution && v !== state.solution[Math.floor(idx / 9)][idx % 9]) {
-      state.mistakes++;
-      document.getElementById('sudoku-mistakes').textContent = state.mistakes;
-      // Show the rejected digit in red briefly so the tap is visibly answered.
-      state.wrongIdx = idx; state.wrongVal = v; render();
-      if (state.wrongTimer) clearTimeout(state.wrongTimer);
-      state.wrongTimer = setTimeout(function () {
-        state.wrongIdx = -1; state.wrongTimer = null;
-        if (!state.over) render();
-      }, 650);
-      if (state.mistakes >= 3) { state.over = true; state.pendingValue = 0; paintPad(); showResult('OUT OF LIVES', 'Three mistakes. Try a new puzzle.'); }
+      state.wrongCells[idx] = v;
+      syncMistakes(); render();
       return;
     }
-    state.grid[idx] = v; render(); pushCell(idx, v);
+    delete state.wrongCells[idx];
+    state.grid[idx] = v; state.entries++; syncMistakes(); render(); pushCell(idx, v);
     if (state.grid.every(function (x, i) { return x !== 0 && (!state.solution || x === state.solution[Math.floor(i / 9)][i % 9]); })) {
       state.over = true; clearInterval(state.timerId);
-      state.pendingValue = 0; paintPad();
       submitSolve();
       showResult(state.mode === 'coop' ? 'SOLVED TOGETHER!' : 'SOLVED!', 'Completed in ' + fmt(state.seconds) + '.');
       if (state.mode === 'coop' && socket && state.roomId) socket.emit('sudoku_solved', { room_id: state.roomId });
@@ -245,7 +275,11 @@
 
   function submitSolve() {
     var payload = { game: 'sudoku', category: 'ranked_score', score: timeScore(), metadata: { mode: state.mode, difficulty: state.difficulty }, guest_token: getGuestToken(), username: 'Guest' };
-    fetch('/api/games/leaderboard/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(function () {});
+    fetch('/api/games/leaderboard/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      .then(function () {
+        if (typeof window.fetchLeaderboard === 'function') window.fetchLeaderboard();
+      })
+      .catch(function () {});
   }
 
   function startTimer() {
@@ -294,39 +328,78 @@
       var r = new URLSearchParams(window.location.search).get('room');
       if (r) joinRoom(r.trim().slice(0, 32));
       else setStatus('Create or join a room.');
+    } else if (state.roomId && socket) {
+      socket.emit('leave_sudoku_room', { room_id: state.roomId });
+      state.roomId = null; state.roomGrid = null; state.hasShared = false;
+      state.partnerCursor = -1;
+      document.getElementById('sudoku-partner-name').textContent = '–';
     }
     if (applySoloGate()) return;
     loadPuzzle();
   }
 
+  // Per-tab room token: survives a refresh (sessionStorage) and gives each
+  // tab its own seat, so a second tab cannot hijack the first one's place.
+  function clientToken() {
+    if (state.seatToken) return state.seatToken;
+    var key = 'ew_sudoku_seat_' + String(state.roomId || '');
+    try {
+      var saved = sessionStorage.getItem(key);
+      if (!saved) {
+        saved = 's_' + Math.random().toString(36).slice(2, 14);
+        sessionStorage.setItem(key, saved);
+      }
+      state.seatToken = saved;
+    } catch (e) {
+      state.seatToken = 's_' + Math.random().toString(36).slice(2, 14);
+    }
+    return state.seatToken;
+  }
+
+  var bondId = new URLSearchParams(window.location.search).get('bond_id') || undefined;
+
   function joinRoom(id) {
+    if (state.roomId && state.roomId !== id && socket) {
+      socket.emit('leave_sudoku_room', { room_id: state.roomId });
+    }
+    if (state.roomId !== id) state.seatToken = null;
     state.roomId = id;
+    state.roomGrid = null;
+    state.hasShared = false;
+    state.partnerCursor = -1;
     document.getElementById('room-code-input').value = id;
-    if (socket) socket.emit('join_sudoku_room', { room_id: id, bond_id: new URLSearchParams(window.location.search).get('bond_id') || undefined });
+    if (!socket) { setStatus('Co-op is offline.'); return; }
+    socket.emit('join_sudoku_room', { room_id: id, bond_id: bondId, client_token: clientToken() });
     setStatus('Joined room ' + id + '.');
+  }
+
+  // Only the room host cycles puzzles; the partner follows the shared board.
+  function requestRestart(nextDifficulty) {
+    if (state.mode === 'coop' && socket && state.roomId) {
+      if (!state.isHost) {
+        var sel = document.getElementById('sudoku-diff-select');
+        if (sel) sel.value = state.difficulty;
+        setStatus('Your partner picks the puzzle.');
+        return;
+      }
+      if (nextDifficulty) state.difficulty = nextDifficulty;
+      socket.emit('sudoku_restart', { room_id: state.roomId });
+    } else {
+      if (nextDifficulty) state.difficulty = nextDifficulty;
+      loadPuzzle();
+    }
   }
 
   document.getElementById('tab-solo').addEventListener('click', function () { setMode('solo'); });
   document.getElementById('tab-coop').addEventListener('click', function () { setMode('coop'); });
   var gateDuel = document.getElementById('solo-gate-duel');
   if (gateDuel) gateDuel.addEventListener('click', function () { document.getElementById('tab-coop').click(); });
-  document.getElementById('sudoku-new-btn').addEventListener('click', function () {
-    // Co-op: only the restart initiator loads — the relay tells us if that's us.
-    if (state.mode === 'coop' && socket && state.roomId) socket.emit('sudoku_restart', { room_id: state.roomId });
-    else loadPuzzle();
-  });
-  document.getElementById('sudoku-again-btn').addEventListener('click', function () {
-    if (state.mode === 'coop' && socket && state.roomId) socket.emit('sudoku_restart', { room_id: state.roomId });
-    else loadPuzzle();
-  });
-  document.getElementById('sudoku-erase-btn').addEventListener('click', function () {
-    state.pendingValue = 0; paintPad(); enterNumber(0);
-  });
+  document.getElementById('sudoku-new-btn').addEventListener('click', function () { requestRestart(); });
+  document.getElementById('sudoku-again-btn').addEventListener('click', function () { requestRestart(); });
+  document.getElementById('sudoku-erase-btn').addEventListener('click', function () { enterNumber(0); });
   var diffSelect = document.getElementById('sudoku-diff-select');
   if (diffSelect) diffSelect.addEventListener('change', function () {
-    state.difficulty = diffSelect.value;
-    if (state.mode === 'coop' && socket && state.roomId) socket.emit('sudoku_restart', { room_id: state.roomId });
-    else loadPuzzle();
+    requestRestart(diffSelect.value);
   });
   document.getElementById('join-room-btn').addEventListener('click', function () {
     var v = (document.getElementById('room-code-input').value || '').trim();
@@ -337,12 +410,26 @@
     joinRoom('sudoku_' + Math.random().toString(36).slice(2, 8));
   });
   document.getElementById('copy-link-btn').addEventListener('click', function () {
-    var url = window.location.origin + '/games/sudoku?room=' + encodeURIComponent(state.roomId || document.getElementById('room-code-input').value || '');
+    var code = state.roomId || (document.getElementById('room-code-input').value || '').trim();
+    if (!code) { setStatus('No room yet.'); return; }
+    var url = window.location.origin + '/games/sudoku?room=' + encodeURIComponent(code);
     try { navigator.clipboard.writeText(url); setStatus('Link copied.'); } catch (e) { setStatus(url); }
   });
 
   if (socket) {
+    socket.on('connect', function () {
+      // A reconnect gets a new sid; re-seat so the partner keeps their seat.
+      if (state.mode === 'coop' && state.roomId) {
+        socket.emit('join_sudoku_room', { room_id: state.roomId, bond_id: bondId, client_token: clientToken() });
+      }
+    });
+    socket.on('sudoku_room_error', function (d) {
+      setStatus((d && d.message) || 'Could not join.');
+    });
     socket.on('sudoku_room_joined', function (d) {
+      state.isHost = d.is_host !== false;
+      if (Array.isArray(d.grid) && d.grid.length === 81) state.roomGrid = d.grid;
+      if (d.has_puzzle) state.hasShared = true;
       if (d.partner_name) {
         document.getElementById('sudoku-partner-name').textContent = d.partner_name;
         setStatus('Partner joined.');
@@ -351,12 +438,18 @@
       }
     });
     socket.on('sudoku_puzzle', function (d) {
-      if (!d || !d.puzzle || !d.solution) return;
+      if (!usableBoard(d)) return;
+      state.hasShared = true;
+      if (sameBoard(d.puzzle, state.puzzle)) { mergeRoomGrid(); return; }
       applyPuzzle(d, true);
     });
     socket.on('sudoku_cell_update', function (d) {
       var idx = d.r * 9 + d.c;
-      if (!state.givens[idx] && !state.over) { state.grid[idx] = d.v; render(); }
+      if (!state.givens[idx] && !state.over) {
+        state.grid[idx] = d.v;
+        if (state.wrongCells[idx] !== undefined) { delete state.wrongCells[idx]; syncMistakes(); }
+        render();
+      }
     });
     socket.on('sudoku_cursor_move', function (d) {
       state.partnerCursor = d.r * 9 + d.c; render();
@@ -365,11 +458,16 @@
       // Only the restart initiator loads a fresh board (then shares it);
       // the partner waits for the shared board instead of loading a different one.
       var amRestarter = !d || !d.restarter || (socket && d.restarter === socket.id);
-      if (amRestarter) loadPuzzle();
-      else setStatus('New puzzle…');
+      if (amRestarter) {
+        state.hasShared = false; state.roomGrid = null;
+        loadPuzzle();
+      } else {
+        state.roomGrid = null;
+        setStatus('New puzzle…');
+      }
     });
     socket.on('sudoku_solved', function () {
-      if (!state.over) submitSolve();
+      if (!state.over && state.entries > 0) submitSolve();
       state.over = true; clearInterval(state.timerId);
       showResult('SOLVED TOGETHER!', 'Partner completed the puzzle.');
     });

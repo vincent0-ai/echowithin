@@ -16,6 +16,9 @@
         crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="{{ url_for('static', filename='custom_styles.css') }}?v=1.0.6">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=1.0.9">
+    {% if (current_user.is_authenticated and current_user.is_guest) or request.path.startswith('/personal_space') %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='tour.css') }}?v=1.0.0">
+    {% endif %}
     {% block extra_head_css %}{% endblock %}
     <script nonce="{{ csp_nonce }}">
     (function(){
@@ -548,9 +551,15 @@
 
 <body data-user-logged-in="{{ 'true' if current_user.is_authenticated else 'false' }}">
     {% if current_user.is_authenticated and current_user.is_guest %}
-    <div class="tour-mode-banner" style="background: #3e2217; color: #ffffff; padding: 0.45rem 1rem; font-size: 0.82rem; text-align: center; display: flex; justify-content: center; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 10001; border-bottom: 1px solid rgba(255,255,255,0.15);">
-        <span><strong>Interactive Tour Mode</strong>: You are in an isolated demo session. Data will be erased on exit.</span>
-        <a href="{{ url_for('auth.register') }}" style="background: #ffffff; color: #3e2217; font-weight: 600; font-size: 0.75rem; padding: 0.2rem 0.65rem; border-radius: 16px; text-decoration: none; display: inline-block;">Save Data & Sign Up</a>
+    <div class="tour-mode-banner"
+        data-expires-at="{{ (current_user.guest_expires_at_utc.isoformat().replace('+00:00', 'Z')) if current_user.guest_expires_at_utc else '' }}"
+        data-profile-href="{{ url_for('profile.profile', username=current_user.username) }}"
+        style="background: #3e2217; color: #ffffff; padding: 0.45rem 1rem; font-size: 0.82rem; text-align: center; display: flex; justify-content: center; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 10001; border-bottom: 1px solid rgba(255,255,255,0.15);">
+        <span><strong>Interactive Tour Mode</strong>: isolated demo session &middot;
+            <span class="ew-tour-countdown">20:00</span> left<span class="ew-tour-expiry-note" hidden>&middot;
+                sign up to keep your data</span></span>
+        <a href="{{ url_for('auth.register') }}" class="ew-tour-cta" style="background: #ffffff; color: #3e2217; font-weight: 600; font-size: 0.75rem; padding: 0.2rem 0.65rem; border-radius: 16px; text-decoration: none; display: inline-block;">Save Data &amp; Sign Up</a>
+        <a href="{{ url_for('notes.personal_space', tour_fresh=1) }}" class="ew-tour-restart">Restart tour</a>
     </div>
     {% endif %}
     <!-- Native app: auto-reauth on session loss using httpOnly cookie -->
@@ -2636,6 +2645,9 @@
     });
 </script>
 
+{% if (current_user.is_authenticated and current_user.is_guest) or request.path.startswith('/personal_space') %}
+<script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='tour.js') }}?v=1.0.0" defer></script>
+{% endif %}
 
 </body>
 </html>

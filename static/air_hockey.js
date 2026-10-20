@@ -5,7 +5,7 @@
   var PUCK_R = 0.035, MALLET_R = 0.075, GOAL_W = 0.38;
   var state = {
     mode: 'solo', difficulty: 'normal', over: false, scores: [0, 0], streak: 0,
-    roomId: null, player: 0, isHost: true, guestToken: null,
+    roomId: null, player: 0, isHost: true, guestToken: null, opponentPresent: false,
     puck: { x: 0.5, y: 0.75, vx: 0, vy: 0 },
     p1: { x: 0.5, y: 1.28, vx: 0, vy: 0, tx: 0.5, ty: 1.28 },
     p2: { x: 0.5, y: 0.22, vx: 0, vy: 0, tx: 0.5, ty: 0.22 },
@@ -162,10 +162,22 @@
 
   function collide(m) {
     var p = state.puck;
-    var dx = p.x - m.x, dy = p.y - m.y, d = Math.hypot(dx, dy), min = PUCK_R + MALLET_R;
+    var min = PUCK_R + MALLET_R;
+    // Swept test over the mallet's path since the last frame: a fast drag can
+    // jump clean past the puck between frames, which used to tunnel through.
+    var ax = (typeof m.px === 'number') ? m.px : m.x;
+    var ay = (typeof m.py === 'number') ? m.py : m.y;
+    var abx = m.x - ax, aby = m.y - ay;
+    var len2 = abx * abx + aby * aby;
+    var t = 0;
+    if (len2 > 1e-9) {
+      t = Math.max(0, Math.min(1, ((p.x - ax) * abx + (p.y - ay) * aby) / len2));
+    }
+    var cx = ax + abx * t, cy = ay + aby * t;
+    var dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy);
     if (d > 0 && d < min) {
       var nx = dx / d, ny = dy / d;
-      p.x = m.x + nx * min; p.y = m.y + ny * min;
+      p.x = cx + nx * min; p.y = cy + ny * min;
       var rel = (p.vx - m.vx) * nx + (p.vy - m.vy) * ny;
       if (rel < 0) {
         p.vx -= 1.85 * rel * nx; p.vy -= 1.85 * rel * ny;
@@ -488,8 +500,11 @@
     if (!last) last = now;
     var dt = Math.min(0.1, (now - last) / 1000); last = now;
     if (state.over) { draw(); return; }
+    if (state.mode === 'online' && !state.opponentPresent) { draw(); return; }
     var sim = (state.mode !== 'online') || state.isHost;
     if (sim) {
+      state.p1.px = state.p1.x; state.p1.py = state.p1.y;
+      state.p2.px = state.p2.x; state.p2.py = state.p2.y;
       if (state.mode === 'solo') aiControl(dt);
       moveToward(state.p1);
       // Solo: p2 is fully AI-driven (aiControl owns tx/ty and position).
@@ -601,6 +616,7 @@
 
   function joinRoom(id) {
     state.roomId = id;
+    state.opponentPresent = false;
     document.getElementById('room-code-input').value = id;
     if (socket) socket.emit('join_air_room', { room_id: id, bond_id: new URLSearchParams(window.location.search).get('bond_id') || undefined });
     setStatus('Joined room ' + id + '. Waiting…');
@@ -646,6 +662,7 @@
   if (socket) {
     socket.on('air_room_joined', function (d) {
       state.player = d.player; state.isHost = d.is_host;
+      state.opponentPresent = d.is_host ? !!d.guest_name : true;
       resetMatch();
       setStatus(d.guest_name ? 'Opponent joined. Rally!' : 'Share the room code.');
       var lobby = document.getElementById('online-opponents-section');
@@ -684,12 +701,14 @@
     socket.on('air_restarted', function () { resetMatch(); });
     socket.on('air_match_found', function (d) {
       state.roomId = d.room_id; state.player = d.player; state.isHost = d.is_host;
+      state.opponentPresent = true;
       resetMatch(); setStatus('Matched! Rally!');
       var lobby = document.getElementById('online-opponents-section');
       if (lobby) lobby.style.display = 'none';
     });
     socket.on('air_matchmaking_waiting', function () { setStatus('Waiting for opponent…'); });
     socket.on('air_player_left', function () {
+      state.opponentPresent = false;
       setStatus('Opponent left.');
       var lobby = document.getElementById('online-opponents-section');
       if (lobby) lobby.style.display = '';

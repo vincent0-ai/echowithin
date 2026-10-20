@@ -2804,6 +2804,8 @@ def handle_slime_host_sync(data=None, *args, **kwargs):
     room_info = active_slime_rooms.get(room_id)
     if not room_info or request.sid != room_info.get('host_sid'):
         return
+    if not room_info.get('guest_sid'):
+        return
     emit('slime_host_sync', data, room=room_id, include_self=False)
 
 @socketio.on('slime_player_input')
@@ -3100,6 +3102,8 @@ def handle_pong_score_update(data=None, *args, **kwargs):
         return
     room_info = active_pong_rooms.get(room_id)
     if not room_info or request.sid != room_info.get('host_sid'):
+        return
+    if not room_info.get('guest_sid'):
         return
     if 'scores' in data:
         try:
@@ -4603,6 +4607,8 @@ def handle_air_state(data=None, *args, **kwargs):
     room_info = active_air_rooms.get(room_id)
     if not room_info or request.sid != room_info.get('host_sid'):
         return
+    if not room_info.get('guest_sid'):
+        return
     emit('air_state', {'puck': data.get('puck'), 'p1': data.get('p1'), 'p2': data.get('p2'),
                        'scores': room_info.get('scores', [0, 0])}, room=room_id, include_self=False)
 
@@ -4613,6 +4619,8 @@ def handle_air_score(data=None, *args, **kwargs):
     room_id = data.get('room_id')
     room_info = active_air_rooms.get(room_id)
     if not room_info or request.sid != room_info.get('host_sid'):
+        return
+    if not room_info.get('guest_sid'):
         return
     try:
         scores = [max(0, min(int(data.get('scores', [0, 0])[0]), 99)),

@@ -465,14 +465,14 @@ class TestSlimeVolleyball:
                 assert room_id in m.active_slime_rooms
                 assert m.active_slime_rooms[room_id]['host_sid'] == 'sid_host_123'
 
-                # Host sync relay
+                # Host sync with no opponent seated stays on the host
                 sync_payload = {
                     'room_id': room_id,
                     'ball': {'x': 0, 'y': 10, 'vx': 0, 'vy': 0},
                     'scores': [1, 0]
                 }
                 sync_handler(sync_payload)
-                mock_emit.assert_called_with('slime_host_sync', sync_payload, room=room_id, include_self=False)
+                assert not any(c[0][0] == 'slime_host_sync' for c in mock_emit.call_args_list)
 
                 # Guest joins, then guest input relay (side-gated: only the
                 # seated guest's input is relayed to the host sim)
@@ -486,7 +486,15 @@ class TestSlimeVolleyball:
                     'p2': {'x': 10, 'y': 1.5, 'vx': 0, 'vy': 0}
                 }
                 input_handler(input_payload)
-                mock_emit.assert_called_with('slime_player_input', input_payload, room=room_id, include_self=False)
+                assert any(c[0][0] == 'slime_player_input' and c[0][1] == input_payload
+                           for c in mock_emit.call_args_list)
+                # With an opponent present the host snapshot is relayed again.
+                mock_req.sid = 'sid_host_123'
+                m.current_user.id = 'test-host'
+                m.current_user.username = 'Host'
+                sync_handler(sync_payload)
+                assert any(c[0][0] == 'slime_host_sync' and c[0][1] == sync_payload
+                           for c in mock_emit.call_args_list)
 
                 # Restart event (member-gated; must exclude the sender: a
                 # remote-triggered restart never re-emits, so an echo would

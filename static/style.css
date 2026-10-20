@@ -586,6 +586,13 @@ body {
     }
 }
 
+/* Installed/standalone app: stack above the platform reload FAB (bottom-right) */
+@media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
+    .feed-top-btn {
+        bottom: 84px;
+    }
+}
+
 .nav-brand {
     font-size: 1.5rem;
     font-weight: bold;
@@ -1196,18 +1203,18 @@ body {
 }
 
 .post-image {
-    width: 100%;
-    /* Makes the image fill its container horizontally */
-    height: auto;
-    /* Maintains the image's aspect ratio */
-    max-height: 500px;
-    /* Prevents very tall images from taking up too much space */
-    object-fit: cover;
-    /* Ensures the image covers the area, cropping if necessary, without distortion */
+    /* Show the whole image: scale within the card instead of cropping it
+       (width:100% + max-height turned into a fixed box that cropped the sides
+       or top/bottom of most photos). */
     display: block;
-    /* Removes any extra space below the image */
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 500px;
+    margin: 0 auto;
     border: 1px solid var(--separator-color);
     /* Adds a subtle border */
+    border-radius: 6px;
 }
 
 .post-image-container.processing {

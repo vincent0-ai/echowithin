@@ -1,7 +1,7 @@
 {
-  "versionCode": 48,
-  "versionName": "1.13.3",
+  "versionCode": 49,
+  "versionName": "1.14.0",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.13.3 Note Visitor Recognition & Form Version History:\n• Authenticated browser session handover for shared notes to properly recognize viewer identity\n• Form responses version history and seamless alignment across form edits",
-  "sha256": "05E79D072A80BC5AABF4CA22AB074C360E9F6A70FB85C3C842FCB22E4424D115"
+  "changelog": "v1.14.0 Markdown Suite & Sync Hardening:\n• Full CommonMark & GFM rendering engine with asynchronous parse caching\n• Tap-to-edit with accurate caret placement directly at tapped position\n• Live markdown styling in editor with syntax dimming\n• Tag filter chips in Search and interactive version-history diffs\n• Offline-first SQLite sync hardening with WorkManager and gzip compression",
+  "sha256": "155F9F0883D4D4FDD9FF2C5BE64502676FE033C7D777B6CE207EBC7C6265FC8B"
 }

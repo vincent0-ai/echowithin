@@ -203,6 +203,8 @@ def profile_settings(username):
                     fresh_user = m.users_conf.find_one({'_id': user['_id']})
                     if fresh_user:
                         login_user(m.User(fresh_user), remember=True)
+                    if 'onboarding_use_case' in update_data:
+                        current_user.onboarding_use_case = update_data['onboarding_use_case']
                 flash('Settings updated successfully!', 'success')
             except Exception as e:
                 current_app.logger.error(f"Failed to update settings for user {user['_id']}: {e}")

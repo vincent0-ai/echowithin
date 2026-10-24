@@ -33,6 +33,7 @@ def home():
     user_oid = ObjectId(current_user.id)
     user_doc = m.users_conf.find_one({'_id': user_oid}, {'onboarding_use_case': 1, 'vault_pin_hash': 1})
     onboarding_use_case = (user_doc or {}).get('onboarding_use_case')
+    current_user.onboarding_use_case = onboarding_use_case
     cached_community = m.community_stats_cache.get('community_stats')
     if cached_community:
         total_members = cached_community['total_members']
@@ -198,6 +199,8 @@ def save_onboarding_preferences():
         {'_id': ObjectId(current_user.id)},
         {'$set': {'onboarding_use_case': use_case}}
     )
+    current_user.onboarding_use_case = use_case
+    m.user_loader_cache.pop(f"user:{current_user.id}", None)
     return jsonify({'success': True, 'use_case': use_case})
 
 

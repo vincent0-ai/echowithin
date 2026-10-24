@@ -191,10 +191,14 @@ def profile_settings(username):
         onboarding_use_case = request.form.get('onboarding_use_case', '').strip().lower()
         if onboarding_use_case in ('general', 'reflection', 'relationship', 'discussion', 'creative', 'play'):
             update_data['onboarding_use_case'] = onboarding_use_case
+        focus_changed = (
+            'onboarding_use_case' in update_data
+            and update_data['onboarding_use_case'] != user.get('onboarding_use_case')
+        )
         if update_data:
             try:
                 m.users_conf.update_one({'_id': user['_id']}, {'$set': update_data})
-                if 'username' in update_data:
+                if 'username' in update_data or 'onboarding_use_case' in update_data:
                     m.user_loader_cache.pop(f"user:{current_user.id}", None)
                     fresh_user = m.users_conf.find_one({'_id': user['_id']})
                     if fresh_user:
@@ -204,6 +208,8 @@ def profile_settings(username):
                 current_app.logger.error(f"Failed to update settings for user {user['_id']}: {e}")
                 flash('Failed to update settings. Please try again later.', 'danger')
         redirect_username = update_data.get('username', username)
+        if focus_changed:
+            return redirect(url_for('pages.home'))
         return redirect(url_for('profile.profile_settings', username=redirect_username))
     # Decrypt bio if encrypted for settings form pre-fill
     if user.get('bio_encrypted') and user.get('bio'):

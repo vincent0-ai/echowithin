@@ -103,3 +103,16 @@
 - Styled the Home focus Change control as a visible button.
 - Privacy impact: no new data is collected; the existing onboarding preference endpoint remains the only persistence path.
 - Validation: 38 onboarding/authentication tests passed and `git diff --check` passed.
+
+## Navigation Focus Refresh and More Menu
+
+### Model Attribution
+- Model: Copilot SDK in VS Code
+
+### Summary of Changes
+- Refresh the authenticated user after a Home focus update so the new navigation arrangement is available immediately.
+- Return to Home only when the focus actually changes; unrelated settings edits retain their existing destination.
+- Show More on desktop and filter out links already prioritized for the selected focus.
+- Keep Profile in the primary navigation and expose Trusted Circles through the secondary menu where appropriate.
+- Privacy impact: no new data is collected or exposed.
+- Validation: 38 onboarding/authentication tests passed and Python compilation passed.

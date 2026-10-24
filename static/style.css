@@ -653,9 +653,10 @@ body {
     text-decoration: underline;
 }
 
-/* More dropdown - hidden on desktop, all items show inline */
+/* Keep the More control available at every viewport width. */
 .nav-more-dropdown {
-    display: none;
+    display: block;
+    position: relative;
 }
 
 /* More dropdown button (styled to match nav links) */

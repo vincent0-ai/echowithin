@@ -68,7 +68,6 @@
 <main class="public-home">
     <section class="public-home-hero">
         <div class="public-home-copy">
-            <p class="public-home-kicker">Private by design</p>
             <h1>A quieter place for the people and moments that matter.</h1>
             <p class="public-home-lede">Write privately, grow closer, and share with the circles you trust.</p>
             <div class="public-home-actions">
@@ -76,50 +75,9 @@
                 <a href="{{ url_for('auth.start_guest_tour') }}" class="public-home-secondary" rel="nofollow">Explore the tour</a>
             </div>
         </div>
-        <div class="public-home-preview" aria-label="EchoWithin spaces">
-            <div class="public-preview-topline"><span class="public-preview-dot"></span> Your space</div>
-            <div class="public-preview-title">Continue your Bond</div>
-            <p>Answer today’s question, save a shared memory, or pick up where you left off.</p>
-            <div class="public-preview-row"><span>Shared journal</span><strong>Private</strong></div>
-            <div class="public-preview-row"><span>Daily question</span><strong>Ready</strong></div>
-            <div class="public-preview-row"><span>Next memory</span><strong>Yours</strong></div>
-        </div>
-    </section>
-
-    <section class="public-home-paths" aria-labelledby="paths-title">
-        <div class="public-section-heading">
-            <p class="public-home-kicker">Start with what you need</p>
-            <h2 id="paths-title">One platform, different ways to use it.</h2>
-        </div>
-        <div class="public-path-grid">
-            <article class="public-path-card">
-                <span class="public-path-label">Private reflection</span>
-                <h3>Make room for your own thoughts.</h3>
-                <p>Encrypted notes, a Private Vault, and a personal space for writing without an audience.</p>
-            </article>
-            <article class="public-path-card">
-                <span class="public-path-label">Relationship growth</span>
-                <h3>Keep choosing each other.</h3>
-                <p>Shared questions, habits, goals, moods, memories, and a calendar built for two.</p>
-            </article>
-            <article class="public-path-card">
-                <span class="public-path-label">Discussions</span>
-                <h3>Find conversations worth having.</h3>
-                <p>Communities, long-form posts, forms, and focused spaces for people with shared interests.</p>
-            </article>
-            <article class="public-path-card">
-                <span class="public-path-label">Creative connection</span>
-                <h3>Share more than a message.</h3>
-                <p>Surprise notes, photo memories, voice messages, games, and small moments made together.</p>
-            </article>
-        </div>
     </section>
 
     <section class="public-comparison" aria-labelledby="comparison-title">
-        <div class="public-section-heading">
-            <p class="public-home-kicker">A different kind of social space</p>
-            <h2 id="comparison-title">Connection without the noise.</h2>
-        </div>
         <div class="comparison-table" role="table">
             <div class="comparison-row comparison-header" role="row">
                 <span role="columnheader">Everyday social apps</span>
@@ -130,12 +88,6 @@
             <div class="comparison-row" role="row"><span>Engagement for its own sake</span><strong>Prompts that lead to real connection</strong></div>
             <div class="comparison-row" role="row"><span>Memories disappear into the feed</span><strong>Keep a shared timeline of what matters</strong></div>
         </div>
-    </section>
-
-    <section class="public-home-final">
-        <h2>Start with one meaningful thing.</h2>
-        <p>Your first note, your first question, or your first trusted space.</p>
-        <a href="{{ url_for('auth.login', next=url_for('pages.home')) }}" class="btn public-home-primary" rel="nofollow">Create your space</a>
     </section>
 </main>
 {% endblock %}

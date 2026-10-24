@@ -73,3 +73,16 @@
 - Added a Circle lobby index for efficient activity loading.
 - Privacy impact: Circle lobby association is only exposed through a Circle the user belongs to; game creation validates Circle membership.
 - Validation: 48 focused tests passed, Python compilation passed, and `git diff --check` passed.
+
+## Mobile Onboarding Interaction
+
+### Model Attribution
+- Model: Copilot SDK in VS Code
+
+### Summary of Changes
+- Hardened the Home onboarding choice interaction for mobile taps.
+- Added same-origin credentials and explicit JSON success handling before navigating Home.
+- Added a direct navigation fallback instead of relying on a generic reload.
+- Styled the Home focus Change control as a visible button.
+- Privacy impact: no new data is collected; the existing onboarding preference endpoint remains the only persistence path.
+- Validation: 38 onboarding/authentication tests passed and `git diff --check` passed.

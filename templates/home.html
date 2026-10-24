@@ -10,7 +10,8 @@
     .home-kicker { color:var(--text-secondary); font-size:.78rem; letter-spacing:.08em; text-transform:uppercase; margin:0 0 .35rem; }
     .home-welcome h1 { margin:0; color:var(--primary-dark-color); font-size:clamp(1.7rem, 3vw, 2.35rem); }
     .home-welcome p { margin:.45rem 0 0; color:var(--text-secondary); }
-    .home-use-case { border:1px solid var(--border-color); border-radius:999px; padding:.45rem .75rem; color:var(--text-secondary); font-size:.8rem; white-space:nowrap; }
+    .home-use-case { display:inline-flex; align-items:center; border:1px solid var(--primary-color); border-radius:999px; padding:.5rem .85rem; background:var(--card-bg); color:var(--primary-dark-color); font-size:.8rem; font-weight:600; text-decoration:none; white-space:nowrap; cursor:pointer; transition:background .15s, color .15s; }
+    .home-use-case:hover, .home-use-case:focus-visible { background:var(--primary-color); color:var(--text-light-color); outline:none; }
     .home-focus { display:grid; grid-template-columns:minmax(0, 1.4fr) minmax(250px, .8fr); gap:1rem; margin-bottom:1rem; }
     .home-focus-card, .home-compact-card, .home-quiet-card { background:var(--card-bg); border:1px solid var(--border-color); border-radius:14px; padding:1.15rem; }
     .home-focus-card { background:var(--surface-bg); }
@@ -40,7 +41,7 @@
     .home-onboarding h2 { color:var(--primary-dark-color); margin:0 0 .35rem; }
     .home-onboarding > p { color:var(--text-secondary); margin:.25rem 0 1rem; }
     .home-choice-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:.65rem; }
-    .home-choice { text-align:left; background:var(--surface-bg); color:var(--text-dark-color); border:1px solid var(--border-color); border-radius:10px; padding:.85rem; cursor:pointer; font:inherit; }
+    .home-choice { text-align:left; background:var(--surface-bg); color:var(--text-dark-color); border:1px solid var(--border-color); border-radius:10px; padding:.85rem; cursor:pointer; font:inherit; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
     .home-choice:hover, .home-choice:focus-visible { border-color:var(--primary-color); outline:2px solid transparent; }
     .home-choice strong, .home-choice span { display:block; }
     .home-choice strong { color:var(--primary-dark-color); margin-bottom:.25rem; }
@@ -161,15 +162,20 @@ document.addEventListener('DOMContentLoaded', function () {
     const status = document.getElementById('home-onboarding-status');
     if (!modal) return;
     modal.querySelectorAll('[data-use-case]').forEach(function (button) {
-        button.addEventListener('click', function () {
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            if (button.disabled) return;
             modal.querySelectorAll('[data-use-case]').forEach(function (item) { item.disabled = true; });
             fetch('{{ url_for("pages.save_onboarding_preferences") }}', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+                credentials: 'same-origin',
                 body: JSON.stringify({use_case: button.dataset.useCase})
             }).then(function (response) {
-                if (!response.ok) throw new Error('Unable to save preference');
-                window.location.reload();
+                return response.json().then(function (data) {
+                    if (!response.ok || !data.success) throw new Error(data.error || 'Unable to save preference');
+                    window.location.replace('{{ url_for("pages.home") }}');
+                });
             }).catch(function () {
                 modal.querySelectorAll('[data-use-case]').forEach(function (item) { item.disabled = false; });
                 status.textContent = 'Please try again.';

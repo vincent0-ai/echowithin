@@ -549,6 +549,17 @@ def games_create():
         flash('Sign up to create games.', 'warning')
         return redirect(url_for('auth.login'))
     selected_type = (request.args.get('type') or request.args.get('game_type') or 'poll').strip().lower()
+    circle_id = (request.args.get('circle_id') or request.form.get('circle_id') or '').strip()
+    circle_oid = None
+    if circle_id:
+        try:
+            circle_oid = ObjectId(circle_id)
+        except Exception:
+            flash('Circle not found.', 'danger')
+            return redirect(url_for('game.games_list'))
+        circle = m.circles_conf.find_one({'_id': circle_oid, 'members': ObjectId(current_user.id)})
+        if not circle:
+            abort(403)
     if selected_type not in ALLOWED_GAME_TYPES:
         selected_type = 'poll'
     if request.method == 'POST':
@@ -682,6 +693,8 @@ def games_create():
                 'created_at': now,
                 'revealed': False,
             }
+            if circle_oid:
+                doc['circle_id'] = circle_oid
 
         elif game_type == 'ttal':
             # Two Truths and a Lie — no preset question/options; players submit in-lobby
@@ -700,6 +713,8 @@ def games_create():
                 'created_at': now,
                 'revealed': False,
             }
+            if circle_oid:
+                doc['circle_id'] = circle_oid
 
         elif game_type == 'story':
             # Story Chain — collaborative writing
@@ -729,6 +744,8 @@ def games_create():
                 'created_at': now,
                 'revealed': False,
             }
+            if circle_oid:
+                doc['circle_id'] = circle_oid
 
         elif game_type == 'caption':
             # Caption This — host sets an image and/or prompt, players submit captions
@@ -779,6 +796,8 @@ def games_create():
                 'created_at': now,
                 'revealed': False,
             }
+            if circle_oid:
+                doc['circle_id'] = circle_oid
 
         doc['allow_anonymous'] = allow_anonymous
         doc['timer_seconds'] = timer_seconds
@@ -798,7 +817,7 @@ def games_create():
             m.app.logger.warning(f"Could not create game envelope key for {lobby_id}: {e}")
         flash('Game lobby created — share the link.', 'success')
         return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
-    return render_template('game_create.html', active_page='games', selected_type=selected_type)
+    return render_template('game_create.html', active_page='games', selected_type=selected_type, circle_id=circle_id)
 
 @bp.route('/api/game/poll/create', methods=['POST'])
 @login_required
@@ -2491,5 +2510,3 @@ def coop_words_api():
         'status': 'success',
         'words': pool[:count]
     })
-
-

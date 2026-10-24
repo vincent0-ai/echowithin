@@ -10,6 +10,7 @@
     <a href="{{ url_for('notes.personal_space') }}#games" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Back to Games</a>
   </div>
   <form method="POST" class="ew-card" id="create-form" enctype="multipart/form-data">
+    {% if circle_id %}<input type="hidden" name="circle_id" value="{{ circle_id }}">{% endif %}
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="ew-form-label">Title *</label>
     <input type="text" name="title" maxlength="100" required class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., Friday Game Night">

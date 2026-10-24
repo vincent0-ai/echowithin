@@ -1133,6 +1133,7 @@ form_responses_conf.create_index([('share_id', 1), ('submitted_at', -1)])
 game_sessions_conf.create_index('lobby_id', unique=True, sparse=True)
 game_sessions_conf.create_index('pin', sparse=True)
 game_sessions_conf.create_index([('host_id', 1), ('created_at', -1)])
+game_sessions_conf.create_index([('circle_id', 1), ('created_at', -1)])
 game_sessions_conf.create_index('expires_at', expireAfterSeconds=0)
 # NOTE: Not unique — TTAL guesses create multiple docs per user per lobby.
 # Application-level duplicate checks handle poll/trivia/wyr one-vote-per-user.

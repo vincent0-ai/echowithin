@@ -103,14 +103,23 @@ def view_circle(circle_id):
             post['payload'] = json.loads(raw_content)
         except (TypeError, json.JSONDecodeError):
             post['payload'] = {'content': raw_content}
+        if post.get('kind') == 'poll':
+            post['my_vote'] = post['payload'].get('votes', {}).get(str(current_user.id))
+        elif post.get('kind') == 'event':
+            post['is_attending'] = str(current_user.id) in post['payload'].get('attending', [])
         author = m.users_conf.find_one({'_id': post.get('author_id')}, {'username': 1})
         post['author_name'] = author.get('username', 'Member') if author else 'Member'
     members = list(m.users_conf.find({'_id': {'$in': circle.get('members', [])}}, {'username': 1, 'profile_image_url': 1}))
+    game_lobbies = list(m.game_sessions_conf.find(
+        {'circle_id': circle['_id'], 'deactivated': {'$ne': True}},
+        {'lobby_id': 1, 'title': 1, 'game_type': 1, 'pin': 1, 'expires_at': 1}
+    ).sort('created_at', -1).limit(10))
     return render_template(
         'circle.html',
         circle=circle,
         posts=posts,
         members=members,
+        game_lobbies=game_lobbies,
         pending_requests=list(m.circle_requests_conf.find({'circle_id': circle['_id'], 'status': 'pending'})) if _role(circle) in ('owner', 'moderator') else [],
         circle_type=CIRCLE_TYPES.get(circle.get('circle_type', 'custom'), CIRCLE_TYPES['custom']),
         is_owner=str(circle.get('owner_id')) == str(current_user.id),
@@ -178,6 +187,57 @@ def create_event(circle_id):
     m.circle_posts_conf.insert_one({'circle_id': circle['_id'], 'author_id': ObjectId(current_user.id), 'kind': 'event', 'content': encrypt_community_note(payload, circle['_id']), 'created_at': now, 'expires_at': None})
     m.circles_conf.update_one({'_id': circle['_id']}, {'$set': {'updated_at': now}})
     return _redirect(circle_id)
+
+
+@bp.route('/circle/<circle_id>/posts/<post_id>/vote', methods=['POST'])
+@login_required
+def vote_poll(circle_id, post_id):
+    import main as m
+    circle = _get_circle(circle_id)
+    post = m.circle_posts_conf.find_one({'_id': _oid(post_id), 'circle_id': circle['_id'], 'kind': 'poll'})
+    if not post:
+        abort(404)
+    try:
+        option_index = int(request.form.get('option', ''))
+    except (TypeError, ValueError):
+        flash('Choose an option.', 'danger')
+        return _redirect(circle_id)
+    payload = json.loads(decrypt_community_note(post.get('content', ''), circle['_id']))
+    options = payload.get('options', [])
+    if option_index < 0 or option_index >= len(options):
+        flash('Choose a valid option.', 'danger')
+        return _redirect(circle_id)
+    payload.setdefault('votes', {})[str(current_user.id)] = option_index
+    m.circle_posts_conf.update_one({'_id': post['_id']}, {'$set': {'content': encrypt_community_note(json.dumps(payload), circle['_id']), 'updated_at': _now()}})
+    return _redirect(circle_id)
+
+
+@bp.route('/circle/<circle_id>/posts/<post_id>/rsvp', methods=['POST'])
+@login_required
+def rsvp_event(circle_id, post_id):
+    import main as m
+    circle = _get_circle(circle_id)
+    post = m.circle_posts_conf.find_one({'_id': _oid(post_id), 'circle_id': circle['_id'], 'kind': 'event'})
+    if not post:
+        abort(404)
+    payload = json.loads(decrypt_community_note(post.get('content', ''), circle['_id']))
+    attending = set(payload.get('attending', []))
+    user_id = str(current_user.id)
+    if user_id in attending:
+        attending.remove(user_id)
+    else:
+        attending.add(user_id)
+    payload['attending'] = sorted(attending)
+    m.circle_posts_conf.update_one({'_id': post['_id']}, {'$set': {'content': encrypt_community_note(json.dumps(payload), circle['_id']), 'updated_at': _now()}})
+    return _redirect(circle_id)
+
+
+@bp.route('/circle/<circle_id>/games/create')
+@login_required
+def create_circle_game(circle_id):
+    _get_circle(circle_id)
+    game_type = request.args.get('type', 'poll')
+    return redirect(url_for('game.games_create', circle_id=circle_id, game_type=game_type))
 
 
 @bp.route('/circle/<circle_id>/invite', methods=['POST'])

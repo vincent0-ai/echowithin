@@ -58,3 +58,18 @@
 - Removed the duplicate Trusted Circles link from the discussion-focused navigation.
 - Kept secondary destinations in More.
 - Validation: 38 onboarding/authentication tests passed and `git diff --check` passed.
+
+## Circle Activity Integration
+
+### Model Attribution
+- Model: Copilot SDK in VS Code
+
+### Summary of Changes
+- Reviewed the existing game system: PIN-based party rooms support polls, trivia, Would You Rather, Two Truths and a Lie, Story Chain, and Caption This.
+- Added Circle-hosted game links that reuse the existing game creation and lobby flows.
+- Circle-hosted lobbies are tagged to their Circle and shown to members in the Circle activity area.
+- Added Circle-native poll voting and event RSVP actions with encrypted payload updates.
+- Added quick access from Circles to host poll/trivia games and join a game by PIN.
+- Added a Circle lobby index for efficient activity loading.
+- Privacy impact: Circle lobby association is only exposed through a Circle the user belongs to; game creation validates Circle membership.
+- Validation: 48 focused tests passed, Python compilation passed, and `git diff --check` passed.

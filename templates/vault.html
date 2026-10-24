@@ -179,6 +179,24 @@
             transition: opacity 0.2s;
         }
 
+        .vault-item-quick-delete {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            z-index: 3;
+            width: 28px;
+            height: 28px;
+            border: 0;
+            border-radius: 50%;
+            background: rgba(198, 40, 40, 0.92);
+            color: #fff;
+            cursor: pointer;
+            display: none;
+        }
+        .vault-item:hover .vault-item-quick-delete,
+        .select-mode .vault-item-quick-delete { display: block; }
+        .select-mode .vault-item-quick-delete { display: none; }
+
         .vault-item:hover .vault-item-overlay {
             opacity: 1;
         }
@@ -607,6 +625,10 @@
         <button class="vault-lightbox-close" onclick="closeLightbox()">&times;</button>
         <img id="vault-lightbox-img" class="vault-lightbox-content" style="display:none">
         <video id="vault-lightbox-vid" class="vault-lightbox-content" controls style="display:none"></video>
+        <div id="vault-lightbox-doc" class="vault-lightbox-content" style="display:none;text-align:center;color:#fff;">
+            <i class="fas fa-file" style="font-size:4rem;opacity:.8;"></i>
+            <p id="vault-lightbox-doc-name" style="margin:.75rem 0 0;"></p>
+        </div>
         <div class="vault-lightbox-actions">
             <button class="vault-lightbox-btn" id="vault-lightbox-info-btn" onclick="showLightboxInfo()">
                 <i class="fas fa-info-circle"></i> Info
@@ -877,6 +899,18 @@
             chk.innerHTML = '<i class="fas fa-check"></i>';
             div.appendChild(chk);
 
+            var quickDelete = document.createElement('button');
+            quickDelete.type = 'button';
+            quickDelete.className = 'vault-item-quick-delete';
+            quickDelete.title = 'Delete item';
+            quickDelete.setAttribute('aria-label', 'Delete ' + (item.filename || 'item'));
+            quickDelete.innerHTML = '<i class="fas fa-trash"></i>';
+            quickDelete.onclick = function (event) {
+                event.stopPropagation();
+                deleteVaultItem(item);
+            };
+            div.appendChild(quickDelete);
+
             div.onclick = function () {
                 if (selectMode) {
                     toggleItemSelection(div, item.id);
@@ -1126,6 +1160,8 @@
 
         img.style.display = 'none';
         vid.style.display = 'none';
+        var doc = document.getElementById('vault-lightbox-doc');
+        doc.style.display = 'none';
         img.src = '';
         vid.src = '';
 
@@ -1143,8 +1179,8 @@
             vid.src = serveUrl;
             vid.style.display = 'block';
         } else {
-            window.open(serveUrl, '_blank');
-            return;
+            document.getElementById('vault-lightbox-doc-name').textContent = item.filename || 'Document';
+            doc.style.display = 'block';
         }
 
         lb.classList.add('active');
@@ -1215,13 +1251,17 @@
 
     window.deleteLightboxItem = function () {
         if (!currentLightboxItem) return;
-        if (!confirm('Delete this item from your vault? This cannot be undone.')) return;
-        fetch('/api/vault/items/' + currentLightboxItem.id, {
+        deleteVaultItem(currentLightboxItem);
+    };
+
+    function deleteVaultItem(item) {
+        if (!item || !confirm('Delete this item from your vault? This cannot be undone.')) return;
+        fetch('/api/vault/items/' + item.id, {
             method: 'DELETE',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(function (r) { return r.json(); }).then(function (d) {
             if (d.success) {
-                closeLightbox();
+                if (currentLightboxItem && currentLightboxItem.id === item.id) closeLightbox();
                 loadItems();
             } else {
                 alert(d.error || 'Delete failed');

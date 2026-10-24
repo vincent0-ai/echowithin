@@ -13,6 +13,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label>Name<input name="name" maxlength="80" required placeholder="Weekend friends"></label>
             <label>Type<select name="circle_type">{% for key, value in circle_types.items() %}<option value="{{ key }}">{{ value[0] }}</option>{% endfor %}</select></label>
+            <label class="circle-check"><input type="checkbox" name="approval_required" value="1"> Approve new members</label>
             <button type="submit" class="btn">Create Circle</button>
         </form>
     </section>

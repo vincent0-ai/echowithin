@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}<title>Circle request | EchoWithin</title>{% endblock %}
+{% block content %}
+<main class="circle-pending"><h1>Request sent</h1><p>Your request to join {{ circle.name }} is waiting for approval.</p><a class="btn" href="{{ url_for('circles.circles_page') }}">Back to Circles</a></main>
+<style nonce="{{ csp_nonce }}">.circle-pending{max-width:620px;margin:4rem auto;padding:0 1rem;text-align:center}.circle-pending p{color:var(--text-secondary)}</style>
+{% endblock %}

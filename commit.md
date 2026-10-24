@@ -33,3 +33,16 @@
 - Kept Trusted Circles separate from Communities.
 - Privacy impact: Circle membership and encrypted posts are stored in dedicated private collections; invite links are limited by expiry and use count.
 - Validation: 48 focused tests passed and changed Python files compiled successfully. Direct template startup validation was blocked by the local MongoDB authentication configuration.
+
+## Trusted Circle Controls and Vault Document Actions
+
+### Model Attribution
+- Model: Copilot SDK in VS Code
+
+### Summary of Changes
+- Added approval-required Circle membership requests with owner/moderator approval and denial.
+- Added Circle mute controls, encrypted polls, and encrypted events.
+- Added direct Vault item deletion controls and a consistent document preview panel with info, download, and delete actions.
+- Preserved bulk selection for deleting multiple Vault items at once.
+- Privacy impact: Circle requests and membership controls remain private to Circle members; Vault deletion continues through the authenticated protected delete endpoints.
+- Validation: 12 focused Vault/onboarding tests passed, Python compilation passed, and `git diff --check` passed.

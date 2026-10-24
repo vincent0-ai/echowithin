@@ -29,6 +29,7 @@ communities_conf = None
 circles_conf = None
 circle_posts_conf = None
 circle_invites_conf = None
+circle_requests_conf = None
 community_notes_conf = None
 community_reactions_conf = None
 community_reports_conf = None

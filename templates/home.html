@@ -93,10 +93,6 @@
         <article class="home-compact-card">
             <p class="home-card-label">Your rhythm</p>
             <h2>{{ note_count }} private note{{ '' if note_count == 1 else 's' }}</h2>
-            <div class="home-stats">
-                <div class="home-stat"><strong>{{ user_community_count }}</strong><span>communities</span></div>
-                <div class="home-stat"><strong>{{ active_bonds|length }}</strong><span>active Bond{{ '' if active_bonds|length == 1 else 's' }}</span></div>
-            </div>
         </article>
     </section>
 
@@ -107,7 +103,6 @@
         <a class="home-signal" href="{{ url_for('bonds.bonds_page') }}"><strong>Create a Bond</strong><span>Start a shared space.</span></a>
         {% endif %}
         <a class="home-signal {% if not unread_messages %}is-muted{% endif %}" href="{{ url_for('chat.messages_page') }}"><strong>{% if unread_messages %}You have an unread message{% else %}Messages are clear{% endif %}</strong><span>{% if unread_messages %}See what is waiting for you.{% else %}Start a private conversation.{% endif %}</span></a>
-        <a class="home-signal {% if not vault_locked %}is-muted{% endif %}" href="{{ url_for('vault.vault_page') }}"><strong>{% if vault_locked %}Your Private Vault is locked{% else %}Private Vault{% endif %}</strong><span>{% if vault_locked %}Open your protected files.{% else %}Keep sensitive files separate.{% endif %}</span></a>
         {% if streak_at_risk %}
         <a class="home-signal" href="{{ url_for('bonds.bonds_page') }}"><strong>Your shared streak is at risk</strong><span>Make one small check-in today.</span></a>
         {% elif upcoming_anniversary %}

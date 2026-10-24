@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}<title>Trusted Circles | EchoWithin</title>{% endblock %}
+{% block content %}
+<main class="circles-shell">
+    <header class="circles-header">
+        <p class="circles-kicker">Shared spaces for your people</p>
+        <h1>Trusted Circles</h1>
+        <p>Create a private group for friends, family, study, hobbies, or something custom.</p>
+    </header>
+    <section class="circles-create">
+        <h2>Create a Circle</h2>
+        <form method="POST" action="{{ url_for('circles.create_circle') }}" class="circles-create-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label>Name<input name="name" maxlength="80" required placeholder="Weekend friends"></label>
+            <label>Type<select name="circle_type">{% for key, value in circle_types.items() %}<option value="{{ key }}">{{ value[0] }}</option>{% endfor %}</select></label>
+            <button type="submit" class="btn">Create Circle</button>
+        </form>
+    </section>
+    <section>
+        <h2 class="circles-section-title">Your Circles</h2>
+        {% if circles %}
+        <div class="circles-grid">{% for circle in circles %}<a class="circle-card" href="{{ url_for('circles.view_circle', circle_id=circle._id) }}"><strong>{{ circle.name }}</strong><span>{{ circle.type_label }} · {{ circle.member_count }} member{{ '' if circle.member_count == 1 else 's' }}</span></a>{% endfor %}</div>
+        {% else %}<p class="circles-empty">Create a private space for the people you trust.</p>{% endif %}
+    </section>
+</main>
+<style nonce="{{ csp_nonce }}">
+.circles-shell{max-width:900px;margin:0 auto;padding:2rem 1rem}.circles-header{margin-bottom:1.5rem}.circles-kicker{color:var(--primary-color);font-size:.78rem;text-transform:uppercase;letter-spacing:.08em}.circles-header h1{color:var(--primary-dark-color);margin:.2rem 0}.circles-header p:last-child,.circles-empty{color:var(--text-secondary)}.circles-create{background:var(--surface-bg);border:1px solid var(--border-color);border-radius:14px;padding:1rem;margin-bottom:1.5rem}.circles-create h2,.circles-section-title{color:var(--primary-dark-color);font-size:1.15rem}.circles-create-form{display:grid;grid-template-columns:1.4fr 1fr auto;gap:.75rem;align-items:end}.circles-create-form label{color:var(--text-secondary);font-size:.82rem}.circles-create-form input,.circles-create-form select{display:block;width:100%;box-sizing:border-box;margin-top:.3rem;padding:.65rem;border:1px solid var(--border-color);border-radius:8px;background:var(--card-bg);color:var(--text-dark-color)}.circles-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem}.circle-card{display:flex;flex-direction:column;gap:.4rem;text-decoration:none;border:1px solid var(--border-color);border-radius:12px;padding:1rem;background:var(--card-bg)}.circle-card:hover{border-color:var(--primary-color)}.circle-card strong{color:var(--primary-dark-color)}.circle-card span{color:var(--text-secondary);font-size:.8rem}@media(max-width:700px){.circles-create-form,.circles-grid{grid-template-columns:1fr}}
+</style>
+{% endblock %}

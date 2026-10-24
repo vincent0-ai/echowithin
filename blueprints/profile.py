@@ -188,6 +188,9 @@ def profile_settings(username):
         dm_privacy = request.form.get('dm_privacy')
         if dm_privacy in ('everyone', 'nobody'):
             update_data['dm_privacy'] = dm_privacy
+        onboarding_use_case = request.form.get('onboarding_use_case', '').strip().lower()
+        if onboarding_use_case in ('general', 'reflection', 'relationship', 'discussion', 'creative', 'play'):
+            update_data['onboarding_use_case'] = onboarding_use_case
         if update_data:
             try:
                 m.users_conf.update_one({'_id': user['_id']}, {'$set': update_data})

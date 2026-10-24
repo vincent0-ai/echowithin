@@ -110,6 +110,7 @@ from blueprints.notes import bp as notes_bp
 from blueprints.sharing import bp as sharing_bp
 from blueprints.chat import bp as chat_bp
 from blueprints.communities import bp as communities_bp
+from blueprints.circles import bp as circles_bp
 from blueprints.admin import bp as admin_bp
 from blueprints.whisper import bp as whisper_bp
 from blueprints.bonds import bp as bonds_bp
@@ -261,6 +262,7 @@ app.register_blueprint(notes_bp)
 app.register_blueprint(sharing_bp)
 app.register_blueprint(chat_bp)
 app.register_blueprint(communities_bp)
+app.register_blueprint(circles_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(whisper_bp)
 app.register_blueprint(bonds_bp)
@@ -858,6 +860,9 @@ sync_update_manifest()
 
 # --- Community Notes Collections ---
 communities_conf = db['communities']
+circles_conf = db['circles']
+circle_posts_conf = db['circle_posts']
+circle_invites_conf = db['circle_invites']
 community_notes_conf = db['community_notes']
 community_reactions_conf = db['community_reactions']
 community_reports_conf = db['community_reports']
@@ -1091,6 +1096,10 @@ app_tokens_conf.create_index('user_id')
 communities_conf.create_index('admin_id')
 communities_conf.create_index('invite_code', unique=True, sparse=True)
 communities_conf.create_index([('members', 1)])
+circles_conf.create_index([('members', 1)])
+circles_conf.create_index([('owner_id', 1), ('updated_at', -1)])
+circle_posts_conf.create_index([('circle_id', 1), ('created_at', -1)])
+circle_invites_conf.create_index('token_hash', unique=True)
 community_notes_conf.create_index([('community_id', 1), ('created_at', -1)])
 community_notes_conf.create_index([('community_id', 1), ('score', -1)])
 community_notes_conf.create_index('author_id')
@@ -1177,6 +1186,9 @@ database.app_tokens_conf = app_tokens_conf
 database.user_sessions_conf = user_sessions_conf
 database.app_updates_conf = app_updates_conf
 database.communities_conf = communities_conf
+database.circles_conf = circles_conf
+database.circle_posts_conf = circle_posts_conf
+database.circle_invites_conf = circle_invites_conf
 database.community_notes_conf = community_notes_conf
 database.community_reactions_conf = community_reactions_conf
 database.community_reports_conf = community_reports_conf

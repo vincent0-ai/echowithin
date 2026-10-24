@@ -11,6 +11,18 @@
     <form method="POST" action="{{ url_for('profile.profile_settings', username=user.username) }}" enctype="multipart/form-data"
       class="post-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group" style="margin-bottom: 1.5rem;">
+        <label for="onboarding_use_case" style="font-weight: 600; color: var(--text-dark-color);">Home focus</label>
+        <p style="font-size: 0.9rem; color: var(--text-secondary); margin: 0.35rem 0 0.75rem;">Choose what appears first in your navigation and Home.</p>
+        <select id="onboarding_use_case" name="onboarding_use_case" class="form-input">
+          <option value="general" {% if user.get('onboarding_use_case', 'general') == 'general' %}selected{% endif %}>A little of everything</option>
+          <option value="reflection" {% if user.get('onboarding_use_case') == 'reflection' %}selected{% endif %}>Private reflection</option>
+          <option value="relationship" {% if user.get('onboarding_use_case') == 'relationship' %}selected{% endif %}>Relationship growth</option>
+          <option value="discussion" {% if user.get('onboarding_use_case') == 'discussion' %}selected{% endif %}>Discussions and communities</option>
+          <option value="creative" {% if user.get('onboarding_use_case') == 'creative' %}selected{% endif %}>Shared memories and creativity</option>
+          <option value="play" {% if user.get('onboarding_use_case') == 'play' %}selected{% endif %}>Play and connection</option>
+        </select>
+      </div>
 
       <div class="form-group">
         <label for="username">Username</label>

@@ -27,8 +27,12 @@ def dashboard():
 @login_required
 def home():
     import main as m
+    from blueprints.bonds import _get_effective_streak, _get_partner_id_from_bond
     page_title = f"Home - {current_user.username}"
-    page_description = "Your personal dashboard on EchoWithin. Create new posts and engage with the community."
+    page_description = "Your personal space for notes, relationships, conversations, and community."
+    user_oid = ObjectId(current_user.id)
+    user_doc = m.users_conf.find_one({'_id': user_oid}, {'onboarding_use_case': 1, 'vault_pin_hash': 1})
+    onboarding_use_case = (user_doc or {}).get('onboarding_use_case')
     cached_community = m.community_stats_cache.get('community_stats')
     if cached_community:
         total_members = cached_community['total_members']
@@ -56,7 +60,6 @@ def home():
         hot_posts = get_latest_posts_feed(limit=5)[:5]
     except Exception as e:
         current_app.logger.error(f"Failed to load hot posts for homepage: {e}")
-    user_oid = ObjectId(current_user.id)
     user_id_str = str(current_user.id)
     # PERF: Cache per-user counts in Redis (60s TTL) to avoid count_documents on every load
     note_count = None
@@ -85,7 +88,117 @@ def home():
                 m.redis_cache.setex(f'home_community_count:{user_id_str}', 60, str(user_community_count))
             except Exception:
                 pass
-    return render_template("home.html", username=current_user.username, active_page='home', title=page_title, description=page_description, meta_image=url_for('static', filename='logo-512.png', _external=True), total_members=total_members, total_posts=total_posts, most_active_member=most_active_member, hot_posts=hot_posts, note_count=note_count, user_community_count=user_community_count, active_now=active_now)
+
+    unread_messages = m.direct_messages_conf.count_documents({
+        'recipient_id': user_oid,
+        'is_read': False
+    })
+    active_bonds = []
+    try:
+        from blueprints.bonds import _get_user_bonds
+        for bond in _get_user_bonds(user_oid, 'active')[:3]:
+            partner_id = _get_partner_id_from_bond(bond, user_id_str)
+            partner = m.users_conf.find_one(
+                {'_id': ObjectId(partner_id)},
+                {'username': 1, 'profile_image_url': 1}
+            )
+            if not partner:
+                continue
+            active_bonds.append({
+                'id': str(bond['_id']),
+                'partner_username': partner.get('username', 'Partner'),
+                'streak_count': _get_effective_streak(bond),
+                'bond_type': bond.get('bond_type', 'custom'),
+                'accepted_at': bond.get('accepted_at'),
+                'last_streak_date': bond.get('last_streak_date')
+            })
+    except (AttributeError, TypeError, ValueError) as exc:
+        current_app.logger.warning('Unable to load home Bond summary: %s', exc)
+
+    upcoming_anniversary = None
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    for bond in active_bonds:
+        accepted_at = bond.get('accepted_at')
+        if not isinstance(accepted_at, datetime.datetime):
+            continue
+        if accepted_at.tzinfo is None:
+            accepted_at = accepted_at.replace(tzinfo=datetime.timezone.utc)
+        try:
+            anniversary = accepted_at.replace(year=now_utc.year)
+        except ValueError:
+            anniversary = accepted_at.replace(year=now_utc.year, day=28)
+        if anniversary.date() < now_utc.date():
+            try:
+                anniversary = anniversary.replace(year=now_utc.year + 1)
+            except ValueError:
+                anniversary = anniversary.replace(year=now_utc.year + 1, day=28)
+        days_until = (anniversary.date() - now_utc.date()).days
+        if upcoming_anniversary is None or days_until < upcoming_anniversary['days_until']:
+            upcoming_anniversary = {
+                'partner_username': bond['partner_username'],
+                'days_until': days_until,
+                'date_label': anniversary.strftime('%b %-d') if os.name != 'nt' else anniversary.strftime('%b %#d')
+            }
+
+    streak_at_risk = any(
+        bond.get('streak_count', 0) > 0 and
+        isinstance(bond.get('last_streak_date'), datetime.datetime) and
+        (now_utc.date() - (
+            bond['last_streak_date'].replace(tzinfo=datetime.timezone.utc)
+            if bond['last_streak_date'].tzinfo is None else bond['last_streak_date'].astimezone(datetime.timezone.utc)
+        ).date()).days >= 1
+        for bond in active_bonds
+    )
+    use_case_labels = {
+        'general': 'A little of everything',
+        'reflection': 'Private reflection',
+        'relationship': 'Relationship growth',
+        'discussion': 'Discussions and communities',
+        'creative': 'Shared memories and creativity',
+        'play': 'Play and connection'
+    }
+    return render_template(
+        "home.html",
+        username=current_user.username,
+        active_page='home',
+        title=page_title,
+        description=page_description,
+        meta_image=url_for('static', filename='logo-512.png', _external=True),
+        total_members=total_members,
+        total_posts=total_posts,
+        most_active_member=most_active_member,
+        hot_posts=hot_posts,
+        note_count=note_count,
+        user_community_count=user_community_count,
+        active_now=active_now,
+        unread_messages=unread_messages,
+        active_bonds=active_bonds,
+        upcoming_anniversary=upcoming_anniversary,
+        streak_at_risk=streak_at_risk,
+        vault_locked=bool(user_doc and user_doc.get('vault_pin_hash')),
+        onboarding_use_case=onboarding_use_case,
+        onboarding_label=use_case_labels.get(onboarding_use_case, 'A little of everything'),
+        needs_onboarding=(not bool(onboarding_use_case) or request.args.get('change_focus') == '1') and not getattr(current_user, 'is_guest', False),
+        change_focus=request.args.get('change_focus') == '1'
+    )
+
+
+@bp.route('/api/onboarding/preferences', methods=['POST'])
+@login_required
+def save_onboarding_preferences():
+    import main as m
+    if getattr(current_user, 'is_guest', False):
+        return jsonify({'error': 'Guest sessions cannot save preferences'}), 403
+    payload = request.get_json(silent=True) or {}
+    use_case = str(payload.get('use_case', '')).strip().lower()
+    allowed = {'general', 'reflection', 'relationship', 'discussion', 'creative', 'play'}
+    if use_case not in allowed:
+        return jsonify({'error': 'Choose a valid starting point'}), 400
+    m.users_conf.update_one(
+        {'_id': ObjectId(current_user.id)},
+        {'$set': {'onboarding_use_case': use_case}}
+    )
+    return jsonify({'success': True, 'use_case': use_case})
 
 
 @bp.route('/search')

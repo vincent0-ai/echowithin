@@ -24,63 +24,118 @@
 <meta name="twitter:image" content="{{ url_for('static', filename='logo-512.png', _external=True) }}" />
 {% endblock %}
 
-{% block head_meta %}
-<script type="application/ld+json" nonce="{{ csp_nonce }}">
-{
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    "name": "EchoWithin",
-    "url": "https://echowithin.xyz/",
-    "description": "{{ description }}",
-    "potentialAction": {
-        "@type": "SearchAction",
-        "target": "https://echowithin.xyz/search?q={search_term_string}",
-        "query-input": "required name=search_term_string"
-    }
-}
-</script>
+{% block extra_head_css %}
+<style nonce="{{ csp_nonce }}">
+    .public-home { max-width:1120px; margin:0 auto; padding:3rem 1rem 4rem; }
+    .public-home-hero { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr); gap:3rem; align-items:center; padding:2rem 0 4rem; }
+    .public-home-kicker { color:var(--primary-color); font-size:.78rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; margin:0 0 .7rem; }
+    .public-home h1 { color:var(--primary-dark-color); font-size:clamp(2.3rem,6vw,4.6rem); line-height:1.04; letter-spacing:-.05em; max-width:720px; margin:0; }
+    .public-home-lede { color:var(--text-secondary); font-size:1.15rem; line-height:1.55; max-width:560px; margin:1.25rem 0 1.5rem; }
+    .public-home-actions { display:flex; align-items:center; flex-wrap:wrap; gap:.8rem; }
+    .public-home-primary { background:var(--primary-color); border:1px solid var(--primary-color); border-radius:9px; color:#fff; display:inline-block; font-weight:700; padding:.75rem 1.35rem; text-decoration:none; }
+    .public-home-secondary { color:var(--primary-color); font-weight:700; padding:.75rem .3rem; text-decoration:none; }
+    .public-home-secondary:hover { text-decoration:underline; }
+    .public-home-preview { background:var(--surface-bg); border:1px solid var(--border-color); border-radius:16px; box-shadow:0 10px 30px var(--shadow-color); padding:1.4rem; }
+    .public-preview-topline { color:var(--text-secondary); font-size:.78rem; margin-bottom:2rem; }
+    .public-preview-dot { background:#4b9b70; border-radius:50%; display:inline-block; height:7px; margin-right:.35rem; width:7px; }
+    .public-preview-title { color:var(--primary-dark-color); font-size:1.45rem; font-weight:800; }
+    .public-home-preview p { color:var(--text-secondary); font-size:.9rem; line-height:1.5; margin:.45rem 0 1.2rem; }
+    .public-preview-row { border-top:1px solid var(--border-color); color:var(--text-secondary); display:flex; font-size:.83rem; justify-content:space-between; padding:.7rem 0; }
+    .public-preview-row strong { color:var(--primary-color); }
+    .public-section-heading { margin-bottom:1.25rem; }
+    .public-section-heading h2, .public-home-final h2 { color:var(--primary-dark-color); font-size:clamp(1.5rem,3vw,2.2rem); letter-spacing:-.03em; margin:0; }
+    .public-home-paths, .public-comparison { border-top:1px solid var(--border-color); padding:3rem 0; }
+    .public-path-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.75rem; }
+    .public-path-card { border:1px solid var(--border-color); border-radius:12px; padding:1rem; }
+    .public-path-card:hover { border-color:var(--primary-color); }
+    .public-path-label { color:var(--primary-color); display:block; font-size:.76rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+    .public-path-card h3 { color:var(--primary-dark-color); font-size:1.05rem; line-height:1.25; margin:.65rem 0 .45rem; }
+    .public-path-card p { color:var(--text-secondary); font-size:.86rem; line-height:1.5; margin:0; }
+    .comparison-table { border:1px solid var(--border-color); border-radius:12px; overflow:hidden; }
+    .comparison-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; padding:.85rem 1rem; border-top:1px solid var(--border-color); }
+    .comparison-row:first-child { border-top:0; }
+    .comparison-row span { color:var(--text-secondary); }
+    .comparison-row strong { color:var(--primary-dark-color); }
+    .comparison-header { background:var(--surface-bg); color:var(--primary-dark-color); font-size:.8rem; font-weight:700; text-transform:uppercase; }
+    .public-home-final { border-top:1px solid var(--border-color); padding:3rem 0 1rem; }
+    .public-home-final p { color:var(--text-secondary); margin:.5rem 0 1.2rem; }
+    @media (max-width:760px) { .public-home { padding-top:1.5rem; } .public-home-hero { grid-template-columns:1fr; gap:2rem; padding-bottom:3rem; } .public-path-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width:450px) { .public-path-grid { grid-template-columns:1fr; } .comparison-row { grid-template-columns:1fr; gap:.25rem; } }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="dashboard-page-container" style="max-width: 760px; margin: 2.5rem auto 3.5rem auto; padding: 0 1rem;">
-    <!-- Single Centered Sleek Feature Card -->
-    <div class="dashboard-hero-card" style="background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e0e0e0); border-radius: 16px; padding: 2.5rem 2rem; box-shadow: 0 6px 24px var(--shadow-color, rgba(0,0,0,0.06)); text-align: center;">
-        
-        <h1 style="font-size: 2.2rem; font-weight: 800; color: var(--primary-color, #3e2217); margin: 0 0 0.5rem 0; letter-spacing: -0.5px;">EchoWithin</h1>
-        <p style="font-size: 1rem; color: var(--text-muted, #666); margin: 0 0 1.75rem 0; line-height: 1.5; max-width: 560px; margin-left: auto; margin-right: auto;">
-            A private platform for encrypted personal notes, relationship bonds, and deep conversations.
-        </p>
-
-        <!-- Feature Grid Summary -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; text-align: left; margin-bottom: 2rem; background: var(--surface-bg, #faf8f7); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-color, #f0e6e2);">
-            <div>
-                <h4 style="margin: 0 0 0.3rem 0; font-size: 0.95rem; font-weight: 700; color: var(--text-dark-color, #222);">Private Encrypted Notes</h4>
-                <p style="margin: 0; font-size: 0.84rem; color: var(--text-muted, #666); line-height: 1.45;">Notes encrypted at rest with envelope keys, PIN lock, and surprise links.</p>
-            </div>
-            <div>
-                <h4 style="margin: 0 0 0.3rem 0; font-size: 0.95rem; font-weight: 700; color: var(--text-dark-color, #222);">Bonds and Relationships</h4>
-                <p style="margin: 0; font-size: 0.84rem; color: var(--text-muted, #666); line-height: 1.45;">Shared goal progress, daily habits, 30-day mood check-ins, and daily Q&A.</p>
-            </div>
-            <div>
-                <h4 style="margin: 0 0 0.3rem 0; font-size: 0.95rem; font-weight: 700; color: var(--text-dark-color, #222);">Messages and Whisper Mode</h4>
-                <p style="margin: 0; font-size: 0.84rem; color: var(--text-muted, #666); line-height: 1.45;">Direct messaging and self-destructing chats with session watermarks & capture alerts.</p>
-            </div>
-            <div>
-                <h4 style="margin: 0 0 0.3rem 0; font-size: 0.95rem; font-weight: 700; color: var(--text-dark-color, #222);">Community Spaces</h4>
-                <p style="margin: 0; font-size: 0.84rem; color: var(--text-muted, #666); line-height: 1.45;">Collaborative interest groups and long-form blog publishing.</p>
+<main class="public-home">
+    <section class="public-home-hero">
+        <div class="public-home-copy">
+            <p class="public-home-kicker">Private by design</p>
+            <h1>A quieter place for the people and moments that matter.</h1>
+            <p class="public-home-lede">Write privately, grow closer, and share with the circles you trust.</p>
+            <div class="public-home-actions">
+                <a href="{{ url_for('auth.login', next=url_for('pages.home')) }}" class="btn public-home-primary" rel="nofollow">Get started</a>
+                <a href="{{ url_for('auth.start_guest_tour') }}" class="public-home-secondary" rel="nofollow">Explore the tour</a>
             </div>
         </div>
-
-        <!-- Action Buttons -->
-        <div style="display: flex; justify-content: center; align-items: center; gap: 0.85rem; flex-wrap: wrap;">
-            <a href="{{ url_for('auth.login', next=url_for('pages.home')) }}" class="btn" style="background: var(--primary-color, #3e2217); color: #ffffff; padding: 0.75rem 1.8rem; border-radius: 10px; font-weight: 700; font-size: 0.95rem; text-decoration: none; border: 1px solid #3e2217; display: inline-block;" rel="nofollow">
-                Get Started
-            </a>
-            <a href="{{ url_for('auth.start_guest_tour') }}" class="btn" style="background: var(--surface-bg, #f5f5f5); color: var(--text-dark-color, #222); padding: 0.75rem 1.8rem; border-radius: 10px; font-weight: 700; font-size: 0.95rem; text-decoration: none; border: 1px solid var(--border-color, #ccc); display: inline-block;" rel="nofollow">
-                Take Interactive Tour
-            </a>
+        <div class="public-home-preview" aria-label="EchoWithin spaces">
+            <div class="public-preview-topline"><span class="public-preview-dot"></span> Your space</div>
+            <div class="public-preview-title">Continue your Bond</div>
+            <p>Answer today’s question, save a shared memory, or pick up where you left off.</p>
+            <div class="public-preview-row"><span>Shared journal</span><strong>Private</strong></div>
+            <div class="public-preview-row"><span>Daily question</span><strong>Ready</strong></div>
+            <div class="public-preview-row"><span>Next memory</span><strong>Yours</strong></div>
         </div>
+    </section>
 
-    </div>
-</div>
+    <section class="public-home-paths" aria-labelledby="paths-title">
+        <div class="public-section-heading">
+            <p class="public-home-kicker">Start with what you need</p>
+            <h2 id="paths-title">One platform, different ways to use it.</h2>
+        </div>
+        <div class="public-path-grid">
+            <article class="public-path-card">
+                <span class="public-path-label">Private reflection</span>
+                <h3>Make room for your own thoughts.</h3>
+                <p>Encrypted notes, a Private Vault, and a personal space for writing without an audience.</p>
+            </article>
+            <article class="public-path-card">
+                <span class="public-path-label">Relationship growth</span>
+                <h3>Keep choosing each other.</h3>
+                <p>Shared questions, habits, goals, moods, memories, and a calendar built for two.</p>
+            </article>
+            <article class="public-path-card">
+                <span class="public-path-label">Discussions</span>
+                <h3>Find conversations worth having.</h3>
+                <p>Communities, long-form posts, forms, and focused spaces for people with shared interests.</p>
+            </article>
+            <article class="public-path-card">
+                <span class="public-path-label">Creative connection</span>
+                <h3>Share more than a message.</h3>
+                <p>Surprise notes, photo memories, voice messages, games, and small moments made together.</p>
+            </article>
+        </div>
+    </section>
+
+    <section class="public-comparison" aria-labelledby="comparison-title">
+        <div class="public-section-heading">
+            <p class="public-home-kicker">A different kind of social space</p>
+            <h2 id="comparison-title">Connection without the noise.</h2>
+        </div>
+        <div class="comparison-table" role="table">
+            <div class="comparison-row comparison-header" role="row">
+                <span role="columnheader">Everyday social apps</span>
+                <span role="columnheader">EchoWithin</span>
+            </div>
+            <div class="comparison-row" role="row"><span>Public by default</span><strong>Choose who sees each space</strong></div>
+            <div class="comparison-row" role="row"><span>One feed for everything</span><strong>Private, shared, and community spaces</strong></div>
+            <div class="comparison-row" role="row"><span>Engagement for its own sake</span><strong>Prompts that lead to real connection</strong></div>
+            <div class="comparison-row" role="row"><span>Memories disappear into the feed</span><strong>Keep a shared timeline of what matters</strong></div>
+        </div>
+    </section>
+
+    <section class="public-home-final">
+        <h2>Start with one meaningful thing.</h2>
+        <p>Your first note, your first question, or your first trusted space.</p>
+        <a href="{{ url_for('auth.login', next=url_for('pages.home')) }}" class="btn public-home-primary" rel="nofollow">Create your space</a>
+    </section>
+</main>
 {% endblock %}

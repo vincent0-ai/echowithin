@@ -832,26 +832,44 @@
             </div>
             <nav class="nav-links" id="nav-links">
                 {% if current_user.is_authenticated %}
+                {% set use_case = current_user.onboarding_use_case|default('general', true) %}
                 <a href="{{ url_for('pages.home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
+                {% if use_case == 'relationship' %}
+                <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Together</a>
+                <a href="{{ url_for('chat.messages_page') }}" class="{{ 'active' if active_page == 'messages' }}" style="position: relative;">Messages <span id="global-unread-count" class="badge" style="display: none; background: #c62828; color: white; margin-left: 2px;">0</span></a>
+                <a href="{{ url_for('notes.personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">Notes</a>
+                {% elif use_case == 'discussion' %}
+                <a href="{{ url_for('communities.communities_page') }}" class="{{ 'active' if active_page == 'communities' }}">Communities</a>
+                <a href="{{ url_for('blog.blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
+                <a href="{{ url_for('chat.messages_page') }}" class="{{ 'active' if active_page == 'messages' }}" style="position: relative;">Messages <span id="global-unread-count" class="badge" style="display: none; background: #c62828; color: white; margin-left: 2px;">0</span></a>
+                {% elif use_case == 'reflection' %}
+                <a href="{{ url_for('notes.personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">Notes</a>
+                <a href="{{ url_for('vault.vault_page') }}" class="{{ 'active' if active_page == 'vault' }}">Vault</a>
+                <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Together</a>
+                {% elif use_case == 'creative' %}
                 <a href="{{ url_for('notes.personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">Notes</a>
                 <a href="{{ url_for('blog.blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
-                <a href="{{ url_for('chat.messages_page') }}" class="{{ 'active' if active_page == 'messages' }}" style="position: relative;">
-                    Messages
-                    <span id="global-unread-count" class="badge" style="display: none; background: #c62828; color: white; margin-left: 2px;">0</span>
-                </a>
-                <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Bonds</a>
-                <!-- Items hidden on mobile, shown in More dropdown -->
-                <a href="{{ url_for('profile.profile', username=current_user.username) }}"
-                    class="nav-more-item {{ 'active' if active_page == 'profile' }}">Profile</a>
-                <a href="{{ url_for('game.games_list') }}" class="nav-more-item {{ 'active' if active_page == 'games' }}">Games</a>
-                <a href="{{ url_for('forms.forms_list') }}" class="nav-more-item {{ 'active' if active_page == 'forms' }}">Forms</a>
-                <a href="{{ url_for('pages.about') }}" class="nav-more-item {{ 'active' if active_page == 'login' }}">About</a>
-                <!-- More dropdown for mobile -->
+                <a href="{{ url_for('communities.communities_page') }}" class="{{ 'active' if active_page == 'communities' }}">Communities</a>
+                {% elif use_case == 'play' %}
+                <a href="{{ url_for('game.games_list') }}" class="{{ 'active' if active_page == 'games' }}">Play</a>
+                <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Together</a>
+                <a href="{{ url_for('chat.messages_page') }}" class="{{ 'active' if active_page == 'messages' }}" style="position: relative;">Messages <span id="global-unread-count" class="badge" style="display: none; background: #c62828; color: white; margin-left: 2px;">0</span></a>
+                {% else %}
+                <a href="{{ url_for('notes.personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">Notes</a>
+                <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Together</a>
+                <a href="{{ url_for('chat.messages_page') }}" class="{{ 'active' if active_page == 'messages' }}" style="position: relative;">Messages <span id="global-unread-count" class="badge" style="display: none; background: #c62828; color: white; margin-left: 2px;">0</span></a>
+                {% endif %}
                 <div class="nav-more-dropdown" id="nav-more-dropdown">
                     <button type="button" class="nav-more-btn" id="nav-more-btn" aria-expanded="false" aria-haspopup="true">
                         More <span class="nav-more-arrow">&#9662;</span>
                     </button>
                     <div class="nav-more-menu" id="nav-more-menu">
+                        <a href="{{ url_for('notes.personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">Notes</a>
+                        <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Together</a>
+                        <a href="{{ url_for('chat.messages_page') }}" class="{{ 'active' if active_page == 'messages' }}">Messages</a>
+                        <a href="{{ url_for('blog.blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
+                        <a href="{{ url_for('communities.communities_page') }}" class="{{ 'active' if active_page == 'communities' }}">Communities</a>
+                        <a href="{{ url_for('vault.vault_page') }}" class="{{ 'active' if active_page == 'vault' }}">Private Vault</a>
                         <a href="{{ url_for('profile.profile', username=current_user.username) }}"
                             class="{{ 'active' if active_page == 'profile' }}">Profile</a>
                         <a href="{{ url_for('game.games_list') }}" class="{{ 'active' if active_page == 'games' }}">Games</a>

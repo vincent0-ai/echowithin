@@ -39,6 +39,7 @@ class User(UserMixin):
         self.age_assurance_pending = user_data.get('age_assurance_pending', False)
         # Theme preference (cached on the user object to avoid a DB query per request)
         self.theme_preference = user_data.get('theme_preference', 'light')
+        self.onboarding_use_case = user_data.get('onboarding_use_case')
 
     @property
     def is_guest_expired(self):

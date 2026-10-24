@@ -1,459 +1,182 @@
 {% extends "base.html" %}
 
-{% block title %}
-<title>{{ title }}</title>
-{% endblock %}
+{% block title %}<title>{{ title }}</title>{% endblock %}
+{% block meta_description %}<meta name="description" content="{{ description }}">{% endblock %}
 
-{% block meta_description %}
-<meta name="description" content="{{ description }}">
+{% block extra_head_css %}
+<style nonce="{{ csp_nonce }}">
+    .home-shell { max-width: 1120px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+    .home-welcome { display:flex; justify-content:space-between; gap:1rem; align-items:end; margin-bottom:1.5rem; }
+    .home-kicker { color:var(--text-secondary); font-size:.78rem; letter-spacing:.08em; text-transform:uppercase; margin:0 0 .35rem; }
+    .home-welcome h1 { margin:0; color:var(--primary-dark-color); font-size:clamp(1.7rem, 3vw, 2.35rem); }
+    .home-welcome p { margin:.45rem 0 0; color:var(--text-secondary); }
+    .home-use-case { border:1px solid var(--border-color); border-radius:999px; padding:.45rem .75rem; color:var(--text-secondary); font-size:.8rem; white-space:nowrap; }
+    .home-focus { display:grid; grid-template-columns:minmax(0, 1.4fr) minmax(250px, .8fr); gap:1rem; margin-bottom:1rem; }
+    .home-focus-card, .home-compact-card, .home-quiet-card { background:var(--card-bg); border:1px solid var(--border-color); border-radius:14px; padding:1.15rem; }
+    .home-focus-card { background:var(--surface-bg); }
+    .home-card-label { color:var(--text-secondary); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em; margin:0 0 .45rem; }
+    .home-focus-card h2, .home-compact-card h2 { margin:0; color:var(--primary-dark-color); font-size:1.25rem; }
+    .home-focus-card p, .home-compact-card p { color:var(--text-secondary); line-height:1.5; margin:.5rem 0 1rem; }
+    .home-card-link { color:var(--primary-color); font-weight:700; text-decoration:none; }
+    .home-card-link:hover { text-decoration:underline; }
+    .home-compact-list { display:grid; gap:.65rem; }
+    .home-compact-card { min-height:100%; }
+    .home-signal-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:.75rem; margin-bottom:1.5rem; }
+    .home-signal { display:flex; flex-direction:column; gap:.45rem; min-height:110px; background:var(--card-bg); border:1px solid var(--border-color); border-radius:12px; padding:.9rem; text-decoration:none; }
+    .home-signal:hover { border-color:var(--primary-color); }
+    .home-signal strong { color:var(--primary-dark-color); font-size:.95rem; }
+    .home-signal span { color:var(--text-secondary); font-size:.82rem; line-height:1.35; }
+    .home-signal.is-muted { background:var(--surface-bg); }
+    .home-lower { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+    .home-bond-row { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:.7rem 0; border-bottom:1px solid var(--border-color); }
+    .home-bond-row:last-child { border-bottom:0; }
+    .home-bond-row strong { color:var(--primary-dark-color); }
+    .home-bond-row span { display:block; color:var(--text-secondary); font-size:.8rem; margin-top:.2rem; }
+    .home-stats { display:flex; gap:1.5rem; margin-top:.75rem; }
+    .home-stat strong { display:block; color:var(--primary-dark-color); font-size:1.3rem; }
+    .home-stat span { color:var(--text-secondary); font-size:.78rem; }
+    .home-onboarding-backdrop { position:fixed; inset:0; z-index:2000; display:flex; align-items:center; justify-content:center; padding:1rem; background:rgba(32,24,20,.45); }
+    .home-onboarding { width:min(680px, 100%); max-height:calc(100vh - 2rem); overflow:auto; background:var(--card-bg); border:1px solid var(--border-color); border-radius:16px; padding:1.5rem; box-shadow:0 12px 40px rgba(0,0,0,.22); }
+    .home-onboarding h2 { color:var(--primary-dark-color); margin:0 0 .35rem; }
+    .home-onboarding > p { color:var(--text-secondary); margin:.25rem 0 1rem; }
+    .home-choice-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:.65rem; }
+    .home-choice { text-align:left; background:var(--surface-bg); color:var(--text-dark-color); border:1px solid var(--border-color); border-radius:10px; padding:.85rem; cursor:pointer; font:inherit; }
+    .home-choice:hover, .home-choice:focus-visible { border-color:var(--primary-color); outline:2px solid transparent; }
+    .home-choice strong, .home-choice span { display:block; }
+    .home-choice strong { color:var(--primary-dark-color); margin-bottom:.25rem; }
+    .home-choice span { color:var(--text-secondary); font-size:.8rem; line-height:1.35; }
+    .home-onboarding-status { min-height:1.1rem; color:#b3261e; font-size:.82rem; margin-top:.75rem; }
+    @media (max-width: 760px) {
+        .home-focus, .home-lower { grid-template-columns:1fr; }
+        .home-signal-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+        .home-welcome { align-items:start; flex-direction:column; }
+    }
+    @media (max-width: 430px) { .home-choice-grid { grid-template-columns:1fr; } }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="content-wrapper">
+<main class="home-shell">
+    <header class="home-welcome">
+        <div>
+            <p class="home-kicker">Your space</p>
+            <h1>Welcome back, {{ username }}.</h1>
+            <p>Pick up the part of EchoWithin that matters today.</p>
+        </div>
+        <a class="home-use-case" href="{{ url_for('pages.home', change_focus=1) }}">{{ onboarding_label }} · Change</a>
+    </header>
 
-    <!-- Welcome header -->
-    <div class="home-header">
-        <h1>Welcome, {{ username }}!</h1>
-        <p>Our Community and your notes are waiting.</p>
-    </div>
-
-    <!-- Share promo (dismissable) -->
-    <div class="share-promo-card" id="home-share-promo" data-promo-mode="temporary"
-        style="display:none; background: linear-gradient(135deg, #fdf2f8, #fef3e7); border: 1px solid #f5d0e0; border-radius: 12px; padding: 0.9rem 1.1rem; margin-bottom: 1rem; position: relative;">
-        <div style="display:flex; align-items:flex-start; gap:0.65rem;">
-            <div style="font-size:1.5rem; line-height:1;">🎁</div>
-            <div style="color:#555; font-size:0.88rem; line-height:1.4;">
-                <strong id="home-share-promo-title" style="display:block; color:#3e2217; margin-bottom:0.15rem;">Share a
-                    surprise note today</strong>
-                <span id="home-share-promo-copy">Pick one private note and turn it into a magic link.</span>
-                <a id="home-share-promo-link" href="{{ url_for('notes.personal_space') }}?open_share_picker=1#notes"
-                    style="color:#c2185b; font-weight:600; text-decoration:none;">Open note picker →</a>
-            </div>
-        </div>
-        <button type="button" id="home-share-promo-dismiss" aria-label="Dismiss"
-            style="position:absolute; top:6px; right:8px; border:none; background:none; color:#999; cursor:pointer; font-size:1rem;">
-            &times;
-        </button>
-    </div>
-
-    <!-- Quick Actions -->
-    <div class="home-quick-actions">
-        <a href="{{ url_for('notes.personal_space') }}" class="quick-action-card qa-primary">
-            <strong>New Note</strong>
-            <span>Create a private, encrypted note</span>
-        </a>
-        <a href="{{ url_for('notes.personal_space') }}?open_share_picker=1#notes" class="quick-action-card qa-primary">
-            <strong>Send Surprise</strong>
-            <span>Share a themed note with someone</span>
-        </a>
-        <a href="{{ url_for('pages.create_post') }}" class="quick-action-card qa-primary">
-            <strong>Write Blog Post</strong>
-            <span>Publish to the community blog</span>
-        </a>
-        <a href="{{ url_for('communities.communities_page') }}" class="quick-action-card qa-primary">
-            <strong>Communities</strong>
-            <span>{{ user_community_count }} space{{ 's' if user_community_count != 1 }} joined</span>
-        </a>
-    </div>
-
-    <!-- Your Notes -->
-    <div class="home-section">
-        <div class="home-section-header">
-            <h2>Your Notes</h2>
-            <a href="{{ url_for('notes.personal_space') }}" class="home-section-link">Open Notes →</a>
-        </div>
-        <div class="home-notes-summary">
-            <div class="notes-count-display">
-                <span class="notes-count-number">{{ note_count }}</span>
-                <span class="notes-count-label">note{{ 's' if note_count != 1 }} in your personal space</span>
-            </div>
-            {% if note_count == 0 %}
-            <p class="notes-empty-hint">Start writing — your notes are encrypted at rest and private to you.</p>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Daily Quote -->
-    <div id="zen-quote-container"
-        style="display: none; margin: 0 auto 1.5rem auto; max-width: 600px; padding: 1rem 1.25rem; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #f0e6e1; transition: opacity 0.3s ease;">
-        <div id="zen-quote-content"
-            style="font-style: italic; font-size: 1rem; color: var(--primary-dark-color); margin-bottom: 0.5rem; line-height: 1.5;">
-        </div>
-        <div id="zen-quote-author" style="text-align: right; font-weight: 600; font-size: 0.85rem; color: #555;">
-        </div>
-        <div class="quote-attribution" style="margin-top: 0.75rem; font-size: 0.75rem; color: #bbb; text-align: right;">
-            <a href="https://zenquotes.io/" target="_blank" rel="noopener noreferrer"
-                style="color: #bbb; text-decoration: none; border-bottom: 1px dotted #ccc;">By ZenQuotes API</a>
-        </div>
-    </div>
-
-    <!-- Community Pulse -->
-    <div class="home-section">
-        <div class="home-section-header">
-            <h2>Community Pulse</h2>
-            <a href="{{ url_for('blog.blog') }}" class="home-section-link">Explore Blog →</a>
-        </div>
-
-        <div class="community-stats-row">
-            <div class="stat-pill">
-                <strong>{{ total_members }}</strong>
-                <span>Members</span>
-            </div>
-            <div class="stat-pill stat-active-now">
-                <strong>
-                    <span class="active-pulse"></span>
-                    {{ active_now }}
-                </strong>
-                <span>Online Now</span>
-            </div>
-        </div>
-
-        {% if hot_posts %}
-        <div class="home-trending">
-            <h3>Trending</h3>
-            <ul>
-                {% for post in hot_posts %}
-                <li><a href="{{ url_for('blog.view_post', slug=post.slug) }}">{{ post.title }}</a></li>
-                {% endfor %}
-            </ul>
-        </div>
+    <section class="home-focus" aria-label="Your next step">
+        {% if active_bonds %}
+        <article class="home-focus-card">
+            <p class="home-card-label">Continue your Bond</p>
+            <h2>{{ active_bonds[0].partner_username }}</h2>
+            <p>Keep your shared space moving with a question, memory, or small check-in.</p>
+            <a class="home-card-link" href="{{ url_for('bonds.bonds_page') }}">Open Together</a>
+        </article>
+        {% elif note_count == 0 %}
+        <article class="home-focus-card">
+            <p class="home-card-label">Start here</p>
+            <h2>Make your first private space.</h2>
+            <p>Write a note, invite someone to a Bond, or explore a community at your own pace.</p>
+            <a class="home-card-link" href="{{ url_for('notes.personal_space') }}">Write a note</a>
+        </article>
+        {% else %}
+        <article class="home-focus-card">
+            <p class="home-card-label">Keep going</p>
+            <h2>Your private space is ready.</h2>
+            <p>Return to your notes or choose a new conversation to carry forward.</p>
+            <a class="home-card-link" href="{{ url_for('notes.personal_space') }}">Open Notes</a>
+        </article>
         {% endif %}
+        <article class="home-compact-card">
+            <p class="home-card-label">Your rhythm</p>
+            <h2>{{ note_count }} private note{{ '' if note_count == 1 else 's' }}</h2>
+            <div class="home-stats">
+                <div class="home-stat"><strong>{{ user_community_count }}</strong><span>communities</span></div>
+                <div class="home-stat"><strong>{{ active_bonds|length }}</strong><span>active Bond{{ '' if active_bonds|length == 1 else 's' }}</span></div>
+            </div>
+        </article>
+    </section>
+
+    <section class="home-signal-grid" aria-label="Things to do">
+        {% if active_bonds %}
+        <a class="home-signal" href="{{ url_for('bonds.bonds_page') }}"><strong>Answer today’s question</strong><span>Take a moment together.</span></a>
+        {% else %}
+        <a class="home-signal" href="{{ url_for('bonds.bonds_page') }}"><strong>Create a Bond</strong><span>Start a shared space.</span></a>
+        {% endif %}
+        <a class="home-signal {% if not unread_messages %}is-muted{% endif %}" href="{{ url_for('chat.messages_page') }}"><strong>{% if unread_messages %}You have an unread message{% else %}Messages are clear{% endif %}</strong><span>{% if unread_messages %}See what is waiting for you.{% else %}Start a private conversation.{% endif %}</span></a>
+        <a class="home-signal {% if not vault_locked %}is-muted{% endif %}" href="{{ url_for('vault.vault_page') }}"><strong>{% if vault_locked %}Your Private Vault is locked{% else %}Private Vault{% endif %}</strong><span>{% if vault_locked %}Open your protected files.{% else %}Keep sensitive files separate.{% endif %}</span></a>
+        {% if streak_at_risk %}
+        <a class="home-signal" href="{{ url_for('bonds.bonds_page') }}"><strong>Your shared streak is at risk</strong><span>Make one small check-in today.</span></a>
+        {% elif upcoming_anniversary %}
+        <a class="home-signal" href="{{ url_for('bonds.bonds_page') }}"><strong>Upcoming anniversary</strong><span>{{ upcoming_anniversary.partner_username }} · {{ upcoming_anniversary.days_until }} day{{ '' if upcoming_anniversary.days_until == 1 else 's' }}.</span></a>
+        {% else %}
+        <a class="home-signal is-muted" href="{{ url_for('bonds.bonds_page') }}"><strong>Make a shared memory</strong><span>Your next moment can start here.</span></a>
+        {% endif %}
+    </section>
+
+    <section class="home-lower">
+        <article class="home-compact-card">
+            <p class="home-card-label">Your Bonds</p>
+            <h2>Shared spaces</h2>
+            {% if active_bonds %}
+                {% for bond in active_bonds %}
+                <div class="home-bond-row"><div><strong>{{ bond.partner_username }}</strong><span>{{ bond.bond_type|replace('_', ' ')|title }}</span></div><span>{{ bond.streak_count }} day streak</span></div>
+                {% endfor %}
+            {% else %}
+                <p>You do not have an active Bond yet.</p>
+                <a class="home-card-link" href="{{ url_for('bonds.bonds_page') }}">Explore Bonds</a>
+            {% endif %}
+        </article>
+        <article class="home-compact-card">
+            <p class="home-card-label">Community</p>
+            <h2>Find your people</h2>
+            <p>{{ total_members }} members, {{ user_community_count }} space{{ '' if user_community_count == 1 else 's' }} joined, and conversations waiting to be discovered.</p>
+            <a class="home-card-link" href="{{ url_for('communities.communities_page') }}">Explore communities</a>
+        </article>
+    </section>
+</main>
+
+{% if needs_onboarding %}
+<div class="home-onboarding-backdrop" id="home-onboarding" role="dialog" aria-modal="true" aria-labelledby="home-onboarding-title">
+    <div class="home-onboarding">
+        <p class="home-kicker">Make it yours</p>
+        <h2 id="home-onboarding-title">What brings you to EchoWithin?</h2>
+        <p>Choose a starting point. You can change it from Home later.</p>
+        <div class="home-choice-grid">
+            <button class="home-choice" type="button" data-use-case="general"><strong>A little of everything</strong><span>Notes, Bonds, conversations, and community.</span></button>
+            <button class="home-choice" type="button" data-use-case="reflection"><strong>Private reflection</strong><span>Writing, personal space, and protected files.</span></button>
+            <button class="home-choice" type="button" data-use-case="relationship"><strong>Relationship growth</strong><span>Questions, habits, goals, and shared memories.</span></button>
+            <button class="home-choice" type="button" data-use-case="discussion"><strong>Discussions and communities</strong><span>Find thoughtful conversations and people with shared interests.</span></button>
+            <button class="home-choice" type="button" data-use-case="creative"><strong>Shared memories and creativity</strong><span>Photos, surprise notes, stories, and collaborative ideas.</span></button>
+            <button class="home-choice" type="button" data-use-case="play"><strong>Play and connection</strong><span>Games, Bonds, and easy ways to spend time together.</span></button>
+        </div>
+        <p class="home-onboarding-status" id="home-onboarding-status" aria-live="polite"></p>
     </div>
-
 </div>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // Share promo dismiss
-        (function initTemporarySharePromo() {
-            const promo = document.getElementById('home-share-promo');
-            const dismissBtn = document.getElementById('home-share-promo-dismiss');
-            const titleEl = document.getElementById('home-share-promo-title');
-            const copyEl = document.getElementById('home-share-promo-copy');
-            const linkEl = document.getElementById('home-share-promo-link');
-            if (!promo) return;
-
-            const key = 'ew_share_promo_snooze_until';
-            const snoozeUntil = parseInt(localStorage.getItem(key) || '0', 10);
-            if (Date.now() >= snoozeUntil) {
-                promo.style.display = 'block';
-            }
-
-            if (dismissBtn) {
-                dismissBtn.addEventListener('click', () => {
-                    localStorage.setItem(key, String(Date.now() + (12 * 60 * 60 * 1000)));
-                    promo.style.display = 'none';
-                });
-            }
-
-            if (titleEl && copyEl && linkEl) {
-                const variants = [
-                    {
-                        title: 'Share a surprise note today',
-                        copy: 'Pick one private note and turn it into a magic link.',
-                        cta: 'Open note picker →'
-                    },
-                    {
-                        title: 'Need standard note cooperation?',
-                        copy: 'Use a standard note for collaboration, edit workflows, and version tracking.',
-                        cta: 'Start collaboration →'
-                    }
-                ];
-
-                let variantIndex = 0;
-                const applyVariant = (index) => {
-                    const item = variants[index];
-                    titleEl.textContent = item.title;
-                    copyEl.textContent = item.copy;
-                    linkEl.textContent = item.cta;
-                };
-
-                applyVariant(variantIndex);
-                setInterval(() => {
-                    variantIndex = (variantIndex + 1) % variants.length;
-                    applyVariant(variantIndex);
-                }, 9000);
-            }
-        })();
-
-        // Daily quote
-        const container = document.getElementById('zen-quote-container');
-        const content = document.getElementById('zen-quote-content');
-        const author = document.getElementById('zen-quote-author');
-
-        echoFetch('/api/quote')
-            .then(response => {
-                if (!response.ok) throw new Error('Network response was not ok');
-                return response.json();
-            })
-            .then(data => {
-                if (data && data.text) {
-                    content.textContent = '"' + data.text + '"';
-                    author.textContent = '— ' + data.author;
-                    container.style.display = 'block';
-                    container.style.opacity = '0';
-                    setTimeout(() => {
-                        container.style.opacity = '1';
-                    }, 50);
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching ZenQuote:', error);
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function () {
+    const modal = document.getElementById('home-onboarding');
+    const status = document.getElementById('home-onboarding-status');
+    if (!modal) return;
+    modal.querySelectorAll('[data-use-case]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            modal.querySelectorAll('[data-use-case]').forEach(function (item) { item.disabled = true; });
+            fetch('{{ url_for("pages.save_onboarding_preferences") }}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+                body: JSON.stringify({use_case: button.dataset.useCase})
+            }).then(function (response) {
+                if (!response.ok) throw new Error('Unable to save preference');
+                window.location.reload();
+            }).catch(function () {
+                modal.querySelectorAll('[data-use-case]').forEach(function (item) { item.disabled = false; });
+                status.textContent = 'Please try again.';
             });
+        });
     });
+});
 </script>
-
-<style>
-    .home-header {
-        text-align: center;
-        padding: 1.5rem 1rem 1rem;
-        margin-bottom: 1.25rem;
-        background: linear-gradient(135deg, #3e2217 0%, #5a3328 100%);
-        border-radius: 12px;
-        color: white;
-    }
-
-    .home-header h1 {
-        color: white;
-        font-size: 1.4rem;
-        font-weight: 700;
-        margin: 0 0 0.25rem 0;
-    }
-
-    .home-header p {
-        color: rgba(255, 255, 255, 0.8);
-        font-size: 0.9rem;
-        margin: 0;
-    }
-
-    /* Quick Actions */
-    .home-quick-actions {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 0.75rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .quick-action-card {
-        display: block;
-        padding: 1rem 1.1rem;
-        background: white;
-        border-radius: 10px;
-        border: 1px solid #3e2217;
-        box-shadow: 0 2px 6px rgba(62, 34, 23, 0.04);
-        text-decoration: none;
-        color: inherit;
-        transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
-    }
-
-    .quick-action-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 14px rgba(62, 34, 23, 0.12);
-        border-color: #3e2217;
-    }
-
-    .quick-action-card strong {
-        display: block;
-        font-size: 0.95rem;
-        color: #3e2217;
-        margin-bottom: 0.2rem;
-    }
-
-    .quick-action-card span {
-        font-size: 0.8rem;
-        color: #888;
-    }
-
-    .quick-action-card.qa-primary {
-        border-color: #3e2217;
-    }
-
-    /* Sections */
-    .home-section {
-        margin-bottom: 1.5rem;
-    }
-
-    .home-section-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.75rem;
-        padding-bottom: 0.4rem;
-        border-bottom: 1px solid #f0f0f0;
-    }
-
-    .home-section-header h2 {
-        font-size: 1rem;
-        font-weight: 700;
-        color: #3e2217;
-        margin: 0;
-    }
-
-    .home-section-link {
-        font-size: 0.82rem;
-        font-weight: 600;
-        color: #3e2217;
-        text-decoration: none;
-    }
-
-    .home-section-link:hover {
-        text-decoration: underline;
-    }
-
-    /* Notes summary */
-    .home-notes-summary {
-        background: white;
-        border-radius: 10px;
-        padding: 1.25rem;
-        border: 1px solid rgba(62, 34, 23, 0.08);
-    }
-
-    .notes-count-display {
-        display: flex;
-        align-items: baseline;
-        gap: 0.5rem;
-    }
-
-    .notes-count-number {
-        font-size: 2rem;
-        font-weight: 800;
-        color: #3e2217;
-    }
-
-    .notes-count-label {
-        font-size: 0.9rem;
-        color: #888;
-    }
-
-    .notes-empty-hint {
-        margin: 0.5rem 0 0 0;
-        font-size: 0.85rem;
-        color: #aaa;
-    }
-
-    /* Community stats */
-    .community-stats-row {
-        display: flex;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-        margin-bottom: 1rem;
-    }
-
-    .stat-pill {
-        flex: 1;
-        min-width: 100px;
-        text-align: center;
-        padding: 0.75rem 0.5rem;
-        background: white;
-        border-radius: 8px;
-        border: 1px solid rgba(62, 34, 23, 0.08);
-    }
-
-    .stat-pill strong {
-        display: block;
-        font-size: 1.15rem;
-        color: #3e2217;
-        font-weight: 700;
-    }
-
-    .stat-pill span {
-        font-size: 0.75rem;
-        color: #999;
-    }
-
-    .active-pulse {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        background-color: #2ecc71;
-        border-radius: 50%;
-        margin-right: 4px;
-        vertical-align: middle;
-        position: relative;
-        top: -1px;
-        box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7);
-        animation: pulse-green 1.8s infinite;
-    }
-
-    @keyframes pulse-green {
-        0% {
-            transform: scale(0.95);
-            box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7);
-        }
-        70% {
-            transform: scale(1);
-            box-shadow: 0 0 0 6px rgba(46, 204, 113, 0);
-        }
-        100% {
-            transform: scale(0.95);
-            box-shadow: 0 0 0 0 rgba(46, 204, 113, 0);
-        }
-    }
-
-    /* Trending */
-    .home-trending {
-        background: white;
-        border-radius: 10px;
-        padding: 1rem 1.25rem;
-        border: 1px solid rgba(62, 34, 23, 0.08);
-    }
-
-    .home-trending h3 {
-        font-size: 0.88rem;
-        font-weight: 700;
-        color: #3e2217;
-        margin: 0 0 0.5rem 0;
-    }
-
-    .home-trending ul {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    .home-trending li {
-        padding: 0.35rem 0;
-        border-bottom: 1px solid #f8f8f8;
-    }
-
-    .home-trending li:last-child {
-        border-bottom: none;
-    }
-
-    .home-trending a {
-        color: #555;
-        text-decoration: none;
-        font-size: 0.88rem;
-    }
-
-    .home-trending a:hover {
-        color: #3e2217;
-        text-decoration: underline;
-    }
-
-    @media (max-width: 600px) {
-        .home-quick-actions {
-            grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr));
-            gap: 0.6rem;
-        }
-
-        .quick-action-card {
-            padding: 0.85rem 0.8rem;
-        }
-
-        .quick-action-card strong {
-            font-size: 0.88rem;
-        }
-    }
-
-    @media (max-width: 340px) {
-        .home-quick-actions {
-            grid-template-columns: 1fr;
-        }
-    }
-</style>
-
-{# Load Remark42 script to enable comment counters on this page #}
-{# Remark42 removed: use server-provided comment_count on posts #}
-
+{% endif %}
 {% endblock %}

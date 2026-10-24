@@ -15,7 +15,7 @@
         integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA=="
         crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="{{ url_for('static', filename='custom_styles.css') }}?v=1.0.6">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=1.0.10">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=1.0.11">
     {% if (current_user.is_authenticated and current_user.is_guest) or request.path.startswith('/personal_space') %}
     <link rel="stylesheet" href="{{ url_for('static', filename='tour.css') }}?v=1.0.0">
     {% endif %}

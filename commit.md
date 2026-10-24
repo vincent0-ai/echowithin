@@ -46,3 +46,15 @@
 - Preserved bulk selection for deleting multiple Vault items at once.
 - Privacy impact: Circle requests and membership controls remain private to Circle members; Vault deletion continues through the authenticated protected delete endpoints.
 - Validation: 12 focused Vault/onboarding tests passed, Python compilation passed, and `git diff --check` passed.
+
+## Navigation Focus Defaults
+
+### Model Attribution
+- Model: Copilot SDK in VS Code
+
+### Summary of Changes
+- Kept Profile visible as a default top-level destination for every onboarding focus.
+- Limited use-case personalization to the ordering and prioritization of the other direct links.
+- Removed the duplicate Trusted Circles link from the discussion-focused navigation.
+- Kept secondary destinations in More.
+- Validation: 38 onboarding/authentication tests passed and `git diff --check` passed.

@@ -864,6 +864,8 @@ circles_conf = db['circles']
 circle_posts_conf = db['circle_posts']
 circle_invites_conf = db['circle_invites']
 circle_requests_conf = db['circle_requests']
+circle_messages_conf = db['circle_messages']
+circle_media_conf = db['circle_media']
 community_notes_conf = db['community_notes']
 community_reactions_conf = db['community_reactions']
 community_reports_conf = db['community_reports']
@@ -1103,6 +1105,8 @@ circle_posts_conf.create_index([('circle_id', 1), ('created_at', -1)])
 circle_invites_conf.create_index('token_hash', unique=True)
 circle_requests_conf.create_index([('circle_id', 1), ('status', 1), ('created_at', -1)])
 circle_requests_conf.create_index([('circle_id', 1), ('user_id', 1)], unique=True)
+circle_messages_conf.create_index([('circle_id', 1), ('created_at', -1)])
+circle_media_conf.create_index([('circle_id', 1), ('created_at', -1)])
 community_notes_conf.create_index([('community_id', 1), ('created_at', -1)])
 community_notes_conf.create_index([('community_id', 1), ('score', -1)])
 community_notes_conf.create_index('author_id')
@@ -1194,6 +1198,8 @@ database.circles_conf = circles_conf
 database.circle_posts_conf = circle_posts_conf
 database.circle_invites_conf = circle_invites_conf
 database.circle_requests_conf = circle_requests_conf
+database.circle_messages_conf = circle_messages_conf
+database.circle_media_conf = circle_media_conf
 database.community_notes_conf = community_notes_conf
 database.community_reactions_conf = community_reactions_conf
 database.community_reports_conf = community_reports_conf

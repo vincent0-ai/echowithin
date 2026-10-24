@@ -59,6 +59,23 @@
 - Kept secondary destinations in More.
 - Validation: 38 onboarding/authentication tests passed and `git diff --check` passed.
 
+## Trusted Circle Roadmap Expansion
+
+### Model Attribution
+- Model: Copilot SDK in VS Code
+
+### Summary of Changes
+- Added QR-compatible invite display using the existing local QR asset.
+- Added username-based invitations and approval workflow integration.
+- Added owner-only moderator/member role controls and member removal.
+- Added private encrypted Circle chat.
+- Added per-post expiry options and a member-only plain-text export.
+- Added Circle-level notification mute/unmute controls.
+- Preserved existing game integration and Circle membership authorization.
+- Privacy impact: Circle chat and post content remain encrypted at rest; exports are generated only after membership authorization and are not stored server-side.
+- Media sharing remains intentionally blocked until a reusable private-media serving path can decrypt and authorize media safely; no plaintext fallback was introduced.
+- Validation: 48 focused tests passed, Circle templates parsed, Python compilation passed, and `git diff --check` passed.
+
 ## Circle Activity Integration
 
 ### Model Attribution

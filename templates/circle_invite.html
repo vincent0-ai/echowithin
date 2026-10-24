@@ -1,5 +1,7 @@
 {% extends "base.html" %}
+{% block extra_head %}<script src="{{ url_for('static', filename='qrcode.min.js') }}"></script>{% endblock %}
 {% block title %}<title>Circle invite | EchoWithin</title>{% endblock %}
 {% block content %}
-<main style="max-width:620px;margin:3rem auto;padding:0 1rem;text-align:center"><h1 style="color:var(--primary-dark-color)">Invite to {{ circle.name }}</h1><p style="color:var(--text-secondary)">This invite expires in 7 days and can be used 20 times.</p><input readonly value="{{ invite_url }}" style="width:100%;box-sizing:border-box;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--surface-bg);color:var(--text-dark-color)" onclick="this.select()"><p style="color:var(--text-secondary);font-size:.82rem">Copy this link to invite someone you trust.</p></main>
+<main style="max-width:620px;margin:3rem auto;padding:0 1rem;text-align:center"><h1 style="color:var(--primary-dark-color)">Invite to {{ circle.name }}</h1><p style="color:var(--text-secondary)">This invite expires in 7 days and can be used 20 times.</p><canvas id="circle-invite-qr" style="max-width:220px;margin:1rem auto;display:block"></canvas><input readonly value="{{ invite_url }}" style="width:100%;box-sizing:border-box;padding:.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--surface-bg);color:var(--text-dark-color)" onclick="this.select()"><p style="color:var(--text-secondary);font-size:.82rem">Scan or copy this invite.</p></main>
+<script nonce="{{ csp_nonce }}">document.addEventListener('DOMContentLoaded',function(){if(window.QRCode){QRCode.toCanvas(document.getElementById('circle-invite-qr'),'{{ invite_url }}',{width:220},function(){ });}});</script>
 {% endblock %}

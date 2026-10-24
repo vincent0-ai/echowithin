@@ -7,7 +7,7 @@ import secrets
 
 from bson.errors import InvalidId
 from bson.objectid import ObjectId
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for, jsonify, make_response
 from flask_login import current_user, login_required
 
 from security import encrypt_community_note, decrypt_community_note, parse_iso_utc
@@ -96,7 +96,11 @@ def create_circle():
 def view_circle(circle_id):
     import main as m
     circle = _get_circle(circle_id)
-    posts = list(m.circle_posts_conf.find({'circle_id': circle['_id']}).sort('created_at', -1).limit(50))
+    now = _now()
+    posts = list(m.circle_posts_conf.find({
+        'circle_id': circle['_id'],
+        '$or': [{'expires_at': None}, {'expires_at': {'$exists': False}}, {'expires_at': {'$gt': now}}]
+    }).sort('created_at', -1).limit(50))
     for post in posts:
         raw_content = decrypt_community_note(post.get('content', ''), circle['_id'])
         try:
@@ -114,18 +118,43 @@ def view_circle(circle_id):
         {'circle_id': circle['_id'], 'deactivated': {'$ne': True}},
         {'lobby_id': 1, 'title': 1, 'game_type': 1, 'pin': 1, 'expires_at': 1}
     ).sort('created_at', -1).limit(10))
+    messages = list(m.circle_messages_conf.find({'circle_id': circle['_id']}).sort('created_at', -1).limit(50))
+    for message in messages:
+        message['content'] = decrypt_community_note(message.get('content', ''), circle['_id'])
+        author = m.users_conf.find_one({'_id': message.get('author_id')}, {'username': 1})
+        message['author_name'] = author.get('username', 'Member') if author else 'Member'
+    messages.reverse()
     return render_template(
         'circle.html',
         circle=circle,
         posts=posts,
         members=members,
         game_lobbies=game_lobbies,
+        messages=messages,
         pending_requests=list(m.circle_requests_conf.find({'circle_id': circle['_id'], 'status': 'pending'})) if _role(circle) in ('owner', 'moderator') else [],
         circle_type=CIRCLE_TYPES.get(circle.get('circle_type', 'custom'), CIRCLE_TYPES['custom']),
         is_owner=str(circle.get('owner_id')) == str(current_user.id),
         active_page='circles',
         title=f"{circle.get('name', 'Circle')} | EchoWithin"
     )
+
+
+@bp.route('/circle/<circle_id>/chat', methods=['POST'])
+@login_required
+def create_circle_message(circle_id):
+    import main as m
+    circle = _get_circle(circle_id)
+    content = request.form.get('content', '').strip()
+    if not content or len(content) > 2000:
+        flash('Write a message first.', 'danger')
+        return _redirect(circle_id)
+    m.circle_messages_conf.insert_one({
+        'circle_id': circle['_id'],
+        'author_id': ObjectId(current_user.id),
+        'content': encrypt_community_note(content, circle['_id']),
+        'created_at': _now()
+    })
+    return _redirect(circle_id)
 
 
 @bp.route('/circle/<circle_id>/posts', methods=['POST'])
@@ -138,13 +167,17 @@ def create_circle_post(circle_id):
         flash('Write a post before sharing.', 'danger')
         return redirect(url_for('circles.view_circle', circle_id=circle_id))
     now = _now()
+    expiry = request.form.get('expiry', '').strip()
+    expires_at = None
+    if expiry in ('1d', '7d', '30d'):
+        expires_at = now + datetime.timedelta(days=int(expiry[:-1]))
     m.circle_posts_conf.insert_one({
         'circle_id': circle['_id'],
         'author_id': ObjectId(current_user.id),
         'kind': 'post',
         'content': encrypt_community_note(content, circle['_id']),
         'created_at': now,
-        'expires_at': None
+        'expires_at': expires_at
     })
     m.circles_conf.update_one({'_id': circle['_id']}, {'$set': {'updated_at': now}})
     return redirect(url_for('circles.view_circle', circle_id=circle_id))
@@ -262,6 +295,28 @@ def create_invite(circle_id):
     return render_template('circle_invite.html', circle=circle, invite_url=invite_url, active_page='circles', title='Circle invite | EchoWithin')
 
 
+@bp.route('/circle/<circle_id>/invite/user', methods=['POST'])
+@login_required
+def invite_username(circle_id):
+    import main as m
+    circle = _get_circle(circle_id)
+    if _role(circle) not in ('owner', 'moderator'):
+        abort(403)
+    username = request.form.get('username', '').strip()
+    user = m.users_conf.find_one({'username': username}, {'_id': 1})
+    if not user or user['_id'] in circle.get('members', []):
+        flash('User not found or already a member.', 'danger')
+        return _redirect(circle_id)
+    now = _now()
+    m.circle_requests_conf.update_one(
+        {'circle_id': circle['_id'], 'user_id': user['_id']},
+        {'$set': {'status': 'pending', 'invited_by': ObjectId(current_user.id), 'created_at': now}},
+        upsert=True
+    )
+    flash('Invitation sent.', 'success')
+    return _redirect(circle_id)
+
+
 @bp.route('/circle/join/<token>')
 @login_required
 def join_circle(token):
@@ -317,6 +372,55 @@ def deny_request(circle_id, request_id):
     if not result.matched_count:
         abort(404)
     return _redirect(circle_id)
+
+
+@bp.route('/circle/<circle_id>/members/<member_id>/role', methods=['POST'])
+@login_required
+def change_member_role(circle_id, member_id):
+    import main as m
+    circle = _get_circle(circle_id)
+    if _role(circle) != 'owner':
+        abort(403)
+    member_oid = _oid(member_id)
+    if member_oid == circle.get('owner_id') or member_oid not in circle.get('members', []):
+        abort(400)
+    role = request.form.get('role', 'member')
+    if role not in ('moderator', 'member'):
+        abort(400)
+    m.circles_conf.update_one({'_id': circle['_id']}, {'$set': {'roles.' + str(member_oid): role, 'updated_at': _now()}})
+    return _redirect(circle_id)
+
+
+@bp.route('/circle/<circle_id>/members/<member_id>/remove', methods=['POST'])
+@login_required
+def remove_member(circle_id, member_id):
+    import main as m
+    circle = _get_circle(circle_id)
+    if _role(circle) not in ('owner', 'moderator'):
+        abort(403)
+    member_oid = _oid(member_id)
+    if member_oid == circle.get('owner_id') or member_oid not in circle.get('members', []):
+        abort(400)
+    if _role(circle) != 'owner' and circle.get('roles', {}).get(str(member_oid)) == 'moderator':
+        abort(403)
+    m.circles_conf.update_one({'_id': circle['_id']}, {'$pull': {'members': member_oid}, '$unset': {'roles.' + str(member_oid): ''}, '$set': {'updated_at': _now()}})
+    return _redirect(circle_id)
+
+
+@bp.route('/circle/<circle_id>/export')
+@login_required
+def export_circle(circle_id):
+    import main as m
+    circle = _get_circle(circle_id)
+    posts = list(m.circle_posts_conf.find({'circle_id': circle['_id']}).sort('created_at', 1))
+    lines = [f"Circle: {circle.get('name', 'Circle')}", '']
+    for post in posts:
+        raw = decrypt_community_note(post.get('content', ''), circle['_id'])
+        lines.append(f"[{post.get('created_at', '')}] {raw}")
+    response = make_response('\n'.join(lines))
+    response.headers['Content-Type'] = 'text/plain; charset=utf-8'
+    response.headers['Content-Disposition'] = f"attachment; filename={circle.get('name', 'circle').replace(' ', '_')}.txt"
+    return response
 
 
 @bp.route('/circle/<circle_id>/settings/mute', methods=['POST'])

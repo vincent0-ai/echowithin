@@ -1,17 +1,308 @@
 {% extends "base.html" %}
 {% block title %}<title>{{ title }}</title>{% endblock %}
 {% block content %}
-<main class="circle-shell">
-    <header class="circle-header"><div><p class="circle-kicker">{{ circle_type[0] }} Circle</p><h1>{{ circle.name }}</h1><p>{{ circle_type[1] }}</p></div><div class="circle-actions"><form method="POST" action="{{ url_for('circles.create_invite', circle_id=circle._id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn" type="submit">Invite people</button></form><form method="POST" action="{{ url_for('circles.toggle_mute', circle_id=circle._id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-secondary" type="submit">{{ 'Unmute' if current_user.id in (circle.muted_by|map('string')|list) else 'Mute' }}</button></form><a class="btn btn-secondary" href="{{ url_for('circles.export_circle', circle_id=circle._id) }}">Export</a></div></header>
-    <section class="circle-post-box"><form method="POST" action="{{ url_for('circles.create_circle_post', circle_id=circle._id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label for="circle-content">Share with this Circle</label><textarea id="circle-content" name="content" maxlength="5000" required placeholder="Write something for your circle..."></textarea><div class="circle-post-options"><select name="expiry" aria-label="Post expiry"><option value="">Keep this post</option><option value="1d">Expire in 1 day</option><option value="7d">Expire in 7 days</option><option value="30d">Expire in 30 days</option></select><button class="btn" type="submit">Share</button></div></form></section>
-    <section class="circle-chat"><h2>Circle chat</h2><div class="circle-chat-log">{% for message in messages %}<p><strong>{{ message.author_name }}</strong> {{ message.content }}</p>{% else %}<p class="circle-muted">Start the conversation.</p>{% endfor %}</div><form method="POST" action="{{ url_for('circles.create_circle_message', circle_id=circle._id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input name="content" maxlength="2000" required placeholder="Message this Circle"><button class="btn" type="submit">Send</button></form></section>
-    {% if is_owner or current_user.id in circle.roles|map('string')|list %}<section class="circle-admin"><h2>Invite by username</h2><form method="POST" action="{{ url_for('circles.invite_username', circle_id=circle._id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input name="username" required placeholder="Username"><button class="btn" type="submit">Invite</button></form></section>{% endif %}
-    <section class="circle-activities"><div><h2>Play and plan</h2><p>Bring existing EchoWithin activities into this Circle.</p></div><div class="circle-activity-links"><a class="btn" href="{{ url_for('circles.create_circle_game', circle_id=circle._id, type='poll') }}">Host a poll game</a><a class="btn btn-secondary" href="{{ url_for('circles.create_circle_game', circle_id=circle._id, type='trivia') }}">Host trivia</a><a class="btn btn-secondary" href="{{ url_for('game.games_join') }}">Join with PIN</a></div>{% if game_lobbies %}<div class="circle-lobbies">{% for lobby in game_lobbies %}<a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}"><strong>{{ lobby.title }}</strong><span>{{ lobby.game_type }}{% if lobby.pin %} · PIN {{ lobby.pin }}{% endif %}</span></a>{% endfor %}</div>{% endif %}</section>
-    <section class="circle-tools"><details><summary>Create a private poll</summary><form method="POST" action="{{ url_for('circles.create_poll', circle_id=circle._id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input name="question" maxlength="240" required placeholder="Ask your circle"><input name="options" required placeholder="Option 1"><input name="options" required placeholder="Option 2"><input name="options" placeholder="Option 3"><button class="btn" type="submit">Add poll</button></form></details><details><summary>Add an event</summary><form method="POST" action="{{ url_for('circles.create_event', circle_id=circle._id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input name="name" maxlength="120" required placeholder="Event name"><input name="starts_at" type="datetime-local" required><button class="btn" type="submit">Add event</button></form></details></section>
-    {% if pending_requests %}<section class="circle-members"><h2>Join requests</h2>{% for join_request in pending_requests %}<div class="circle-request"><span>{{ join_request.user_id }}</span><form method="POST" action="{{ url_for('circles.approve_request', circle_id=circle._id, request_id=join_request._id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn" type="submit">Approve</button></form><form method="POST" action="{{ url_for('circles.deny_request', circle_id=circle._id, request_id=join_request._id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-secondary" type="submit">Decline</button></form></div>{% endfor %}</section>{% endif %}
-    <section class="circle-feed"><h2>Circle feed</h2>{% for post in posts %}<article class="circle-post"><p class="circle-post-meta">{{ post.author_name }} · {{ post.created_at|localtime('%b %d, %Y') }}</p>{% if post.kind == 'poll' %}<strong>{{ post.payload.question }}</strong><form class="circle-vote-form" method="POST" action="{{ url_for('circles.vote_poll', circle_id=circle._id, post_id=post._id) }}">{% for option in post.payload.options %}<label><input type="radio" name="option" value="{{ loop.index0 }}" {% if post.my_vote == loop.index0 %}checked{% endif %} required>{{ option }}</label>{% endfor %}<button class="btn btn-secondary" type="submit">Vote</button></form>{% elif post.kind == 'event' %}<strong>{{ post.payload.name }}</strong><p>{{ post.payload.starts_at }}</p><form method="POST" action="{{ url_for('circles.rsvp_event', circle_id=circle._id, post_id=post._id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-secondary" type="submit">{{ 'Going' if post.is_attending else 'I’m going' }}</button><span class="circle-rsvp-count">{{ post.payload.attending|length }} going</span></form>{% else %}<p>{{ post.payload.content }}</p>{% endif %}</article>{% else %}<p class="circle-muted">Your first shared post can start the conversation.</p>{% endfor %}</section>
-    <aside class="circle-members"><h2>Members</h2>{% for member in members %}<div class="circle-member"><span>{{ member.username }}</span>{% if member._id|string != circle.owner_id|string and is_owner %}<form method="POST" action="{{ url_for('circles.change_member_role', circle_id=circle._id, member_id=member._id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><select name="role" aria-label="Role for {{ member.username }}"><option value="member">Member</option><option value="moderator" {% if circle.roles.get(member._id|string) == 'moderator' %}selected{% endif %}>Moderator</option></select><button class="btn btn-secondary" type="submit">Save</button></form><form method="POST" action="{{ url_for('circles.remove_member', circle_id=circle._id, member_id=member._id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-secondary" type="submit">Remove</button></form>{% endif %}</div>{% endfor %}</aside>
+{% set is_mod = is_owner or current_user.id in circle.roles|map('string')|list %}
+{% set is_muted = current_user.id in (circle.muted_by|map('string')|list) %}
+<main class="cv" id="cv">
+    <header class="cv-head">
+        <div class="cv-title">
+            <p class="cv-kicker">{{ circle_type[0] }} Circle</p>
+            <h1>{{ circle.name }}</h1>
+            <p class="cv-sub">{{ circle_type[1] }}</p>
+        </div>
+        <div class="cv-actions">
+            <form method="POST" action="{{ url_for('circles.create_invite', circle_id=circle._id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn" type="submit">Invite</button>
+            </form>
+            <form method="POST" action="{{ url_for('circles.toggle_mute', circle_id=circle._id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-secondary" type="submit">{{ 'Unmute' if is_muted else 'Mute' }}</button>
+            </form>
+            <a class="btn btn-secondary" href="{{ url_for('circles.export_circle', circle_id=circle._id) }}">Export</a>
+        </div>
+    </header>
+
+    <nav class="cv-tabs" aria-label="Circle sections">
+        <button type="button" data-tab="chat" aria-pressed="true">Chat</button>
+        <button type="button" data-tab="feed" aria-pressed="false">Feed</button>
+        <button type="button" data-tab="plan" aria-pressed="false">Plan</button>
+        <button type="button" data-tab="members" aria-pressed="false">Members</button>
+    </nav>
+
+    <div class="cv-grid">
+        <div class="cv-main">
+            <section class="cv-card cv-panel cv-chat" data-panel="chat" aria-label="Circle chat">
+                <h2>Chat</h2>
+                <div class="cv-chat-log" id="cv-chat-log" role="log" aria-live="polite">
+                    {% set ns = namespace(prev=none) %}
+                    {% for message in messages %}
+                    {% set mine = (message.author_id is defined and message.author_id|string == current_user.id|string) or message.author_name == current_user.username %}
+                    {% set same = ns.prev == message.author_name %}
+                    <div class="cv-msg{% if mine %} cv-msg-mine{% endif %}{% if same %} cv-msg-cont{% endif %}">
+                        {% if not same and not mine %}<span class="cv-msg-author">{{ message.author_name }}</span>{% endif %}
+                        <p class="cv-bubble">{{ message.content }}</p>
+                        {% if message.created_at %}<time class="cv-msg-time">{{ message.created_at|localtime('%H:%M') }}</time>{% endif %}
+                    </div>
+                    {% set ns.prev = message.author_name %}
+                    {% else %}
+                    <p class="cv-empty">No messages yet.</p>
+                    {% endfor %}
+                </div>
+                <form class="cv-composer" method="POST" action="{{ url_for('circles.create_circle_message', circle_id=circle._id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input class="cv-input" name="content" maxlength="2000" required placeholder="Message" autocomplete="off" aria-label="Message">
+                    <button class="btn" type="submit">Send</button>
+                </form>
+            </section>
+
+            <section class="cv-panel cv-feed" data-panel="feed" aria-label="Circle feed">
+                <div class="cv-card">
+                    <form method="POST" action="{{ url_for('circles.create_circle_post', circle_id=circle._id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <label class="cv-label" for="circle-content">Share with this Circle</label>
+                        <textarea class="cv-input cv-textarea" id="circle-content" name="content" maxlength="5000" required placeholder="Write something"></textarea>
+                        <div class="cv-row">
+                            <select class="cv-input" name="expiry" aria-label="Post expiry">
+                                <option value="">Keep</option>
+                                <option value="1d">Expires in 1 day</option>
+                                <option value="7d">Expires in 7 days</option>
+                                <option value="30d">Expires in 30 days</option>
+                            </select>
+                            <button class="btn" type="submit">Share</button>
+                        </div>
+                    </form>
+                </div>
+                {% for post in posts %}
+                <article class="cv-card cv-post">
+                    <p class="cv-meta">{{ post.author_name }} · {{ post.created_at|localtime('%b %d, %Y') }}</p>
+                    {% if post.kind == 'poll' %}
+                    <strong class="cv-post-title">{{ post.payload.question }}</strong>
+                    <form class="cv-vote" method="POST" action="{{ url_for('circles.vote_poll', circle_id=circle._id, post_id=post._id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        {% for option in post.payload.options %}
+                        <label class="cv-opt"><input type="radio" name="option" value="{{ loop.index0 }}" {% if post.my_vote == loop.index0 %}checked{% endif %} required><span>{{ option }}</span></label>
+                        {% endfor %}
+                        <button class="btn btn-secondary" type="submit">Vote</button>
+                    </form>
+                    {% elif post.kind == 'event' %}
+                    <strong class="cv-post-title">{{ post.payload.name }}</strong>
+                    <p class="cv-meta">{{ post.payload.starts_at }}</p>
+                    <form class="cv-row" method="POST" action="{{ url_for('circles.rsvp_event', circle_id=circle._id, post_id=post._id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="btn btn-secondary" type="submit">{{ 'Going' if post.is_attending else 'I’m going' }}</button>
+                        <span class="cv-meta">{{ post.payload.attending|length }} going</span>
+                    </form>
+                    {% else %}
+                    <p class="cv-text">{{ post.payload.content }}</p>
+                    {% endif %}
+                </article>
+                {% else %}
+                <p class="cv-empty">No posts yet.</p>
+                {% endfor %}
+            </section>
+        </div>
+
+        <div class="cv-side">
+            <section class="cv-card cv-panel" data-panel="plan" aria-label="Plan">
+                <h2>Play and plan</h2>
+                <div class="cv-stack">
+                    <a class="btn" href="{{ url_for('circles.create_circle_game', circle_id=circle._id, type='poll') }}">Host poll game</a>
+                    <a class="btn btn-secondary" href="{{ url_for('circles.create_circle_game', circle_id=circle._id, type='trivia') }}">Host trivia</a>
+                    <a class="btn btn-secondary" href="{{ url_for('game.games_join') }}">Join with PIN</a>
+                </div>
+                {% if game_lobbies %}
+                <div class="cv-lobbies">
+                    {% for lobby in game_lobbies %}
+                    <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}"><strong>{{ lobby.title }}</strong><span>{{ lobby.game_type }}{% if lobby.pin %} · PIN {{ lobby.pin }}{% endif %}</span></a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <details class="cv-details">
+                    <summary>New poll</summary>
+                    <form class="cv-stack" method="POST" action="{{ url_for('circles.create_poll', circle_id=circle._id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input class="cv-input" name="question" maxlength="240" required placeholder="Question">
+                        <input class="cv-input" name="options" required placeholder="Option 1">
+                        <input class="cv-input" name="options" required placeholder="Option 2">
+                        <input class="cv-input" name="options" placeholder="Option 3">
+                        <button class="btn" type="submit">Add poll</button>
+                    </form>
+                </details>
+                <details class="cv-details">
+                    <summary>New event</summary>
+                    <form class="cv-stack" method="POST" action="{{ url_for('circles.create_event', circle_id=circle._id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input class="cv-input" name="name" maxlength="120" required placeholder="Event name" aria-label="Event name">
+                        <input class="cv-input" name="starts_at" type="datetime-local" required aria-label="Starts at">
+                        <button class="btn" type="submit">Add event</button>
+                    </form>
+                </details>
+            </section>
+
+            <section class="cv-card cv-panel" data-panel="members" aria-label="Members">
+                {% if pending_requests %}
+                <h2>Requests</h2>
+                {% for join_request in pending_requests %}
+                <div class="cv-request">
+                    <span class="cv-name">{{ join_request.username or join_request.user_id }}</span>
+                    <div class="cv-row">
+                        <form method="POST" action="{{ url_for('circles.approve_request', circle_id=circle._id, request_id=join_request._id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn" type="submit">Approve</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('circles.deny_request', circle_id=circle._id, request_id=join_request._id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-secondary" type="submit">Decline</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+                {% endif %}
+
+                <h2>Members</h2>
+                {% if is_mod %}
+                <form class="cv-row cv-invite" method="POST" action="{{ url_for('circles.invite_username', circle_id=circle._id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input class="cv-input" name="username" required placeholder="Invite by username" aria-label="Username">
+                    <button class="btn" type="submit">Invite</button>
+                </form>
+                {% endif %}
+                {% for member in members %}
+                {% set role = 'Owner' if member._id|string == circle.owner_id|string else ('Moderator' if circle.roles.get(member._id|string) == 'moderator' else '') %}
+                <div class="cv-member">
+                    <div class="cv-member-top">
+                        <span class="cv-name">{{ member.username }}</span>
+                        {% if role %}<span class="cv-meta">{{ role }}</span>{% endif %}
+                    </div>
+                    {% if member._id|string != circle.owner_id|string and is_owner %}
+                    <details class="cv-details cv-manage">
+                        <summary>Manage</summary>
+                        <form class="cv-row" method="POST" action="{{ url_for('circles.change_member_role', circle_id=circle._id, member_id=member._id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select class="cv-input" name="role" aria-label="Role for {{ member.username }}">
+                                <option value="member">Member</option>
+                                <option value="moderator" {% if circle.roles.get(member._id|string) == 'moderator' %}selected{% endif %}>Moderator</option>
+                            </select>
+                            <button class="btn btn-secondary" type="submit">Save</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('circles.remove_member', circle_id=circle._id, member_id=member._id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-secondary" type="submit">Remove</button>
+                        </form>
+                    </details>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </section>
+        </div>
+    </div>
 </main>
-<style nonce="{{ csp_nonce }}">.circle-shell{max-width:900px;margin:0 auto;padding:2rem 1rem}.circle-header{display:flex;justify-content:space-between;gap:1rem;align-items:start;border-bottom:1px solid var(--border-color);padding-bottom:1rem}.circle-actions,.circle-activity-links,.circle-post-options,.circle-member,.circle-chat form,.circle-admin form{display:flex;gap:.5rem;flex-wrap:wrap}.circle-kicker{color:var(--primary-color);font-size:.78rem;text-transform:uppercase;letter-spacing:.08em}.circle-header h1{color:var(--primary-dark-color);margin:.2rem 0}.circle-header p:last-child,.circle-muted,.circle-post-meta,.circle-activities p{color:var(--text-secondary)}.circle-post-box,.circle-post,.circle-members,.circle-activities,.circle-chat,.circle-admin{background:var(--card-bg);border:1px solid var(--border-color);border-radius:12px;padding:1rem;margin-top:1rem}.circle-post-box label{display:block;color:var(--text-secondary);font-size:.85rem;margin-bottom:.4rem}.circle-post-box textarea{width:100%;min-height:100px;box-sizing:border-box;border:1px solid var(--border-color);border-radius:8px;padding:.7rem;background:var(--surface-bg);color:var(--text-dark-color);margin-bottom:.65rem}.circle-post-options{align-items:center}.circle-post-options select,.circle-admin input,.circle-chat input,.circle-member select{padding:.6rem;border:1px solid var(--border-color);border-radius:7px;background:var(--surface-bg);color:var(--text-dark-color)}.circle-feed h2,.circle-members h2,.circle-activities h2,.circle-chat h2,.circle-admin h2{color:var(--primary-dark-color);font-size:1.15rem}.circle-activities h2{margin:.1rem 0}.circle-activities p{margin:.25rem 0 .75rem}.circle-lobbies{display:grid;gap:.5rem;margin-top:1rem}.circle-lobbies a{display:flex;justify-content:space-between;gap:.5rem;border-top:1px solid var(--border-color);padding-top:.6rem;text-decoration:none;color:var(--primary-dark-color)}.circle-lobbies span,.circle-rsvp-count{color:var(--text-secondary);font-size:.8rem}.circle-tools{display:grid;gap:.5rem;margin-top:1rem}.circle-tools details{border:1px solid var(--border-color);border-radius:10px;padding:.7rem;background:var(--surface-bg)}.circle-tools form,.circle-vote-form{display:grid;gap:.5rem;margin-top:.7rem}.circle-tools input{padding:.6rem;border:1px solid var(--border-color);border-radius:7px;background:var(--card-bg);color:var(--text-dark-color)}.circle-vote-form label{display:block;color:var(--text-secondary);font-size:.85rem}.circle-post{line-height:1.55}.circle-post-meta{font-size:.78rem;margin-top:0}.circle-members span{color:var(--text-secondary)}.circle-member{justify-content:space-between;align-items:center;padding:.45rem 0;border-bottom:1px solid var(--border-color)}.circle-member:last-child{border-bottom:0}.circle-chat-log{max-height:220px;overflow:auto;margin-bottom:.7rem}.circle-chat-log p{margin:.35rem 0;color:var(--text-secondary)}.circle-chat form input,.circle-admin form input{flex:1;min-width:150px}@media(max-width:600px){.circle-header{flex-direction:column}.circle-actions,.circle-actions form,.circle-actions a{width:100%}.circle-actions button,.circle-actions a{flex:1;text-align:center}}
+
+<style nonce="{{ csp_nonce }}">
+.cv { max-width: 1040px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+.cv h1, .cv h2 { color: var(--primary-dark-color); margin: 0; }
+.cv h2 { font-size: 1.05rem; margin-bottom: .75rem; }
+.cv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1rem; }
+.cv-kicker { color: var(--primary-color); font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 .25rem; }
+.cv-sub, .cv-meta, .cv-empty { color: var(--text-secondary); font-size: .85rem; margin: .25rem 0 0; }
+.cv-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.cv-actions form { margin: 0; }
+
+.cv-tabs { display: none; }
+.cv-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 1rem; align-items: start; }
+.cv-main, .cv-side { display: grid; gap: 1rem; min-width: 0; }
+.cv-feed { display: grid; gap: .75rem; }
+.cv-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; min-width: 0; }
+
+.cv-input { width: 100%; box-sizing: border-box; min-height: 2.6rem; padding: .6rem .7rem; font-size: 1rem; font-family: inherit; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-bg); color: var(--text-dark-color); }
+.cv-textarea { min-height: 96px; resize: vertical; margin-bottom: .6rem; }
+.cv-label { display: block; color: var(--text-secondary); font-size: .85rem; margin-bottom: .4rem; }
+.cv-row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.cv-row form, .cv-request form { margin: 0; }
+.cv-row .cv-input { flex: 1; min-width: 120px; width: auto; }
+.cv-stack { display: grid; gap: .5rem; margin-top: .75rem; }
+.cv-stack:first-of-type { margin-top: 0; }
+
+.cv-chat-log { height: 440px; overflow-y: auto; display: flex; flex-direction: column; gap: .25rem; padding: .25rem .1rem .75rem; overscroll-behavior: contain; }
+.cv-msg { display: flex; flex-direction: column; align-items: flex-start; max-width: 82%; margin-top: .6rem; }
+.cv-msg-cont { margin-top: 0; }
+.cv-msg-mine { align-self: flex-end; align-items: flex-end; }
+.cv-msg-author { color: var(--primary-dark-color); font-size: .75rem; font-weight: 700; margin: 0 .25rem .15rem; }
+.cv-bubble { margin: 0; padding: .5rem .8rem; border-radius: 14px; background: var(--surface-bg); border: 1px solid var(--border-color); color: var(--text-dark-color); line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cv-msg-mine .cv-bubble { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
+.cv-msg-time { color: var(--text-secondary); font-size: .68rem; margin: .1rem .3rem 0; }
+.cv-chat-log .cv-empty { margin: auto; }
+.cv-composer { display: flex; gap: .5rem; padding-top: .75rem; border-top: 1px solid var(--border-color); }
+.cv-composer .cv-input { flex: 1; min-width: 0; }
+
+.cv-post-title { display: block; color: var(--primary-dark-color); }
+.cv-post .cv-meta:first-child { margin: 0 0 .35rem; }
+.cv-text { margin: 0; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cv-vote { display: grid; gap: .4rem; margin-top: .6rem; }
+.cv-opt { display: flex; align-items: center; gap: .6rem; padding: .6rem .7rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-bg); color: var(--text-dark-color); cursor: pointer; min-height: 2.6rem; box-sizing: border-box; }
+.cv-opt:hover { border-color: var(--primary-color); }
+
+.cv-lobbies { display: grid; margin-top: .75rem; }
+.cv-lobbies a { display: flex; justify-content: space-between; gap: .5rem; padding: .6rem 0; border-top: 1px solid var(--border-color); color: var(--primary-dark-color); text-decoration: none; }
+.cv-lobbies span { color: var(--text-secondary); font-size: .8rem; }
+.cv-details { margin-top: .75rem; border: 1px solid var(--border-color); border-radius: 10px; padding: .6rem .75rem; background: var(--surface-bg); }
+.cv-details summary { cursor: pointer; color: var(--primary-dark-color); font-weight: 600; font-size: .9rem; }
+.cv-details form { margin-top: .6rem; }
+.cv-details .cv-stack { margin-top: .6rem; }
+
+.cv-request, .cv-member { padding: .6rem 0; border-top: 1px solid var(--border-color); }
+.cv-request { display: grid; gap: .5rem; }
+.cv-invite { margin-bottom: .5rem; flex-wrap: nowrap; }
+.cv-member:first-of-type { border-top: 0; }
+.cv-member-top { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.cv-name { color: var(--text-dark-color); overflow-wrap: anywhere; }
+.cv-manage { background: transparent; }
+.cv-manage form + form { margin-top: .5rem; }
+
+@media (max-width: 860px) {
+    .cv-grid { grid-template-columns: 1fr; }
+    .cv-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: .35rem; margin-bottom: 1rem; }
+    .cv-tabs button { min-height: 2.75rem; padding: .4rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--card-bg); color: var(--text-secondary); font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; }
+    .cv-tabs button[aria-pressed="true"] { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
+    .cv-js .cv-panel { display: none; }
+    .cv-js[data-active="chat"] [data-panel="chat"],
+    .cv-js[data-active="feed"] [data-panel="feed"],
+    .cv-js[data-active="plan"] [data-panel="plan"],
+    .cv-js[data-active="members"] [data-panel="members"] { display: block; }
+    .cv-js[data-active="feed"] [data-panel="feed"] { display: grid; }
+    .cv-chat-log { height: 60vh; height: calc(100dvh - 21rem); min-height: 260px; }
+}
+@media (max-width: 600px) {
+    .cv { padding: 1rem .75rem 2rem; }
+    .cv-head { flex-direction: column; }
+    .cv-actions { width: 100%; }
+    .cv-actions form, .cv-actions > a { flex: 1; }
+    .cv-actions .btn { width: 100%; box-sizing: border-box; text-align: center; min-height: 2.75rem; }
+    .cv-msg { max-width: 90%; }
+    .cv-card { padding: .85rem; }
+}
 </style>
+<script nonce="{{ csp_nonce }}">
+(function () {
+    var cv = document.getElementById('cv');
+    if (!cv) return;
+    cv.classList.add('cv-js');
+    var log = document.getElementById('cv-chat-log');
+    var tabs = cv.querySelectorAll('[data-tab]');
+    var key = 'cv-tab-' + location.pathname;
+    function toBottom() { if (log) log.scrollTop = log.scrollHeight; }
+    function show(name) {
+        cv.setAttribute('data-active', name);
+        tabs.forEach(function (t) { t.setAttribute('aria-pressed', t.dataset.tab === name ? 'true' : 'false'); });
+        try { sessionStorage.setItem(key, name); } catch (e) {}
+        if (name === 'chat') toBottom();
+    }
+    tabs.forEach(function (t) { t.addEventListener('click', function () { show(t.dataset.tab); }); });
+    var saved = 'chat';
+    try { saved = sessionStorage.getItem(key) || 'chat'; } catch (e) {}
+    show(saved);
+    toBottom();
+})();
+</script>
 {% endblock %}

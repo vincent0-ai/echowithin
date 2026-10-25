@@ -26,41 +26,25 @@
 
 {% block extra_head_css %}
 <style nonce="{{ csp_nonce }}">
-    .public-home { max-width:1120px; margin:0 auto; padding:3rem 1rem 4rem; }
-    .public-home-hero { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr); gap:3rem; align-items:center; padding:2rem 0 4rem; }
-    .public-home-kicker { color:var(--primary-color); font-size:.78rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; margin:0 0 .7rem; }
-    .public-home h1 { color:var(--primary-dark-color); font-size:clamp(2.3rem,6vw,4.6rem); line-height:1.04; letter-spacing:-.05em; max-width:720px; margin:0; }
-    .public-home-lede { color:var(--text-secondary); font-size:1.15rem; line-height:1.55; max-width:560px; margin:1.25rem 0 1.5rem; }
-    .public-home-actions { display:flex; align-items:center; flex-wrap:wrap; gap:.8rem; }
-    .public-home-primary { background:var(--primary-color); border:1px solid var(--primary-color); border-radius:9px; color:#fff; display:inline-block; font-weight:700; padding:.75rem 1.35rem; text-decoration:none; }
-    .public-home-secondary { color:var(--primary-color); font-weight:700; padding:.75rem .3rem; text-decoration:none; }
-    .public-home-secondary:hover { text-decoration:underline; }
-    .public-home-preview { background:var(--surface-bg); border:1px solid var(--border-color); border-radius:16px; box-shadow:0 10px 30px var(--shadow-color); padding:1.4rem; }
-    .public-preview-topline { color:var(--text-secondary); font-size:.78rem; margin-bottom:2rem; }
-    .public-preview-dot { background:#4b9b70; border-radius:50%; display:inline-block; height:7px; margin-right:.35rem; width:7px; }
-    .public-preview-title { color:var(--primary-dark-color); font-size:1.45rem; font-weight:800; }
-    .public-home-preview p { color:var(--text-secondary); font-size:.9rem; line-height:1.5; margin:.45rem 0 1.2rem; }
-    .public-preview-row { border-top:1px solid var(--border-color); color:var(--text-secondary); display:flex; font-size:.83rem; justify-content:space-between; padding:.7rem 0; }
-    .public-preview-row strong { color:var(--primary-color); }
-    .public-section-heading { margin-bottom:1.25rem; }
-    .public-section-heading h2, .public-home-final h2 { color:var(--primary-dark-color); font-size:clamp(1.5rem,3vw,2.2rem); letter-spacing:-.03em; margin:0; }
-    .public-home-paths, .public-comparison { border-top:1px solid var(--border-color); padding:3rem 0; }
-    .public-path-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.75rem; }
-    .public-path-card { border:1px solid var(--border-color); border-radius:12px; padding:1rem; }
-    .public-path-card:hover { border-color:var(--primary-color); }
-    .public-path-label { color:var(--primary-color); display:block; font-size:.76rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
-    .public-path-card h3 { color:var(--primary-dark-color); font-size:1.05rem; line-height:1.25; margin:.65rem 0 .45rem; }
-    .public-path-card p { color:var(--text-secondary); font-size:.86rem; line-height:1.5; margin:0; }
-    .comparison-table { border:1px solid var(--border-color); border-radius:12px; overflow:hidden; }
-    .comparison-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; padding:.85rem 1rem; border-top:1px solid var(--border-color); }
-    .comparison-row:first-child { border-top:0; }
-    .comparison-row span { color:var(--text-secondary); }
-    .comparison-row strong { color:var(--primary-dark-color); }
-    .comparison-header { background:var(--surface-bg); color:var(--primary-dark-color); font-size:.8rem; font-weight:700; text-transform:uppercase; }
-    .public-home-final { border-top:1px solid var(--border-color); padding:3rem 0 1rem; }
-    .public-home-final p { color:var(--text-secondary); margin:.5rem 0 1.2rem; }
-    @media (max-width:760px) { .public-home { padding-top:1.5rem; } .public-home-hero { grid-template-columns:1fr; gap:2rem; padding-bottom:3rem; } .public-path-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-    @media (max-width:450px) { .public-path-grid { grid-template-columns:1fr; } .comparison-row { grid-template-columns:1fr; gap:.25rem; } }
+    /* style.css makes every <main> a centered flex column, which shrinks the
+       hero to its content width. Reset it for this page. */
+    main.public-home { display:block; width:100%; max-width:1120px; min-height:0; margin:0 auto; padding:3rem 1rem 4rem; }
+    .public-home-hero { display:flex; align-items:center; min-height:min(60vh,560px); padding:2rem 0; }
+    .public-home-copy { width:100%; max-width:760px; }
+    .public-home h1 { color:var(--primary-dark-color); font-size:clamp(2rem,6.5vw,4rem); font-weight:700; line-height:1.1; letter-spacing:-.03em; overflow-wrap:break-word; margin:0; }
+    .public-home-lede { color:var(--text-secondary); font-size:clamp(1rem,2.4vw,1.2rem); line-height:1.55; max-width:560px; margin:1.25rem 0 1.75rem; }
+    .public-home-actions { display:flex; align-items:center; flex-wrap:wrap; gap:.75rem; }
+    .public-home-actions .btn { display:inline-flex; align-items:center; justify-content:center; min-height:48px; padding:.75rem 1.5rem; border-radius:10px; font-size:.95rem; font-weight:600; text-decoration:none; }
+    .public-home-primary { background:var(--primary-color); border:1px solid var(--primary-color); color:var(--text-light-color); }
+    .public-home-primary:hover { background:var(--primary-dark-color); border-color:var(--primary-dark-color); }
+    .public-home-secondary { background:transparent; border:1px solid var(--border-color); color:var(--primary-color); }
+    .public-home-secondary:hover { border-color:var(--primary-color); }
+    @media (max-width:600px) {
+        main.public-home { padding:1.25rem .75rem 2.5rem; }
+        .public-home-hero { min-height:0; padding:1.5rem 0; }
+        .public-home-actions { flex-direction:column; align-items:stretch; }
+        .public-home-actions .btn { width:100%; }
+    }
 </style>
 {% endblock %}
 
@@ -68,11 +52,11 @@
 <main class="public-home">
     <section class="public-home-hero">
         <div class="public-home-copy">
-            <h1>A quieter place for the people and moments that matter.</h1>
+            <h1>A quieter place for the people, memories, conversations and moments that matter.</h1>
             <p class="public-home-lede">Write privately, grow closer, and share with the circles you trust.</p>
             <div class="public-home-actions">
                 <a href="{{ url_for('auth.login', next=url_for('pages.home')) }}" class="btn public-home-primary" rel="nofollow">Get started</a>
-                <a href="{{ url_for('auth.start_guest_tour') }}" class="public-home-secondary" rel="nofollow">Explore the tour</a>
+                <a href="{{ url_for('auth.start_guest_tour') }}" class="btn public-home-secondary" rel="nofollow">Explore the tour</a>
             </div>
         </div>
     </section>

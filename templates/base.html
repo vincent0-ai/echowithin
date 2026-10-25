@@ -835,7 +835,7 @@
                 {% set use_case = current_user.onboarding_use_case|default('general', true) %}
                 <a href="{{ url_for('pages.home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
                 {% if use_case == 'relationship' %}
-                <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Together</a>
+                <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Bonds</a>
                 <a href="{{ url_for('chat.messages_page') }}" class="{{ 'active' if active_page == 'messages' }}" style="position: relative;">Messages <span id="global-unread-count" class="badge" style="display: none; background: #c62828; color: white; margin-left: 2px;">0</span></a>
                 <a href="{{ url_for('notes.personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">Notes</a>
                 {% elif use_case == 'discussion' %}
@@ -845,18 +845,18 @@
                 {% elif use_case == 'reflection' %}
                 <a href="{{ url_for('notes.personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">Notes</a>
                 <a href="{{ url_for('vault.vault_page') }}" class="{{ 'active' if active_page == 'vault' }}">Vault</a>
-                <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Together</a>
+                <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Bonds</a>
                 {% elif use_case == 'creative' %}
                 <a href="{{ url_for('notes.personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">Notes</a>
                 <a href="{{ url_for('blog.blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('communities.communities_page') }}" class="{{ 'active' if active_page == 'communities' }}">Communities</a>
                 {% elif use_case == 'play' %}
                 <a href="{{ url_for('game.games_list') }}" class="{{ 'active' if active_page == 'games' }}">Play</a>
-                <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Together</a>
+                <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Bonds</a>
                 <a href="{{ url_for('chat.messages_page') }}" class="{{ 'active' if active_page == 'messages' }}" style="position: relative;">Messages <span id="global-unread-count" class="badge" style="display: none; background: #c62828; color: white; margin-left: 2px;">0</span></a>
                 {% else %}
                 <a href="{{ url_for('notes.personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">Notes</a>
-                <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Together</a>
+                <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Bonds</a>
                 <a href="{{ url_for('chat.messages_page') }}" class="{{ 'active' if active_page == 'messages' }}" style="position: relative;">Messages <span id="global-unread-count" class="badge" style="display: none; background: #c62828; color: white; margin-left: 2px;">0</span></a>
                 {% endif %}
                 <a href="{{ url_for('profile.profile', username=current_user.username) }}"
@@ -867,7 +867,7 @@
                     </button>
                     <div class="nav-more-menu" id="nav-more-menu">
                         {% if use_case not in ('general', 'relationship', 'reflection', 'creative', 'play') %}<a href="{{ url_for('notes.personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">Notes</a>{% endif %}
-                        {% if use_case not in ('general', 'relationship', 'reflection', 'play') %}<a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Together</a>{% endif %}
+                        {% if use_case not in ('general', 'relationship', 'reflection', 'play') %}<a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Bonds</a>{% endif %}
                         {% if use_case not in ('general', 'relationship', 'discussion', 'play') %}<a href="{{ url_for('chat.messages_page') }}" class="{{ 'active' if active_page == 'messages' }}">Messages</a>{% endif %}
                         {% if use_case not in ('creative',) %}<a href="{{ url_for('blog.blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>{% endif %}
                         {% if use_case not in ('discussion', 'creative') %}<a href="{{ url_for('communities.communities_page') }}" class="{{ 'active' if active_page == 'communities' }}">Communities</a>{% endif %}

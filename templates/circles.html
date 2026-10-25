@@ -1,30 +1,60 @@
 {% extends "base.html" %}
-{% block title %}<title>Trusted Circles | EchoWithin</title>{% endblock %}
+{% block title %}<title>Trusted Circles</title>{% endblock %}
 {% block content %}
-<main class="circles-shell">
-    <header class="circles-header">
-        <p class="circles-kicker">Shared spaces for your people</p>
+<main class="cl">
+    <header class="cl-head">
         <h1>Trusted Circles</h1>
-        <p>Create a private group for friends, family, study, hobbies, or something custom.</p>
+        <p>Private groups for the people you trust.</p>
     </header>
-    <section class="circles-create">
-        <h2>Create a Circle</h2>
-        <form method="POST" action="{{ url_for('circles.create_circle') }}" class="circles-create-form">
+
+    <details class="cl-create" {% if not circles %}open{% endif %}>
+        <summary class="btn">New Circle</summary>
+        <form method="POST" action="{{ url_for('circles.create_circle') }}" class="cl-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label>Name<input name="name" maxlength="80" required placeholder="Weekend friends"></label>
             <label>Type<select name="circle_type">{% for key, value in circle_types.items() %}<option value="{{ key }}">{{ value[0] }}</option>{% endfor %}</select></label>
-            <label class="circle-check"><input type="checkbox" name="approval_required" value="1"> Approve new members</label>
-            <button type="submit" class="btn">Create Circle</button>
+            <label class="cl-check"><input type="checkbox" name="approval_required" value="1"><span>Approve new members</span></label>
+            <button type="submit" class="btn">Create</button>
         </form>
-    </section>
-    <section>
-        <h2 class="circles-section-title">Your Circles</h2>
+    </details>
+
+    <section aria-label="Your Circles">
         {% if circles %}
-        <div class="circles-grid">{% for circle in circles %}<a class="circle-card" href="{{ url_for('circles.view_circle', circle_id=circle._id) }}"><strong>{{ circle.name }}</strong><span>{{ circle.type_label }} · {{ circle.member_count }} member{{ '' if circle.member_count == 1 else 's' }}</span></a>{% endfor %}</div>
-        {% else %}<p class="circles-empty">Create a private space for the people you trust.</p>{% endif %}
+        <div class="cl-grid">
+            {% for circle in circles %}
+            <a class="cl-card" href="{{ url_for('circles.view_circle', circle_id=circle._id) }}">
+                <strong>{{ circle.name }}</strong>
+                <span>{{ circle.type_label }}</span>
+                <span>{{ circle.member_count }} member{{ '' if circle.member_count == 1 else 's' }}</span>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="cl-empty">No Circles yet.</p>
+        {% endif %}
     </section>
 </main>
 <style nonce="{{ csp_nonce }}">
-.circles-shell{max-width:900px;margin:0 auto;padding:2rem 1rem}.circles-header{margin-bottom:1.5rem}.circles-kicker{color:var(--primary-color);font-size:.78rem;text-transform:uppercase;letter-spacing:.08em}.circles-header h1{color:var(--primary-dark-color);margin:.2rem 0}.circles-header p:last-child,.circles-empty{color:var(--text-secondary)}.circles-create{background:var(--surface-bg);border:1px solid var(--border-color);border-radius:14px;padding:1rem;margin-bottom:1.5rem}.circles-create h2,.circles-section-title{color:var(--primary-dark-color);font-size:1.15rem}.circles-create-form{display:grid;grid-template-columns:1.4fr 1fr auto;gap:.75rem;align-items:end}.circles-create-form label{color:var(--text-secondary);font-size:.82rem}.circles-create-form input,.circles-create-form select{display:block;width:100%;box-sizing:border-box;margin-top:.3rem;padding:.65rem;border:1px solid var(--border-color);border-radius:8px;background:var(--card-bg);color:var(--text-dark-color)}.circles-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem}.circle-card{display:flex;flex-direction:column;gap:.4rem;text-decoration:none;border:1px solid var(--border-color);border-radius:12px;padding:1rem;background:var(--card-bg)}.circle-card:hover{border-color:var(--primary-color)}.circle-card strong{color:var(--primary-dark-color)}.circle-card span{color:var(--text-secondary);font-size:.8rem}@media(max-width:700px){.circles-create-form,.circles-grid{grid-template-columns:1fr}}
+.cl { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+.cl-head { margin-bottom: 1.25rem; }
+.cl-head h1 { color: var(--primary-dark-color); margin: 0; }
+.cl-head p, .cl-empty { color: var(--text-secondary); margin: .3rem 0 0; }
+.cl-create { margin-bottom: 1.5rem; }
+.cl-create summary { display: inline-block; cursor: pointer; list-style: none; }
+.cl-create summary::-webkit-details-marker { display: none; }
+.cl-form { display: grid; grid-template-columns: 1.4fr 1fr auto; gap: .75rem; align-items: end; margin-top: .75rem; padding: 1rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; }
+.cl-form label { color: var(--text-secondary); font-size: .85rem; min-width: 0; }
+.cl-form input:not([type="checkbox"]), .cl-form select { display: block; width: 100%; box-sizing: border-box; min-height: 2.6rem; margin-top: .3rem; padding: .6rem .7rem; font-size: 1rem; font-family: inherit; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-bg); color: var(--text-dark-color); }
+.cl-check { grid-column: 1 / -1; display: flex; align-items: center; gap: .5rem; }
+.cl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .75rem; }
+.cl-card { display: flex; flex-direction: column; gap: .3rem; padding: 1rem; text-decoration: none; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; }
+.cl-card:hover { border-color: var(--primary-color); }
+.cl-card strong { color: var(--primary-dark-color); font-size: 1.05rem; overflow-wrap: anywhere; }
+.cl-card span { color: var(--text-secondary); font-size: .85rem; }
+@media (max-width: 700px) {
+    .cl { padding: 1rem .75rem 2rem; }
+    .cl-form { grid-template-columns: 1fr; }
+    .cl-create summary, .cl-form .btn { display: block; width: 100%; box-sizing: border-box; text-align: center; min-height: 2.75rem; }
+}
 </style>
 {% endblock %}

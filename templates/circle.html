@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block title %}<title>{{ title }}</title>{% endblock %}
 {% block content %}
-{% set is_mod = is_owner or current_user.id in circle.roles|map('string')|list %}
 {% set is_muted = current_user.id in (circle.muted_by|map('string')|list) %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+
 <main class="cv" id="cv">
     <header class="cv-head">
         <div class="cv-title">
@@ -11,298 +12,2220 @@
             <p class="cv-sub">{{ circle_type[1] }}</p>
         </div>
         <div class="cv-actions">
+            {% if is_mod %}
             <form method="POST" action="{{ url_for('circles.create_invite', circle_id=circle._id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn" type="submit">Invite</button>
+                <button class="btn" type="submit"><i class="fas fa-link"></i> Invite Link</button>
             </form>
+            {% endif %}
             <form method="POST" action="{{ url_for('circles.toggle_mute', circle_id=circle._id) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-secondary" type="submit">{{ 'Unmute' if is_muted else 'Mute' }}</button>
             </form>
-            <a class="btn btn-secondary" href="{{ url_for('circles.export_circle', circle_id=circle._id) }}">Export</a>
+            <a class="btn btn-secondary" href="{{ url_for('circles.export_circle', circle_id=circle._id) }}"><i class="fas fa-download"></i> Export</a>
+            {% if not is_owner %}
+            <form method="POST" action="{{ url_for('circles.leave_circle', circle_id=circle._id) }}" onsubmit="return confirm('Leave this Circle?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-secondary cv-btn-danger" type="submit">Leave</button>
+            </form>
+            {% endif %}
         </div>
     </header>
 
+    <!-- Mobile Navigation Tabs (visible <= 860px) -->
     <nav class="cv-tabs" aria-label="Circle sections">
-        <button type="button" data-tab="chat" aria-pressed="true">Chat</button>
-        <button type="button" data-tab="feed" aria-pressed="false">Feed</button>
-        <button type="button" data-tab="plan" aria-pressed="false">Plan</button>
-        <button type="button" data-tab="members" aria-pressed="false">Members</button>
+        <button type="button" data-tab="chat" aria-pressed="true"><i class="fas fa-comments"></i> Chat</button>
+        <button type="button" data-tab="feed" aria-pressed="false"><i class="fas fa-stream"></i> Feed</button>
+        <button type="button" data-tab="plan" aria-pressed="false"><i class="fas fa-calendar-alt"></i> Plan</button>
+        <button type="button" data-tab="members" aria-pressed="false"><i class="fas fa-users"></i> Members</button>
     </nav>
 
     <div class="cv-grid">
+        <!-- Main Column: Chat and Feed with toggle -->
         <div class="cv-main">
+            <!-- Desktop View Segmented Toggle (visible > 860px) -->
+            <div class="cv-main-nav" role="tablist" aria-label="Main View">
+                <button type="button" class="cv-tab-btn active" data-main-view="chat" role="tab" aria-selected="true">
+                    <i class="fas fa-comments"></i> Chat
+                </button>
+                <button type="button" class="cv-tab-btn" data-main-view="feed" role="tab" aria-selected="false">
+                    <i class="fas fa-stream"></i> Feed
+                    <span class="cv-badge">{{ posts|length }}</span>
+                </button>
+            </div>
+
+            <!-- Chat Panel -->
             <section class="cv-card cv-panel cv-chat" data-panel="chat" aria-label="Circle chat">
-                <h2>Chat</h2>
+                <div class="cv-panel-header">
+                    <h2>Chat</h2>
+                    <span class="cv-meta">{{ members|length }} member{{ '' if members|length == 1 else 's' }}</span>
+                </div>
+
+                <!-- Pinned Message Banner -->
+                {% if pinned_message %}
+                <div class="cv-pinned-banner" id="cv-pinned-banner">
+                    <i class="fas fa-thumbtack cv-pin-icon"></i>
+                    <div class="cv-pinned-body">
+                        <strong class="cv-pinned-author">{{ pinned_message.author_name }}</strong>
+                        <span class="cv-pinned-text">{{ pinned_message.content }}</span>
+                    </div>
+                    {% if is_mod %}
+                    <button type="button" class="cv-icon-btn cv-pin-remove" onclick="togglePinMessage('{{ pinned_message._id }}')" title="Unpin message">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- Chat Log -->
                 <div class="cv-chat-log" id="cv-chat-log" role="log" aria-live="polite">
                     {% set ns = namespace(prev=none) %}
                     {% for message in messages %}
-                    {% set mine = (message.author_id is defined and message.author_id|string == current_user.id|string) or message.author_name == current_user.username %}
+                    {% set mine = message.is_mine %}
                     {% set same = ns.prev == message.author_name %}
-                    <div class="cv-msg{% if mine %} cv-msg-mine{% endif %}{% if same %} cv-msg-cont{% endif %}">
-                        {% if not same and not mine %}<span class="cv-msg-author">{{ message.author_name }}</span>{% endif %}
-                        <p class="cv-bubble">{{ message.content }}</p>
-                        {% if message.created_at %}<time class="cv-msg-time">{{ message.created_at|localtime('%H:%M') }}</time>{% endif %}
+                    <div class="cv-msg{% if mine %} cv-msg-mine{% endif %}{% if same %} cv-msg-cont{% endif %}" data-msg-id="{{ message._id }}">
+                        {% if not mine and not same %}
+                        <div class="cv-msg-author-row">
+                            {% if message.author_image %}
+                            <img class="cv-avatar-tiny" src="{{ message.author_image }}" alt="" loading="lazy">
+                            {% else %}
+                            <span class="cv-avatar-initial">{{ message.author_name[:1]|upper }}</span>
+                            {% endif %}
+                            <span class="cv-msg-author">{{ message.author_name }}</span>
+                        </div>
+                        {% endif %}
+
+                        <div class="cv-bubble-wrap">
+                            {% if message.reply_to %}
+                            <div class="cv-reply-quote">
+                                <span class="cv-reply-quote-author">{{ message.reply_to.author_name }}</span>
+                                <span class="cv-reply-quote-text">{{ message.reply_to.snippet }}</span>
+                            </div>
+                            {% endif %}
+                            <p class="cv-bubble">{{ message.content }}</p>
+
+                            <!-- Hover / Action Toolbar -->
+                            <div class="cv-msg-actions">
+                                <button type="button" class="cv-action-icon" onclick="reactMessage('{{ message._id }}', '❤️')" title="Love">❤️</button>
+                                <button type="button" class="cv-action-icon" onclick="reactMessage('{{ message._id }}', '👍')" title="Thumbs up">👍</button>
+                                <button type="button" class="cv-action-icon" onclick="reactMessage('{{ message._id }}', '🔥')" title="Fire">🔥</button>
+                                <button type="button" class="cv-action-icon" onclick="replyToMessage('{{ message._id }}', '{{ message.author_name|replace("'", "\\'") }}', '{{ message.content[:50]|replace("'", "\\'") }}')" title="Reply"><i class="fas fa-reply"></i></button>
+                                {% if is_mod %}
+                                <button type="button" class="cv-action-icon" onclick="togglePinMessage('{{ message._id }}')" title="Pin"><i class="fas fa-thumbtack"></i></button>
+                                {% endif %}
+                                {% if mine %}
+                                <button type="button" class="cv-action-icon" onclick="editMessage('{{ message._id }}')" title="Edit"><i class="fas fa-pen"></i></button>
+                                {% endif %}
+                                {% if mine or is_mod %}
+                                <button type="button" class="cv-action-icon cv-action-delete" onclick="deleteMessage('{{ message._id }}')" title="Delete"><i class="fas fa-trash"></i></button>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Reactions Display -->
+                        <div class="cv-msg-reactions" data-msg-reactions="{{ message._id }}">
+                            {% for emoji, uids in message.reactions.items() if uids %}
+                            <button type="button" class="cv-reaction-pill{% if current_user.id|string in uids %} active{% endif %}" onclick="reactMessage('{{ message._id }}', '{{ emoji }}')">
+                                {{ emoji }} <span class="cv-reaction-count">{{ uids|length }}</span>
+                            </button>
+                            {% endfor %}
+                        </div>
+
+                        <div class="cv-msg-meta-row">
+                            {% if message.edited %}<span class="cv-edited-tag">edited</span>{% endif %}
+                            {% if message.created_at %}<time class="cv-msg-time">{{ message.created_at|localtime('%H:%M') }}</time>{% endif %}
+                        </div>
                     </div>
                     {% set ns.prev = message.author_name %}
                     {% else %}
-                    <p class="cv-empty">No messages yet.</p>
+                    <p class="cv-empty" id="cv-chat-empty">No messages yet. Say hello!</p>
                     {% endfor %}
                 </div>
-                <form class="cv-composer" method="POST" action="{{ url_for('circles.create_circle_message', circle_id=circle._id) }}">
+
+                <!-- Scroll to bottom button -->
+                <button type="button" class="cv-scroll-bottom" id="cv-scroll-bottom" aria-label="Scroll to bottom">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+
+                <!-- Replying Banner -->
+                <div class="cv-reply-bar" id="cv-reply-bar" style="display: none;">
+                    <div class="cv-reply-bar-info">
+                        <span>Replying to <strong id="cv-reply-name"></strong>:</span>
+                        <span id="cv-reply-snippet" class="cv-reply-snippet"></span>
+                    </div>
+                    <button type="button" class="cv-icon-btn" onclick="cancelReply()" title="Cancel reply"><i class="fas fa-times"></i></button>
+                </div>
+
+                <!-- Chat Composer -->
+                <form class="cv-composer" id="cv-chat-form" method="POST" action="{{ url_for('circles.create_circle_message', circle_id=circle._id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input class="cv-input" name="content" maxlength="2000" required placeholder="Message" autocomplete="off" aria-label="Message">
-                    <button class="btn" type="submit">Send</button>
+                    <input type="hidden" name="reply_to_id" id="cv-reply-to-id" value="">
+                    <input class="cv-input cv-chat-input" id="cv-chat-input" name="content" maxlength="2000" required placeholder="Write a message..." autocomplete="off" aria-label="Message">
+                    <button class="btn cv-send-btn" type="submit"><i class="fas fa-paper-plane"></i> Send</button>
                 </form>
             </section>
 
+            <!-- Feed Panel -->
             <section class="cv-panel cv-feed" data-panel="feed" aria-label="Circle feed">
-                <div class="cv-card">
-                    <form method="POST" action="{{ url_for('circles.create_circle_post', circle_id=circle._id) }}">
+                <!-- Share with Circle Composer -->
+                <div class="cv-card cv-post-composer">
+                    <form method="POST" action="{{ url_for('circles.create_circle_post', circle_id=circle._id) }}" id="cv-post-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <label class="cv-label" for="circle-content">Share with this Circle</label>
-                        <textarea class="cv-input cv-textarea" id="circle-content" name="content" maxlength="5000" required placeholder="Write something"></textarea>
-                        <div class="cv-row">
-                            <select class="cv-input" name="expiry" aria-label="Post expiry">
-                                <option value="">Keep</option>
+                        <textarea class="cv-input cv-textarea" id="circle-content" name="content" maxlength="5000" required placeholder="What's on your mind? Share an update, photo link, or thought..."></textarea>
+                        <div class="cv-row cv-post-actions">
+                            <select class="cv-input cv-select-expiry" name="expiry" aria-label="Post expiry">
+                                <option value="">Keep forever</option>
                                 <option value="1d">Expires in 1 day</option>
                                 <option value="7d">Expires in 7 days</option>
                                 <option value="30d">Expires in 30 days</option>
                             </select>
-                            <button class="btn" type="submit">Share</button>
+                            <button class="btn" type="submit"><i class="fas fa-share"></i> Share</button>
                         </div>
                     </form>
                 </div>
-                {% for post in posts %}
-                <article class="cv-card cv-post">
-                    <p class="cv-meta">{{ post.author_name }} · {{ post.created_at|localtime('%b %d, %Y') }}</p>
-                    {% if post.kind == 'poll' %}
-                    <strong class="cv-post-title">{{ post.payload.question }}</strong>
-                    <form class="cv-vote" method="POST" action="{{ url_for('circles.vote_poll', circle_id=circle._id, post_id=post._id) }}">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        {% for option in post.payload.options %}
-                        <label class="cv-opt"><input type="radio" name="option" value="{{ loop.index0 }}" {% if post.my_vote == loop.index0 %}checked{% endif %} required><span>{{ option }}</span></label>
-                        {% endfor %}
-                        <button class="btn btn-secondary" type="submit">Vote</button>
-                    </form>
-                    {% elif post.kind == 'event' %}
-                    <strong class="cv-post-title">{{ post.payload.name }}</strong>
-                    <p class="cv-meta">{{ post.payload.starts_at }}</p>
-                    <form class="cv-row" method="POST" action="{{ url_for('circles.rsvp_event', circle_id=circle._id, post_id=post._id) }}">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button class="btn btn-secondary" type="submit">{{ 'Going' if post.is_attending else 'I’m going' }}</button>
-                        <span class="cv-meta">{{ post.payload.attending|length }} going</span>
-                    </form>
+
+                <!-- Posts List -->
+                <div class="cv-posts-stream" id="cv-posts-stream">
+                    {% for post in posts %}
+                    <article class="cv-card cv-post{% if post.is_pinned %} cv-post-pinned{% endif %}" data-post-id="{{ post._id }}">
+                        <div class="cv-post-top">
+                            <div class="cv-post-author">
+                                {% if post.author_image %}
+                                <img class="cv-avatar-small" src="{{ post.author_image }}" alt="" loading="lazy">
+                                {% else %}
+                                <span class="cv-avatar-initial">{{ post.author_name[:1]|upper }}</span>
+                                {% endif %}
+                                <div class="cv-post-author-text">
+                                    <span class="cv-post-name">{{ post.author_name }}</span>
+                                    <time class="cv-meta">{{ post.created_at|localtime('%b %d, %Y · %H:%M') }}</time>
+                                </div>
+                            </div>
+                            <div class="cv-post-badges">
+                                {% if post.is_pinned %}<span class="cv-badge cv-badge-pinned"><i class="fas fa-thumbtack"></i> Pinned</span>{% endif %}
+                                {% if post.kind == 'poll' %}<span class="cv-badge cv-badge-subtle">Poll</span>{% endif %}
+                                {% if post.kind == 'event' %}<span class="cv-badge cv-badge-subtle">Event</span>{% endif %}
+                                {% if post.expires_at %}<span class="cv-badge cv-badge-expiry"><i class="fas fa-hourglass-half"></i> Expiring</span>{% endif %}
+
+                                <!-- Post Action Menu -->
+                                <div class="cv-dropdown">
+                                    <button type="button" class="cv-icon-btn cv-post-menu-btn" onclick="toggleDropdown(this)" title="Options">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                    <div class="cv-dropdown-menu">
+                                        {% if is_mod %}
+                                        <button type="button" onclick="togglePinPost('{{ post._id }}')">
+                                            <i class="fas fa-thumbtack"></i> {{ 'Unpin' if post.is_pinned else 'Pin' }}
+                                        </button>
+                                        {% endif %}
+                                        {% if post.is_mine and post.kind == 'post' %}
+                                        <button type="button" onclick="editPost('{{ post._id }}')">
+                                            <i class="fas fa-pen"></i> Edit
+                                        </button>
+                                        {% endif %}
+                                        {% if post.is_mine or is_mod %}
+                                        <button type="button" class="cv-danger-text" onclick="deletePost('{{ post._id }}')">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Post Body -->
+                        <div class="cv-post-body" id="post-body-{{ post._id }}">
+                            {% if post.kind == 'poll' %}
+                            <h3 class="cv-post-title">{{ post.payload.question }}</h3>
+                            <div class="cv-poll-box" data-poll-id="{{ post._id }}">
+                                <form class="cv-vote-form" onsubmit="event.preventDefault(); submitVote('{{ post._id }}', this);">
+                                    {% for opt in post.poll_stats.options %}
+                                    <label class="cv-poll-option{% if opt.is_my_vote %} cv-opt-selected{% endif %}">
+                                        <div class="cv-poll-bar" style="width: {{ opt.percent }}%;"></div>
+                                        <div class="cv-poll-content">
+                                            <input type="radio" name="option" value="{{ opt.index }}" {% if opt.is_my_vote %}checked{% endif %} onchange="submitVote('{{ post._id }}', this.form)">
+                                            <span class="cv-poll-label">{{ opt.text }}</span>
+                                            <span class="cv-poll-stat">{{ opt.count }} vote{{ '' if opt.count == 1 else 's' }} ({{ opt.percent }}%)</span>
+                                        </div>
+                                    </label>
+                                    {% endfor %}
+                                </form>
+                                <div class="cv-poll-footer">
+                                    <span class="cv-meta">{{ post.poll_stats.total_votes }} total vote{{ '' if post.poll_stats.total_votes == 1 else 's' }}</span>
+                                </div>
+                            </div>
+                            {% elif post.kind == 'event' %}
+                            <h3 class="cv-post-title">{{ post.payload.name }}</h3>
+                            <div class="cv-event-card">
+                                <div class="cv-event-time">
+                                    <i class="fas fa-calendar-check"></i>
+                                    <span>{{ post.payload.starts_at|localtime('%A, %b %d, %Y · %H:%M') if post.payload.starts_at else 'TBD' }}</span>
+                                </div>
+                                <div class="cv-event-rsvp">
+                                    <button type="button" class="btn {% if post.is_attending %}btn-secondary{% else %}btn-primary{% endif %}" onclick="toggleRsvp('{{ post._id }}', this)">
+                                        <i class="fas {% if post.is_attending %}fa-check{% else %}fa-plus{% endif %}"></i>
+                                        <span>{{ 'Going' if post.is_attending else "I'm going" }}</span>
+                                    </button>
+                                    <span class="cv-meta cv-attendee-count">{{ post.attending_count }} attending</span>
+                                </div>
+                            </div>
+                            {% else %}
+                            <p class="cv-text cv-post-content">{{ post.payload.content }}</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- Post Engagements: Reactions and Comments -->
+                        <div class="cv-post-engagement">
+                            <div class="cv-reactions-bar">
+                                {% set post_rx = post.reactions %}
+                                <button type="button" class="cv-reaction-pill{% if current_user.id|string in post_rx.get('❤️', []) %} active{% endif %}" onclick="reactPost('{{ post._id }}', '❤️')">
+                                    ❤️ <span class="rx-cnt">{{ post_rx.get('❤️', [])|length }}</span>
+                                </button>
+                                <button type="button" class="cv-reaction-pill{% if current_user.id|string in post_rx.get('👍', []) %} active{% endif %}" onclick="reactPost('{{ post._id }}', '👍')">
+                                    👍 <span class="rx-cnt">{{ post_rx.get('👍', [])|length }}</span>
+                                </button>
+                                <button type="button" class="cv-reaction-pill{% if current_user.id|string in post_rx.get('🔥', []) %} active{% endif %}" onclick="reactPost('{{ post._id }}', '🔥')">
+                                    🔥 <span class="rx-cnt">{{ post_rx.get('🔥', [])|length }}</span>
+                                </button>
+                                <button type="button" class="cv-reaction-pill{% if current_user.id|string in post_rx.get('🎉', []) %} active{% endif %}" onclick="reactPost('{{ post._id }}', '🎉')">
+                                    🎉 <span class="rx-cnt">{{ post_rx.get('🎉', [])|length }}</span>
+                                </button>
+                            </div>
+                            <button type="button" class="cv-comment-toggle" onclick="toggleComments('{{ post._id }}')">
+                                <i class="fas fa-comment-alt"></i> Comments ({{ post.comments_count }})
+                            </button>
+                        </div>
+
+                        <!-- Comments Section -->
+                        <div class="cv-comments-section" id="comments-section-{{ post._id }}" style="display: {{ 'block' if post.comments_count > 0 else 'none' }};">
+                            <div class="cv-comments-list" id="comments-list-{{ post._id }}">
+                                {% for c in post.comments %}
+                                <div class="cv-comment-item" id="comment-{{ c.id }}">
+                                    <div class="cv-comment-top">
+                                        <strong class="cv-comment-author">{{ c.author_name }}</strong>
+                                        <div class="cv-comment-meta">
+                                            <time class="cv-meta">{{ c.created_at|localtime('%b %d, %H:%M') }}</time>
+                                            {% if c.is_mine or post.is_mine or is_mod %}
+                                            <button type="button" class="cv-icon-btn cv-comment-del" onclick="deleteComment('{{ post._id }}', '{{ c.id }}')" title="Delete comment"><i class="fas fa-times"></i></button>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <p class="cv-comment-body">{{ c.content }}</p>
+                                </div>
+                                {% endfor %}
+                            </div>
+
+                            <form class="cv-comment-form" onsubmit="event.preventDefault(); submitComment('{{ post._id }}', this);">
+                                <input class="cv-input cv-comment-input" name="content" maxlength="1000" required placeholder="Write a comment..." autocomplete="off">
+                                <button class="btn btn-secondary" type="submit">Post</button>
+                            </form>
+                        </div>
+                    </article>
                     {% else %}
-                    <p class="cv-text">{{ post.payload.content }}</p>
-                    {% endif %}
-                </article>
-                {% else %}
-                <p class="cv-empty">No posts yet.</p>
-                {% endfor %}
+                    <p class="cv-empty" id="cv-feed-empty">No posts yet. Share something with your circle!</p>
+                    {% endfor %}
+                </div>
             </section>
         </div>
 
+        <!-- Sidebar Column: Plan and Members -->
         <div class="cv-side">
-            <section class="cv-card cv-panel" data-panel="plan" aria-label="Plan">
+            <!-- Plan & Play Section -->
+            <section class="cv-card cv-panel cv-plan-panel" data-panel="plan" aria-label="Plan">
                 <h2>Play and plan</h2>
-                <div class="cv-stack">
-                    <a class="btn" href="{{ url_for('circles.create_circle_game', circle_id=circle._id, type='poll') }}">Host poll game</a>
-                    <a class="btn btn-secondary" href="{{ url_for('circles.create_circle_game', circle_id=circle._id, type='trivia') }}">Host trivia</a>
-                    <a class="btn btn-secondary" href="{{ url_for('game.games_join') }}">Join with PIN</a>
+                <div class="cv-stack cv-action-grid">
+                    <a class="btn cv-action-card" href="{{ url_for('circles.create_circle_game', circle_id=circle._id, type='poll') }}">
+                        <i class="fas fa-poll-h"></i> Host poll game
+                    </a>
+                    <a class="btn btn-secondary cv-action-card" href="{{ url_for('circles.create_circle_game', circle_id=circle._id, type='trivia') }}">
+                        <i class="fas fa-brain"></i> Host trivia
+                    </a>
+                    <a class="btn btn-secondary cv-action-card" href="{{ url_for('game.games_join') }}">
+                        <i class="fas fa-key"></i> Join with PIN
+                    </a>
                 </div>
+
                 {% if game_lobbies %}
                 <div class="cv-lobbies">
+                    <h3>Active Lobbies</h3>
                     {% for lobby in game_lobbies %}
-                    <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}"><strong>{{ lobby.title }}</strong><span>{{ lobby.game_type }}{% if lobby.pin %} · PIN {{ lobby.pin }}{% endif %}</span></a>
+                    <a class="cv-lobby-item" href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}">
+                        <div class="cv-lobby-info">
+                            <strong>{{ lobby.title }}</strong>
+                            <span>{{ lobby.game_type }}{% if lobby.pin %} · PIN {{ lobby.pin }}{% endif %}</span>
+                        </div>
+                        <i class="fas fa-arrow-right"></i>
+                    </a>
                     {% endfor %}
                 </div>
                 {% endif %}
+
+                <!-- Dynamic Poll Creator -->
                 <details class="cv-details">
-                    <summary>New poll</summary>
-                    <form class="cv-stack" method="POST" action="{{ url_for('circles.create_poll', circle_id=circle._id) }}">
+                    <summary><i class="fas fa-plus-circle"></i> New poll</summary>
+                    <form class="cv-stack" method="POST" action="{{ url_for('circles.create_poll', circle_id=circle._id) }}" id="cv-poll-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input class="cv-input" name="question" maxlength="240" required placeholder="Question">
-                        <input class="cv-input" name="options" required placeholder="Option 1">
-                        <input class="cv-input" name="options" required placeholder="Option 2">
-                        <input class="cv-input" name="options" placeholder="Option 3">
-                        <button class="btn" type="submit">Add poll</button>
+                        <label class="cv-label" for="poll-question">Question</label>
+                        <input class="cv-input" id="poll-question" name="question" maxlength="240" required placeholder="What should we do this weekend?">
+
+                        <label class="cv-label">Options (2 to 8)</label>
+                        <div class="cv-poll-options-inputs" id="cv-poll-options-inputs">
+                            <div class="cv-opt-row">
+                                <input class="cv-input" name="options" required placeholder="Option 1">
+                            </div>
+                            <div class="cv-opt-row">
+                                <input class="cv-input" name="options" required placeholder="Option 2">
+                            </div>
+                            <div class="cv-opt-row">
+                                <input class="cv-input" name="options" placeholder="Option 3">
+                                <button type="button" class="cv-icon-btn cv-opt-del" onclick="removePollOption(this)" title="Remove option"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn btn-secondary cv-btn-sm" id="cv-add-option-btn" onclick="addPollOption()">
+                            <i class="fas fa-plus"></i> Add option
+                        </button>
+                        <button class="btn" type="submit">Create Poll</button>
                     </form>
                 </details>
+
+                <!-- New Event Creator -->
                 <details class="cv-details">
-                    <summary>New event</summary>
+                    <summary><i class="fas fa-calendar-plus"></i> New event</summary>
                     <form class="cv-stack" method="POST" action="{{ url_for('circles.create_event', circle_id=circle._id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input class="cv-input" name="name" maxlength="120" required placeholder="Event name" aria-label="Event name">
-                        <input class="cv-input" name="starts_at" type="datetime-local" required aria-label="Starts at">
-                        <button class="btn" type="submit">Add event</button>
+                        <label class="cv-label" for="event-name">Event Name</label>
+                        <input class="cv-input" id="event-name" name="name" maxlength="120" required placeholder="Dinner party, Game night...">
+                        <label class="cv-label" for="event-starts">Starts at</label>
+                        <input class="cv-input" id="event-starts" name="starts_at" type="datetime-local" required>
+                        <button class="btn" type="submit">Schedule Event</button>
                     </form>
                 </details>
             </section>
 
-            <section class="cv-card cv-panel" data-panel="members" aria-label="Members">
+            <!-- Members Section -->
+            <section class="cv-card cv-panel cv-members-panel" data-panel="members" aria-label="Members">
+                <!-- Join Requests (if any) -->
                 {% if pending_requests %}
-                <h2>Requests</h2>
-                {% for join_request in pending_requests %}
-                <div class="cv-request">
-                    <span class="cv-name">{{ join_request.username or join_request.user_id }}</span>
-                    <div class="cv-row">
-                        <form method="POST" action="{{ url_for('circles.approve_request', circle_id=circle._id, request_id=join_request._id) }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button class="btn" type="submit">Approve</button>
-                        </form>
-                        <form method="POST" action="{{ url_for('circles.deny_request', circle_id=circle._id, request_id=join_request._id) }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button class="btn btn-secondary" type="submit">Decline</button>
-                        </form>
+                <div class="cv-requests-block">
+                    <h2>Join Requests ({{ pending_requests|length }})</h2>
+                    {% for join_request in pending_requests %}
+                    <div class="cv-request-card">
+                        <div class="cv-request-user">
+                            {% if join_request.profile_image_url %}
+                            <img class="cv-avatar-small" src="{{ join_request.profile_image_url }}" alt="">
+                            {% else %}
+                            <span class="cv-avatar-initial">{{ join_request.username[:1]|upper }}</span>
+                            {% endif %}
+                            <span class="cv-name">{{ join_request.username }}</span>
+                        </div>
+                        <div class="cv-row cv-request-actions">
+                            <form method="POST" action="{{ url_for('circles.approve_request', circle_id=circle._id, request_id=join_request._id) }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button class="btn cv-btn-sm" type="submit">Approve</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('circles.deny_request', circle_id=circle._id, request_id=join_request._id) }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button class="btn btn-secondary cv-btn-sm" type="submit">Decline</button>
+                            </form>
+                        </div>
                     </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
                 {% endif %}
 
-                <h2>Members</h2>
-                {% if is_mod %}
-                <form class="cv-row cv-invite" method="POST" action="{{ url_for('circles.invite_username', circle_id=circle._id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input class="cv-input" name="username" required placeholder="Invite by username" aria-label="Username">
-                    <button class="btn" type="submit">Invite</button>
-                </form>
-                {% endif %}
-                {% for member in members %}
-                {% set role = 'Owner' if member._id|string == circle.owner_id|string else ('Moderator' if circle.roles.get(member._id|string) == 'moderator' else '') %}
-                <div class="cv-member">
-                    <div class="cv-member-top">
-                        <span class="cv-name">{{ member.username }}</span>
-                        {% if role %}<span class="cv-meta">{{ role }}</span>{% endif %}
-                    </div>
-                    {% if member._id|string != circle.owner_id|string and is_owner %}
-                    <details class="cv-details cv-manage">
-                        <summary>Manage</summary>
-                        <form class="cv-row" method="POST" action="{{ url_for('circles.change_member_role', circle_id=circle._id, member_id=member._id) }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <select class="cv-input" name="role" aria-label="Role for {{ member.username }}">
-                                <option value="member">Member</option>
-                                <option value="moderator" {% if circle.roles.get(member._id|string) == 'moderator' %}selected{% endif %}>Moderator</option>
-                            </select>
-                            <button class="btn btn-secondary" type="submit">Save</button>
-                        </form>
-                        <form method="POST" action="{{ url_for('circles.remove_member', circle_id=circle._id, member_id=member._id) }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button class="btn btn-secondary" type="submit">Remove</button>
-                        </form>
-                    </details>
-                    {% endif %}
+                <div class="cv-panel-header">
+                    <h2>Members ({{ members|length }})</h2>
                 </div>
-                {% endfor %}
+
+                <!-- Invite Member with Autocomplete -->
+                {% if is_mod %}
+                <div class="cv-invite-box">
+                    <form class="cv-invite-form" method="POST" action="{{ url_for('circles.invite_username', circle_id=circle._id) }}" id="cv-invite-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="cv-invite-input-wrap">
+                            <input class="cv-input" name="username" id="cv-invite-username" required placeholder="Add by username..." autocomplete="off" aria-label="Username">
+                            <div class="cv-autocomplete-dropdown" id="cv-invite-autocomplete" style="display: none;"></div>
+                        </div>
+                        <button class="btn" type="submit">Add</button>
+                    </form>
+                </div>
+                {% endif %}
+
+                <!-- Members List -->
+                <div class="cv-members-list">
+                    {% for member in members %}
+                    {% set role = 'Owner' if member._id|string == circle.owner_id|string else ('Moderator' if circle.roles.get(member._id|string) == 'moderator' else '') %}
+                    <div class="cv-member-item">
+                        <div class="cv-member-left">
+                            {% if member.profile_image_url %}
+                            <img class="cv-avatar-small" src="{{ member.profile_image_url }}" alt="">
+                            {% else %}
+                            <span class="cv-avatar-initial">{{ member.username[:1]|upper }}</span>
+                            {% endif %}
+                            <div class="cv-member-info">
+                                <span class="cv-name">{{ member.username }}</span>
+                                {% if role %}<span class="cv-role-badge cv-role-{{ role|lower }}">{{ role }}</span>{% endif %}
+                            </div>
+                        </div>
+
+                        {% if member._id|string != circle.owner_id|string and is_owner %}
+                        <details class="cv-details cv-manage">
+                            <summary title="Manage member"><i class="fas fa-cog"></i></summary>
+                            <div class="cv-manage-pop">
+                                <form method="POST" action="{{ url_for('circles.change_member_role', circle_id=circle._id, member_id=member._id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <select class="cv-input" name="role" aria-label="Role for {{ member.username }}">
+                                        <option value="member" {% if circle.roles.get(member._id|string) != 'moderator' %}selected{% endif %}>Member</option>
+                                        <option value="moderator" {% if circle.roles.get(member._id|string) == 'moderator' %}selected{% endif %}>Moderator</option>
+                                    </select>
+                                    <button class="btn btn-secondary cv-btn-sm" type="submit">Update</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('circles.remove_member', circle_id=circle._id, member_id=member._id) }}" onsubmit="return confirm('Remove {{ member.username }} from this circle?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button class="btn btn-secondary cv-btn-danger cv-btn-sm" type="submit">Remove</button>
+                                </form>
+                            </div>
+                        </details>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
             </section>
         </div>
     </div>
 </main>
 
 <style nonce="{{ csp_nonce }}">
-.cv { max-width: 1040px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-.cv h1, .cv h2 { color: var(--primary-dark-color); margin: 0; }
-.cv h2 { font-size: 1.05rem; margin-bottom: .75rem; }
-.cv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); margin-bottom: 1rem; }
+/* Responsive Container & Layout */
+.container:has(.cv) {
+    padding: 0.75rem 1rem !important;
+}
+@media (max-width: 768px) {
+    .container:has(.cv) {
+        padding: 0.5rem 0.25rem !important;
+    }
+}
+
+.cv {
+    width: 100%;
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0.5rem 0.5rem 3rem;
+    box-sizing: border-box;
+}
+
+.cv h1, .cv h2, .cv h3 { color: var(--primary-dark-color); margin: 0; }
+.cv h2 { font-size: 1.1rem; }
+.cv h3 { font-size: 1rem; }
+
+.cv-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 1rem;
+}
 .cv-kicker { color: var(--primary-color); font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 .25rem; }
 .cv-sub, .cv-meta, .cv-empty { color: var(--text-secondary); font-size: .85rem; margin: .25rem 0 0; }
 .cv-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
 .cv-actions form { margin: 0; }
 
-.cv-tabs { display: none; }
-.cv-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 1rem; align-items: start; }
-.cv-main, .cv-side { display: grid; gap: 1rem; min-width: 0; }
-.cv-feed { display: grid; gap: .75rem; }
-.cv-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem; min-width: 0; }
+/* Grid Layout */
+.cv-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 1.25rem;
+    align-items: start;
+    width: 100%;
+    box-sizing: border-box;
+}
+.cv-main, .cv-side {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
 
-.cv-input { width: 100%; box-sizing: border-box; min-height: 2.6rem; padding: .6rem .7rem; font-size: 1rem; font-family: inherit; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-bg); color: var(--text-dark-color); }
-.cv-textarea { min-height: 96px; resize: vertical; margin-bottom: .6rem; }
-.cv-label { display: block; color: var(--text-secondary); font-size: .85rem; margin-bottom: .4rem; }
-.cv-row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
-.cv-row form, .cv-request form { margin: 0; }
-.cv-row .cv-input { flex: 1; min-width: 120px; width: auto; }
-.cv-stack { display: grid; gap: .5rem; margin-top: .75rem; }
-.cv-stack:first-of-type { margin-top: 0; }
+/* Common Card */
+.cv-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+}
+.cv-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: .75rem;
+}
 
-.cv-chat-log { height: 440px; overflow-y: auto; display: flex; flex-direction: column; gap: .25rem; padding: .25rem .1rem .75rem; overscroll-behavior: contain; }
-.cv-msg { display: flex; flex-direction: column; align-items: flex-start; max-width: 82%; margin-top: .6rem; }
-.cv-msg-cont { margin-top: 0; }
-.cv-msg-mine { align-self: flex-end; align-items: flex-end; }
-.cv-msg-author { color: var(--primary-dark-color); font-size: .75rem; font-weight: 700; margin: 0 .25rem .15rem; }
-.cv-bubble { margin: 0; padding: .5rem .8rem; border-radius: 14px; background: var(--surface-bg); border: 1px solid var(--border-color); color: var(--text-dark-color); line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
-.cv-msg-mine .cv-bubble { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
-.cv-msg-time { color: var(--text-secondary); font-size: .68rem; margin: .1rem .3rem 0; }
-.cv-chat-log .cv-empty { margin: auto; }
-.cv-composer { display: flex; gap: .5rem; padding-top: .75rem; border-top: 1px solid var(--border-color); }
-.cv-composer .cv-input { flex: 1; min-width: 0; }
+/* Inputs & Buttons */
+.cv-input {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 2.6rem;
+    padding: .6rem .75rem;
+    font-size: .95rem;
+    font-family: inherit;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--surface-bg);
+    color: var(--text-dark-color);
+    outline: none;
+    transition: border-color .2s;
+}
+.cv-input:focus {
+    border-color: var(--primary-color);
+}
+.cv-textarea {
+    min-height: 85px;
+    resize: vertical;
+    margin-bottom: .6rem;
+}
+.cv-label {
+    display: block;
+    color: var(--text-secondary);
+    font-size: .85rem;
+    margin-bottom: .4rem;
+    font-weight: 500;
+}
+.cv-row {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+}
+.cv-row form { margin: 0; }
+.cv-stack {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
 
-.cv-post-title { display: block; color: var(--primary-dark-color); }
-.cv-post .cv-meta:first-child { margin: 0 0 .35rem; }
-.cv-text { margin: 0; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
-.cv-vote { display: grid; gap: .4rem; margin-top: .6rem; }
-.cv-opt { display: flex; align-items: center; gap: .6rem; padding: .6rem .7rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-bg); color: var(--text-dark-color); cursor: pointer; min-height: 2.6rem; box-sizing: border-box; }
-.cv-opt:hover { border-color: var(--primary-color); }
+.cv-btn-sm {
+    padding: .35rem .75rem;
+    font-size: .82rem;
+    min-height: 2rem;
+}
+.cv-btn-danger {
+    color: #c62828 !important;
+    border-color: rgba(198, 40, 40, 0.4) !important;
+}
+.cv-btn-danger:hover {
+    background: rgba(198, 40, 40, 0.08) !important;
+}
 
-.cv-lobbies { display: grid; margin-top: .75rem; }
-.cv-lobbies a { display: flex; justify-content: space-between; gap: .5rem; padding: .6rem 0; border-top: 1px solid var(--border-color); color: var(--primary-dark-color); text-decoration: none; }
-.cv-lobbies span { color: var(--text-secondary); font-size: .8rem; }
-.cv-details { margin-top: .75rem; border: 1px solid var(--border-color); border-radius: 10px; padding: .6rem .75rem; background: var(--surface-bg); }
-.cv-details summary { cursor: pointer; color: var(--primary-dark-color); font-weight: 600; font-size: .9rem; }
-.cv-details form { margin-top: .6rem; }
-.cv-details .cv-stack { margin-top: .6rem; }
+/* Avatars */
+.cv-avatar-small, .cv-avatar-tiny, .cv-avatar-initial {
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+.cv-avatar-small { width: 34px; height: 34px; }
+.cv-avatar-tiny { width: 22px; height: 22px; }
+.cv-avatar-initial {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-color);
+    color: #fff;
+    font-weight: 700;
+    font-size: .8rem;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+}
+.cv-msg-author-row .cv-avatar-initial {
+    width: 22px;
+    height: 22px;
+    font-size: .7rem;
+}
 
-.cv-request, .cv-member { padding: .6rem 0; border-top: 1px solid var(--border-color); }
-.cv-request { display: grid; gap: .5rem; }
-.cv-invite { margin-bottom: .5rem; flex-wrap: nowrap; }
-.cv-member:first-of-type { border-top: 0; }
-.cv-member-top { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
-.cv-name { color: var(--text-dark-color); overflow-wrap: anywhere; }
-.cv-manage { background: transparent; }
-.cv-manage form + form { margin-top: .5rem; }
+/* Segmented View Toggle (Desktop & Mobile) */
+.cv-main-nav {
+    display: flex;
+    gap: .5rem;
+    padding: .3rem;
+    background: var(--surface-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+.cv-tab-btn {
+    flex: 1;
+    min-height: 2.5rem;
+    padding: .45rem .85rem;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: .9rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .45rem;
+    transition: all .2s;
+}
+.cv-tab-btn:hover {
+    color: var(--primary-dark-color);
+}
+.cv-tab-btn.active {
+    background: var(--card-bg);
+    border-color: var(--border-color);
+    color: var(--primary-dark-color);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.cv-badge {
+    background: var(--surface-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: .75rem;
+    font-weight: 600;
+    padding: .1rem .45rem;
+    border-radius: 12px;
+}
+.cv-tab-btn.active .cv-badge {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+}
 
+/* Mobile Tabs Navigation (<= 860px) */
+.cv-tabs {
+    display: none;
+}
+
+/* Chat Section */
+.cv-chat {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    padding: 1rem;
+}
+.cv-pinned-banner {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .5rem .75rem;
+    margin-bottom: .75rem;
+    background: var(--surface-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: .85rem;
+}
+.cv-pin-icon { color: var(--primary-color); flex-shrink: 0; }
+.cv-pinned-body { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-pinned-author { color: var(--primary-dark-color); margin-right: .3rem; }
+.cv-pinned-text { color: var(--text-dark-color); }
+
+.cv-chat-log {
+    height: 480px;
+    max-height: calc(100vh - 350px);
+    min-height: 360px;
+    overflow-y: auto;
+    overscroll-behavior: auto; /* DO NOT TRAP SCROLL */
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    padding: .4rem .3rem 1rem;
+    position: relative;
+}
+
+.cv-msg {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    max-width: 82%;
+    margin-top: .6rem;
+    position: relative;
+}
+.cv-msg-cont { margin-top: .15rem; }
+.cv-msg-mine {
+    align-self: flex-end;
+    align-items: flex-end;
+}
+.cv-msg-author-row {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    margin: 0 .25rem .2rem;
+}
+.cv-msg-author {
+    color: var(--primary-dark-color);
+    font-size: .78rem;
+    font-weight: 700;
+}
+.cv-bubble-wrap {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+}
+.cv-bubble {
+    margin: 0;
+    padding: .55rem .85rem;
+    border-radius: 14px;
+    background: var(--surface-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-dark-color);
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: .95rem;
+}
+.cv-msg-mine .cv-bubble {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+}
+
+/* Quoted Reply inside Message */
+.cv-reply-quote {
+    background: rgba(0,0,0,0.06);
+    border-radius: 8px;
+    padding: .3rem .5rem;
+    margin-bottom: .3rem;
+    font-size: .78rem;
+    border-left: 2px solid var(--primary-color);
+}
+.cv-msg-mine .cv-reply-quote {
+    background: rgba(255,255,255,0.18);
+    border-left-color: #fff;
+    color: #fff;
+}
+.cv-reply-quote-author { font-weight: 700; display: block; margin-bottom: .1rem; }
+.cv-reply-quote-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+
+/* Message Actions Toolbar (Hover & Tap) */
+.cv-msg-actions {
+    position: absolute;
+    top: -14px;
+    right: 4px;
+    display: none;
+    align-items: center;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 2px 4px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    z-index: 10;
+}
+.cv-msg-mine .cv-msg-actions {
+    right: auto;
+    left: 4px;
+}
+.cv-msg:hover .cv-msg-actions,
+.cv-msg:focus-within .cv-msg-actions {
+    display: flex;
+}
+.cv-action-icon {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: .8rem;
+    padding: 3px 5px;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.cv-action-icon:hover {
+    color: var(--primary-color);
+    background: var(--surface-bg);
+}
+.cv-action-delete:hover {
+    color: #c62828;
+}
+
+/* Reactions on Message */
+.cv-msg-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+    margin-top: .25rem;
+}
+.cv-reaction-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    padding: 2px 7px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    background: var(--surface-bg);
+    font-size: .78rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all .2s;
+}
+.cv-reaction-pill:hover, .cv-reaction-pill.active {
+    border-color: var(--primary-color);
+    background: var(--card-bg);
+    color: var(--primary-color);
+}
+
+.cv-msg-meta-row {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    margin: .15rem .3rem 0;
+}
+.cv-msg-time { color: var(--text-secondary); font-size: .68rem; }
+.cv-edited-tag { color: var(--text-secondary); font-size: .68rem; font-style: italic; }
+
+/* Floating Scroll to Bottom Button */
+.cv-scroll-bottom {
+    position: absolute;
+    bottom: 75px;
+    right: 20px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--primary-color);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 20;
+    transition: transform .2s;
+}
+.cv-scroll-bottom:hover { transform: translateY(-2px); }
+
+/* Replying Banner above Composer */
+.cv-reply-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: .4rem .75rem;
+    background: var(--surface-bg);
+    border: 1px solid var(--border-color);
+    border-bottom: 0;
+    border-radius: 8px 8px 0 0;
+    font-size: .8rem;
+}
+.cv-reply-bar-info { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-reply-snippet { color: var(--text-secondary); margin-left: .3rem; }
+
+/* Composer */
+.cv-composer {
+    display: flex;
+    gap: .5rem;
+    padding-top: .75rem;
+    border-top: 1px solid var(--border-color);
+    align-items: center;
+}
+.cv-chat-input { flex: 1; min-width: 0; }
+.cv-send-btn { flex-shrink: 0; min-height: 2.6rem; padding: 0 1.1rem; }
+
+/* Feed Section */
+.cv-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+}
+.cv-post-composer {
+    border-radius: 12px;
+}
+.cv-post-actions {
+    justify-content: space-between;
+}
+.cv-select-expiry {
+    width: auto;
+    max-width: 180px;
+    flex-shrink: 0;
+}
+.cv-posts-stream {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+}
+
+.cv-post {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    position: relative;
+}
+.cv-post-pinned {
+    border-color: rgba(var(--primary-rgb, 120, 60, 20), 0.35);
+}
+.cv-post-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: .5rem;
+}
+.cv-post-author {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+.cv-post-author-text {
+    display: flex;
+    flex-direction: column;
+}
+.cv-post-name {
+    color: var(--primary-dark-color);
+    font-weight: 700;
+    font-size: .95rem;
+}
+.cv-post-badges {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+}
+.cv-badge-pinned {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+}
+.cv-badge-subtle {
+    background: var(--surface-bg);
+}
+.cv-badge-expiry {
+    background: rgba(220, 100, 20, 0.1);
+    color: #c45500;
+    border-color: rgba(220, 100, 20, 0.3);
+}
+
+/* Post Dropdown Menu */
+.cv-dropdown {
+    position: relative;
+}
+.cv-icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: .9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.cv-icon-btn:hover {
+    color: var(--primary-dark-color);
+    background: var(--surface-bg);
+}
+.cv-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    min-width: 130px;
+    display: none;
+    flex-direction: column;
+    padding: .35rem 0;
+    z-index: 50;
+}
+.cv-dropdown-menu.show { display: flex; }
+.cv-dropdown-menu button {
+    background: transparent;
+    border: none;
+    text-align: left;
+    padding: .5rem .85rem;
+    font-size: .85rem;
+    font-family: inherit;
+    color: var(--text-dark-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+.cv-dropdown-menu button:hover {
+    background: var(--surface-bg);
+    color: var(--primary-color);
+}
+.cv-dropdown-menu .cv-danger-text { color: #c62828; }
+.cv-dropdown-menu .cv-danger-text:hover { color: #b71c1c; }
+
+/* Post Body Elements */
+.cv-post-title {
+    color: var(--primary-dark-color);
+    font-size: 1.05rem;
+    margin-bottom: .5rem;
+}
+.cv-post-content {
+    line-height: 1.6;
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: .95rem;
+}
+
+/* Polls in Feed */
+.cv-poll-box {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    margin-top: .4rem;
+}
+.cv-vote-form {
+    display: flex;
+    flex-direction: column;
+    gap: .45rem;
+}
+.cv-poll-option {
+    position: relative;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--surface-bg);
+    overflow: hidden;
+    cursor: pointer;
+    min-height: 2.75rem;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    transition: border-color .2s;
+}
+.cv-poll-option:hover {
+    border-color: var(--primary-color);
+}
+.cv-opt-selected {
+    border-color: var(--primary-color);
+}
+.cv-poll-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    background: rgba(var(--primary-rgb, 120, 60, 20), 0.15);
+    transition: width .4s ease;
+    z-index: 1;
+}
+.cv-poll-content {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: .6rem .8rem;
+    gap: .6rem;
+}
+.cv-poll-content input[type="radio"] {
+    margin: 0;
+    cursor: pointer;
+}
+.cv-poll-label {
+    flex: 1;
+    font-weight: 500;
+    color: var(--text-dark-color);
+    font-size: .92rem;
+}
+.cv-poll-stat {
+    font-size: .8rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+.cv-poll-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: .2rem;
+}
+
+/* Events in Feed */
+.cv-event-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: .75rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--surface-bg);
+    flex-wrap: wrap;
+}
+.cv-event-time {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    color: var(--primary-dark-color);
+    font-weight: 600;
+    font-size: .95rem;
+}
+.cv-event-rsvp {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+}
+
+/* Engagements Bar */
+.cv-post-engagement {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .75rem;
+    padding-top: .6rem;
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+.cv-reactions-bar {
+    display: flex;
+    gap: .35rem;
+    flex-wrap: wrap;
+}
+.cv-comment-toggle {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: .85rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    font-family: inherit;
+    font-weight: 500;
+}
+.cv-comment-toggle:hover {
+    color: var(--primary-color);
+}
+
+/* Comments Thread */
+.cv-comments-section {
+    padding-top: .75rem;
+    border-top: 1px solid var(--border-color);
+    margin-top: .35rem;
+}
+.cv-comments-list {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    margin-bottom: .75rem;
+}
+.cv-comment-item {
+    background: var(--surface-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: .5rem .75rem;
+}
+.cv-comment-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: .25rem;
+}
+.cv-comment-author {
+    color: var(--primary-dark-color);
+    font-size: .82rem;
+}
+.cv-comment-meta {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+}
+.cv-comment-del {
+    font-size: .75rem;
+    padding: 2px 4px;
+}
+.cv-comment-body {
+    margin: 0;
+    font-size: .88rem;
+    line-height: 1.45;
+    color: var(--text-dark-color);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.cv-comment-form {
+    display: flex;
+    gap: .4rem;
+}
+.cv-comment-input {
+    flex: 1;
+    min-height: 2.3rem;
+    padding: .4rem .65rem;
+    font-size: .88rem;
+}
+
+/* Plan & Play Sidebar */
+.cv-plan-panel {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+}
+.cv-action-grid {
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+    width: 100%;
+}
+.cv-action-card {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    min-height: 2.75rem;
+    width: 100%;
+    box-sizing: border-box;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.cv-lobbies {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    padding-top: .5rem;
+    border-top: 1px solid var(--border-color);
+}
+.cv-lobbies h3 { font-size: .9rem; margin-bottom: .3rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .05em; }
+.cv-lobby-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: .6rem .75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--surface-bg);
+    text-decoration: none;
+    color: var(--text-dark-color);
+}
+.cv-lobby-item:hover { border-color: var(--primary-color); }
+.cv-lobby-info strong { display: block; color: var(--primary-dark-color); font-size: .9rem; }
+.cv-lobby-info span { font-size: .78rem; color: var(--text-secondary); }
+
+.cv-details {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: .6rem .75rem;
+    background: var(--surface-bg);
+}
+.cv-details summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--primary-dark-color);
+    font-size: .9rem;
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    list-style: none;
+}
+.cv-details summary::-webkit-details-marker { display: none; }
+.cv-details form { margin-top: .75rem; }
+
+.cv-poll-options-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+}
+.cv-opt-row {
+    display: flex;
+    gap: .35rem;
+    align-items: center;
+}
+.cv-opt-del {
+    flex-shrink: 0;
+    color: #c62828;
+}
+
+/* Members Section */
+.cv-members-panel {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+}
+.cv-requests-block {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    padding-bottom: .75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.cv-request-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .5rem;
+    padding: .6rem;
+    background: var(--surface-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+.cv-request-user {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+.cv-request-actions {
+    gap: .35rem;
+}
+
+.cv-invite-box {
+    position: relative;
+    width: 100%;
+}
+.cv-invite-form {
+    display: flex;
+    gap: .4rem;
+    width: 100%;
+}
+.cv-invite-input-wrap {
+    flex: 1;
+    position: relative;
+}
+.cv-autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+}
+.cv-autocomplete-item {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .75rem;
+    cursor: pointer;
+    font-size: .88rem;
+    color: var(--text-dark-color);
+    border-bottom: 1px solid var(--border-color);
+}
+.cv-autocomplete-item:last-child { border-bottom: none; }
+.cv-autocomplete-item:hover {
+    background: var(--surface-bg);
+    color: var(--primary-color);
+}
+
+.cv-members-list {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+}
+.cv-member-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: .5rem 0;
+    border-top: 1px solid var(--border-color);
+}
+.cv-member-item:first-child { border-top: none; }
+.cv-member-left {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+}
+.cv-member-info {
+    display: flex;
+    flex-direction: column;
+}
+.cv-role-badge {
+    font-size: .72rem;
+    color: var(--text-secondary);
+}
+.cv-role-owner { color: var(--primary-color); font-weight: 700; }
+.cv-role-moderator { color: #2e7d32; font-weight: 600; }
+
+.cv-manage summary {
+    list-style: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 4px;
+}
+.cv-manage-pop {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    margin-top: .5rem;
+}
+.cv-manage-pop form { margin: 0; }
+
+/* Responsive Media Queries */
 @media (max-width: 860px) {
-    .cv-grid { grid-template-columns: 1fr; }
-    .cv-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: .35rem; margin-bottom: 1rem; }
-    .cv-tabs button { min-height: 2.75rem; padding: .4rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--card-bg); color: var(--text-secondary); font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; }
-    .cv-tabs button[aria-pressed="true"] { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
+    .cv-grid {
+        grid-template-columns: 1fr;
+    }
+    .cv-main-nav {
+        display: none; /* Mobile uses the 4-tab bar at the top */
+    }
+    .cv-tabs {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: .35rem;
+        margin-bottom: 1rem;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    .cv-tabs button {
+        min-height: 2.75rem;
+        padding: .4rem .2rem;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: var(--card-bg);
+        color: var(--text-secondary);
+        font: inherit;
+        font-size: .88rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .3rem;
+        white-space: nowrap;
+    }
+    .cv-tabs button[aria-pressed="true"] {
+        background: var(--primary-color);
+        border-color: var(--primary-color);
+        color: #fff;
+    }
+
+    /* Tab Switcher Logic for Mobile */
     .cv-js .cv-panel { display: none; }
     .cv-js[data-active="chat"] [data-panel="chat"],
     .cv-js[data-active="feed"] [data-panel="feed"],
     .cv-js[data-active="plan"] [data-panel="plan"],
-    .cv-js[data-active="members"] [data-panel="members"] { display: block; }
-    .cv-js[data-active="feed"] [data-panel="feed"] { display: grid; }
-    .cv-chat-log { height: 60vh; height: calc(100dvh - 21rem); min-height: 260px; }
+    .cv-js[data-active="members"] [data-panel="members"] { display: flex; }
+    .cv-chat-log {
+        height: 60vh;
+        height: calc(100dvh - 230px);
+        min-height: 280px;
+    }
 }
+
+@media (min-width: 861px) {
+    /* Desktop Toggle Logic for Main Column */
+    .cv-js[data-main-active="chat"] [data-panel="feed"] {
+        display: none !important;
+    }
+    .cv-js[data-main-active="feed"] [data-panel="chat"] {
+        display: none !important;
+    }
+}
+
 @media (max-width: 600px) {
-    .cv { padding: 1rem .75rem 2rem; }
+    .cv { padding: 0.25rem 0.25rem 2rem; }
     .cv-head { flex-direction: column; }
     .cv-actions { width: 100%; }
     .cv-actions form, .cv-actions > a { flex: 1; }
     .cv-actions .btn { width: 100%; box-sizing: border-box; text-align: center; min-height: 2.75rem; }
     .cv-msg { max-width: 90%; }
-    .cv-card { padding: .85rem; }
+    .cv-card { padding: .85rem; border-radius: 10px; }
+    .cv-select-expiry { max-width: 140px; }
 }
 </style>
+
 <script nonce="{{ csp_nonce }}">
 (function () {
-    var cv = document.getElementById('cv');
+    const cv = document.getElementById('cv');
     if (!cv) return;
     cv.classList.add('cv-js');
-    var log = document.getElementById('cv-chat-log');
-    var tabs = cv.querySelectorAll('[data-tab]');
-    var key = 'cv-tab-' + location.pathname;
-    function toBottom() { if (log) log.scrollTop = log.scrollHeight; }
-    function show(name) {
-        cv.setAttribute('data-active', name);
-        tabs.forEach(function (t) { t.setAttribute('aria-pressed', t.dataset.tab === name ? 'true' : 'false'); });
-        try { sessionStorage.setItem(key, name); } catch (e) {}
-        if (name === 'chat') toBottom();
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const log = document.getElementById('cv-chat-log');
+    const scrollBottomBtn = document.getElementById('cv-scroll-bottom');
+    const chatInput = document.getElementById('cv-chat-input');
+    const replyBar = document.getElementById('cv-reply-bar');
+    const replyName = document.getElementById('cv-reply-name');
+    const replySnippet = document.getElementById('cv-reply-snippet');
+    const replyToIdInput = document.getElementById('cv-reply-to-id');
+
+    // Auto-scroll chat log
+    function toBottom(smooth) {
+        if (!log) return;
+        if (smooth) {
+            log.scrollTo({ top: log.scrollHeight, behavior: 'smooth' });
+        } else {
+            log.scrollTop = log.scrollHeight;
+        }
     }
-    tabs.forEach(function (t) { t.addEventListener('click', function () { show(t.dataset.tab); }); });
-    var saved = 'chat';
-    try { saved = sessionStorage.getItem(key) || 'chat'; } catch (e) {}
-    show(saved);
+
+    if (log) {
+        log.addEventListener('scroll', function () {
+            const distance = log.scrollHeight - log.scrollTop - log.clientHeight;
+            if (distance > 150) {
+                if (scrollBottomBtn) scrollBottomBtn.style.display = 'flex';
+            } else {
+                if (scrollBottomBtn) scrollBottomBtn.style.display = 'none';
+            }
+        });
+    }
+
+    if (scrollBottomBtn) {
+        scrollBottomBtn.addEventListener('click', function () {
+            toBottom(true);
+        });
+    }
+
+    // Navigation and Tab State
+    const mobileTabs = cv.querySelectorAll('.cv-tabs button[data-tab]');
+    const desktopMainBtns = cv.querySelectorAll('.cv-main-nav button[data-main-view]');
+    const mobileKey = 'cv-mob-tab-' + location.pathname;
+    const desktopKey = 'cv-desk-tab-' + location.pathname;
+
+    function setMobileTab(name) {
+        cv.setAttribute('data-active', name);
+        mobileTabs.forEach(function (btn) {
+            btn.setAttribute('aria-pressed', btn.dataset.tab === name ? 'true' : 'false');
+        });
+        try { sessionStorage.setItem(mobileKey, name); } catch (e) {}
+        if (name === 'chat') setTimeout(toBottom, 50);
+    }
+
+    function setDesktopMainView(view) {
+        cv.setAttribute('data-main-active', view);
+        desktopMainBtns.forEach(function (btn) {
+            const active = btn.dataset.mainView === view;
+            btn.classList.toggle('active', active);
+            btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        try { sessionStorage.setItem(desktopKey, view); } catch (e) {}
+        if (view === 'chat') setTimeout(toBottom, 50);
+    }
+
+    mobileTabs.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            setMobileTab(btn.dataset.tab);
+        });
+    });
+
+    desktopMainBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            setDesktopMainView(btn.dataset.mainView);
+        });
+    });
+
+    // Initial Tab State
+    let initialMob = 'chat';
+    try { initialMob = sessionStorage.getItem(mobileKey) || 'chat'; } catch (e) {}
+    setMobileTab(initialMob);
+
+    let initialDesk = 'chat';
+    try { initialDesk = sessionStorage.getItem(desktopKey) || 'chat'; } catch (e) {}
+    setDesktopMainView(initialDesk);
+
     toBottom();
+
+    // Reply mechanism
+    window.replyToMessage = function (msgId, authorName, snippet) {
+        if (replyBar && replyName && replySnippet && replyToIdInput) {
+            replyName.textContent = authorName;
+            replySnippet.textContent = snippet;
+            replyToIdInput.value = msgId;
+            replyBar.style.display = 'flex';
+            if (chatInput) chatInput.focus();
+        }
+    };
+
+    window.cancelReply = function () {
+        if (replyBar && replyToIdInput) {
+            replyBar.style.display = 'none';
+            replyToIdInput.value = '';
+        }
+    };
+
+    // AJAX Chat Submit
+    const chatForm = document.getElementById('cv-chat-form');
+    if (chatForm) {
+        chatForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const content = chatInput.value.trim();
+            if (!content) return;
+            const replyToId = replyToIdInput ? replyToIdInput.value : '';
+
+            fetch(chatForm.action, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ content: content, reply_to_id: replyToId })
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success && data.message) {
+                    chatInput.value = '';
+                    cancelReply();
+                    appendChatMessage(data.message, true);
+                    toBottom(true);
+                } else if (data.error) {
+                    alert(data.error);
+                }
+            })
+            .catch(function () {
+                chatForm.submit();
+            });
+        });
+    }
+
+    function appendChatMessage(msg, isMine) {
+        const emptyEl = document.getElementById('cv-chat-empty');
+        if (emptyEl) emptyEl.remove();
+
+        const row = document.createElement('div');
+        row.className = 'cv-msg' + (isMine ? ' cv-msg-mine' : '');
+        row.setAttribute('data-msg-id', msg.id);
+
+        let html = '';
+        if (!isMine) {
+            html += `<div class="cv-msg-author-row">`;
+            if (msg.author_image) {
+                html += `<img class="cv-avatar-tiny" src="${msg.author_image}" alt="">`;
+            } else {
+                html += `<span class="cv-avatar-initial">${(msg.author_name || 'U').charAt(0).toUpperCase()}</span>`;
+            }
+            html += `<span class="cv-msg-author">${escapeHtml(msg.author_name || 'Member')}</span></div>`;
+        }
+
+        html += `<div class="cv-bubble-wrap">`;
+        if (msg.reply_to) {
+            html += `<div class="cv-reply-quote"><span class="cv-reply-quote-author">${escapeHtml(msg.reply_to.author_name)}</span><span class="cv-reply-quote-text">${escapeHtml(msg.reply_to.snippet)}</span></div>`;
+        }
+        html += `<p class="cv-bubble">${escapeHtml(msg.content)}</p>`;
+        html += `<div class="cv-msg-actions">
+            <button type="button" class="cv-action-icon" onclick="reactMessage('${msg.id}', '❤️')">❤️</button>
+            <button type="button" class="cv-action-icon" onclick="reactMessage('${msg.id}', '👍')">👍</button>
+            <button type="button" class="cv-action-icon" onclick="reactMessage('${msg.id}', '🔥')">🔥</button>
+            <button type="button" class="cv-action-icon" onclick="replyToMessage('${msg.id}', '${escapeJs(msg.author_name)}', '${escapeJs(msg.content.substring(0, 50))}')"><i class="fas fa-reply"></i></button>`;
+        if (isMine) {
+            html += `<button type="button" class="cv-action-icon" onclick="editMessage('${msg.id}')"><i class="fas fa-pen"></i></button>`;
+        }
+        html += `<button type="button" class="cv-action-icon cv-action-delete" onclick="deleteMessage('${msg.id}')"><i class="fas fa-trash"></i></button></div></div>`;
+        html += `<div class="cv-msg-reactions" data-msg-reactions="${msg.id}"></div>`;
+        html += `<div class="cv-msg-meta-row"><time class="cv-msg-time">${msg.created_at_formatted || 'Now'}</time></div>`;
+
+        row.innerHTML = html;
+        log.appendChild(row);
+    }
+
+    // Chat Message React
+    window.reactMessage = function (msgId, emoji) {
+        fetch(`{{ url_for('circles.react_circle_message', circle_id=circle._id, message_id='MSG_ID') }}`.replace('MSG_ID', msgId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ emoji: emoji })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success && data.reactions) {
+                renderMessageReactions(msgId, data.reactions);
+            }
+        });
+    };
+
+    function renderMessageReactions(msgId, reactions) {
+        const container = document.querySelector(`[data-msg-reactions="${msgId}"]`);
+        if (!container) return;
+        let html = '';
+        for (const [em, uids] of Object.entries(reactions)) {
+            if (uids && uids.length > 0) {
+                const isMine = uids.includes('{{ current_user.id }}');
+                html += `<button type="button" class="cv-reaction-pill${isMine ? ' active' : ''}" onclick="reactMessage('${msgId}', '${em}')">
+                    ${em} <span class="cv-reaction-count">${uids.length}</span>
+                </button>`;
+            }
+        }
+        container.innerHTML = html;
+    }
+
+    // Chat Message Edit
+    window.editMessage = function (msgId) {
+        const msgEl = document.querySelector(`[data-msg-id="${msgId}"]`);
+        if (!msgEl) return;
+        const bubble = msgEl.querySelector('.cv-bubble');
+        if (!bubble) return;
+        const currentText = bubble.textContent;
+
+        const editWrap = document.createElement('div');
+        editWrap.className = 'cv-edit-wrap';
+        editWrap.innerHTML = `
+            <textarea class="cv-input" style="min-height: 60px; margin-bottom: 4px;">${escapeHtml(currentText)}</textarea>
+            <div class="cv-row" style="justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary cv-btn-sm cv-edit-cancel">Cancel</button>
+                <button type="button" class="btn cv-btn-sm cv-edit-save">Save</button>
+            </div>
+        `;
+
+        bubble.style.display = 'none';
+        bubble.parentNode.insertBefore(editWrap, bubble.nextSibling);
+
+        editWrap.querySelector('.cv-edit-cancel').onclick = function () {
+            editWrap.remove();
+            bubble.style.display = 'block';
+        };
+
+        editWrap.querySelector('.cv-edit-save').onclick = function () {
+            const newContent = editWrap.querySelector('textarea').value.trim();
+            if (!newContent) return;
+            fetch(`{{ url_for('circles.edit_circle_message', circle_id=circle._id, message_id='MSG_ID') }}`.replace('MSG_ID', msgId), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ content: newContent })
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    bubble.textContent = newContent;
+                    editWrap.remove();
+                    bubble.style.display = 'block';
+                    const metaRow = msgEl.querySelector('.cv-msg-meta-row');
+                    if (metaRow && !metaRow.querySelector('.cv-edited-tag')) {
+                        const tag = document.createElement('span');
+                        tag.className = 'cv-edited-tag';
+                        tag.textContent = 'edited';
+                        metaRow.insertBefore(tag, metaRow.firstChild);
+                    }
+                } else alert(data.error || 'Failed to edit');
+            });
+        };
+    };
+
+    // Chat Message Delete
+    window.deleteMessage = function (msgId) {
+        if (!confirm('Delete this message?')) return;
+        fetch(`{{ url_for('circles.delete_circle_message', circle_id=circle._id, message_id='MSG_ID') }}`.replace('MSG_ID', msgId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'Accept': 'application/json'
+            }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                const msgEl = document.querySelector(`[data-msg-id="${msgId}"]`);
+                if (msgEl) msgEl.remove();
+            } else alert(data.error || 'Failed to delete');
+        });
+    };
+
+    // Chat Message Pin
+    window.togglePinMessage = function (msgId) {
+        fetch(`{{ url_for('circles.pin_circle_message', circle_id=circle._id, message_id='MSG_ID') }}`.replace('MSG_ID', msgId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'Accept': 'application/json'
+            }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                location.reload();
+            } else alert(data.error || 'Failed to pin');
+        });
+    };
+
+    // Feed Post React
+    window.reactPost = function (postId, emoji) {
+        fetch(`{{ url_for('circles.react_circle_post', circle_id=circle._id, post_id='POST_ID') }}`.replace('POST_ID', postId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ emoji: emoji })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success && data.reactions) {
+                const postEl = document.querySelector(`[data-post-id="${postId}"]`);
+                if (!postEl) return;
+                const rxBar = postEl.querySelector('.cv-reactions-bar');
+                if (!rxBar) return;
+                ['❤️', '👍', '🔥', '🎉'].forEach(function (em) {
+                    const pill = rxBar.querySelector(`button[onclick*="'${em}'"]`);
+                    if (pill) {
+                        const countEl = pill.querySelector('.rx-cnt');
+                        const uids = data.reactions[em] || [];
+                        if (countEl) countEl.textContent = uids.length;
+                        pill.classList.toggle('active', uids.includes('{{ current_user.id }}'));
+                    }
+                });
+            }
+        });
+    };
+
+    // Feed Post Pin
+    window.togglePinPost = function (postId) {
+        fetch(`{{ url_for('circles.pin_circle_post', circle_id=circle._id, post_id='POST_ID') }}`.replace('POST_ID', postId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'Accept': 'application/json'
+            }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) location.reload();
+            else alert(data.error || 'Failed to pin');
+        });
+    };
+
+    // Feed Post Edit
+    window.editPost = function (postId) {
+        const postEl = document.querySelector(`[data-post-id="${postId}"]`);
+        if (!postEl) return;
+        const bodyEl = document.getElementById(`post-body-${postId}`);
+        const contentEl = bodyEl.querySelector('.cv-post-content');
+        if (!contentEl) return;
+        const oldContent = contentEl.textContent;
+
+        const editWrap = document.createElement('div');
+        editWrap.className = 'cv-edit-post-wrap';
+        editWrap.innerHTML = `
+            <textarea class="cv-input" style="min-height: 90px; margin-bottom: .5rem;">${escapeHtml(oldContent)}</textarea>
+            <div class="cv-row" style="justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary cv-btn-sm cv-post-cancel">Cancel</button>
+                <button type="button" class="btn cv-btn-sm cv-post-save">Save</button>
+            </div>
+        `;
+
+        contentEl.style.display = 'none';
+        contentEl.parentNode.insertBefore(editWrap, contentEl.nextSibling);
+
+        editWrap.querySelector('.cv-post-cancel').onclick = function () {
+            editWrap.remove();
+            contentEl.style.display = 'block';
+        };
+
+        editWrap.querySelector('.cv-post-save').onclick = function () {
+            const newContent = editWrap.querySelector('textarea').value.trim();
+            if (!newContent) return;
+            fetch(`{{ url_for('circles.edit_circle_post', circle_id=circle._id, post_id='POST_ID') }}`.replace('POST_ID', postId), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ content: newContent })
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    contentEl.textContent = newContent;
+                    editWrap.remove();
+                    contentEl.style.display = 'block';
+                } else alert(data.error || 'Failed to edit post');
+            });
+        };
+    };
+
+    // Feed Post Delete
+    window.deletePost = function (postId) {
+        if (!confirm('Delete this post?')) return;
+        fetch(`{{ url_for('circles.delete_circle_post', circle_id=circle._id, post_id='POST_ID') }}`.replace('POST_ID', postId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'Accept': 'application/json'
+            }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                const postEl = document.querySelector(`[data-post-id="${postId}"]`);
+                if (postEl) postEl.remove();
+            } else alert(data.error || 'Failed to delete');
+        });
+    };
+
+    // Comments Toggle
+    window.toggleComments = function (postId) {
+        const sec = document.getElementById(`comments-section-${postId}`);
+        if (sec) {
+            sec.style.display = sec.style.display === 'none' ? 'block' : 'none';
+            if (sec.style.display === 'block') {
+                const input = sec.querySelector('.cv-comment-input');
+                if (input) input.focus();
+            }
+        }
+    };
+
+    // Submit Comment
+    window.submitComment = function (postId, form) {
+        const input = form.querySelector('.cv-comment-input');
+        const content = input.value.trim();
+        if (!content) return;
+        fetch(`{{ url_for('circles.comment_circle_post', circle_id=circle._id, post_id='POST_ID') }}`.replace('POST_ID', postId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ content: content })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success && data.comment) {
+                input.value = '';
+                const list = document.getElementById(`comments-list-${postId}`);
+                if (list) {
+                    const item = document.createElement('div');
+                    item.className = 'cv-comment-item';
+                    item.id = `comment-${data.comment.id}`;
+                    item.innerHTML = `
+                        <div class="cv-comment-top">
+                            <strong class="cv-comment-author">${escapeHtml(data.comment.author_name)}</strong>
+                            <div class="cv-comment-meta">
+                                <time class="cv-meta">Just now</time>
+                                <button type="button" class="cv-icon-btn cv-comment-del" onclick="deleteComment('${postId}', '${data.comment.id}')" title="Delete"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <p class="cv-comment-body">${escapeHtml(data.comment.content)}</p>
+                    `;
+                    list.appendChild(item);
+                }
+            } else alert(data.error || 'Failed to add comment');
+        });
+    };
+
+    // Delete Comment
+    window.deleteComment = function (postId, commentId) {
+        fetch(`{{ url_for('circles.delete_circle_post_comment', circle_id=circle._id, post_id='POST_ID', comment_id='COMMENT_ID') }}`.replace('POST_ID', postId).replace('COMMENT_ID', commentId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'Accept': 'application/json'
+            }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                const el = document.getElementById(`comment-${commentId}`);
+                if (el) el.remove();
+            } else alert(data.error || 'Failed to delete comment');
+        });
+    };
+
+    // Vote Poll AJAX
+    window.submitVote = function (postId, form) {
+        const formData = new FormData(form);
+        const optVal = formData.get('option');
+        if (optVal === null || optVal === undefined) return;
+        fetch(`{{ url_for('circles.vote_poll', circle_id=circle._id, post_id='POST_ID') }}`.replace('POST_ID', postId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ option: optVal })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) location.reload();
+            else alert(data.error || 'Failed to submit vote');
+        });
+    };
+
+    // RSVP Event AJAX
+    window.toggleRsvp = function (postId, btn) {
+        fetch(`{{ url_for('circles.rsvp_event', circle_id=circle._id, post_id='POST_ID') }}`.replace('POST_ID', postId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'Accept': 'application/json'
+            }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                btn.className = 'btn ' + (data.is_attending ? 'btn-secondary' : 'btn-primary');
+                const span = btn.querySelector('span');
+                if (span) span.textContent = data.is_attending ? 'Going' : "I'm going";
+                const icon = btn.querySelector('i');
+                if (icon) icon.className = 'fas ' + (data.is_attending ? 'fa-check' : 'fa-plus');
+                const countEl = btn.parentNode.querySelector('.cv-attendee-count');
+                if (countEl) countEl.textContent = data.attending_count + ' attending';
+            }
+        });
+    };
+
+    // Dropdown toggle
+    window.toggleDropdown = function (btn) {
+        const menu = btn.nextElementSibling;
+        if (!menu) return;
+        document.querySelectorAll('.cv-dropdown-menu.show').forEach(function (m) {
+            if (m !== menu) m.classList.remove('show');
+        });
+        menu.classList.toggle('show');
+    };
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest('.cv-dropdown')) {
+            document.querySelectorAll('.cv-dropdown-menu.show').forEach(function (m) {
+                m.classList.remove('show');
+            });
+        }
+    });
+
+    // Dynamic Poll Options
+    const pollInputsContainer = document.getElementById('cv-poll-options-inputs');
+    const addOptionBtn = document.getElementById('cv-add-option-btn');
+    window.addPollOption = function () {
+        if (!pollInputsContainer) return;
+        const count = pollInputsContainer.querySelectorAll('.cv-opt-row').length;
+        if (count >= 8) {
+            alert('Maximum 8 options allowed.');
+            return;
+        }
+        const row = document.createElement('div');
+        row.className = 'cv-opt-row';
+        row.innerHTML = `
+            <input class="cv-input" name="options" placeholder="Option ${count + 1}">
+            <button type="button" class="cv-icon-btn cv-opt-del" onclick="removePollOption(this)" title="Remove option"><i class="fas fa-times"></i></button>
+        `;
+        pollInputsContainer.appendChild(row);
+        if (count + 1 >= 8 && addOptionBtn) addOptionBtn.style.display = 'none';
+    };
+
+    window.removePollOption = function (btn) {
+        const row = btn.closest('.cv-opt-row');
+        if (row) row.remove();
+        if (addOptionBtn) addOptionBtn.style.display = 'inline-block';
+    };
+
+    // Live Member Invite Autocomplete
+    const inviteInput = document.getElementById('cv-invite-username');
+    const autocompleteDropdown = document.getElementById('cv-invite-autocomplete');
+    let searchTimeout = null;
+
+    if (inviteInput && autocompleteDropdown) {
+        inviteInput.addEventListener('input', function () {
+            clearTimeout(searchTimeout);
+            const query = inviteInput.value.trim().replace(/^@/, '');
+            if (query.length < 1) {
+                autocompleteDropdown.style.display = 'none';
+                autocompleteDropdown.innerHTML = '';
+                return;
+            }
+
+            searchTimeout = setTimeout(function () {
+                fetch(`{{ url_for('circles.search_invite_users', circle_id=circle._id) }}?q=${encodeURIComponent(query)}`)
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.users && data.users.length > 0) {
+                        autocompleteDropdown.innerHTML = '';
+                        data.users.forEach(function (u) {
+                            if (u.is_member) return; // Skip already members
+                            const item = document.createElement('div');
+                            item.className = 'cv-autocomplete-item';
+                            item.innerHTML = `
+                                ${u.avatar ? `<img class="cv-avatar-tiny" src="${u.avatar}" alt="">` : `<span class="cv-avatar-initial" style="width:20px;height:20px;font-size:10px;">${u.username.charAt(0).toUpperCase()}</span>`}
+                                <span>${escapeHtml(u.username)}</span>
+                            `;
+                            item.addEventListener('click', function () {
+                                inviteInput.value = u.username;
+                                autocompleteDropdown.style.display = 'none';
+                            });
+                            autocompleteDropdown.appendChild(item);
+                        });
+                        autocompleteDropdown.style.display = autocompleteDropdown.children.length > 0 ? 'flex' : 'none';
+                    } else {
+                        autocompleteDropdown.style.display = 'none';
+                    }
+                })
+                .catch(function () {
+                    autocompleteDropdown.style.display = 'none';
+                });
+            }, 250);
+        });
+
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('.cv-invite-input-wrap')) {
+                autocompleteDropdown.style.display = 'none';
+            }
+        });
+    }
+
+    // Socket.IO Real-Time Updates
+    if (window.socket) {
+        window.socket.on('circle_message_sent', function (data) {
+            if (data.circle_id === '{{ circle._id }}') {
+                const isMine = data.author_id === '{{ current_user.id }}';
+                // Only append if not already present
+                if (!document.querySelector(`[data-msg-id="${data.id}"]`)) {
+                    appendChatMessage(data, isMine);
+                    toBottom(true);
+                }
+            }
+        });
+
+        window.socket.on('circle_message_edited', function (data) {
+            if (data.circle_id === '{{ circle._id }}') {
+                const msgEl = document.querySelector(`[data-msg-id="${data.id}"]`);
+                if (msgEl) {
+                    const bubble = msgEl.querySelector('.cv-bubble');
+                    if (bubble) bubble.textContent = data.content;
+                    const metaRow = msgEl.querySelector('.cv-msg-meta-row');
+                    if (metaRow && !metaRow.querySelector('.cv-edited-tag')) {
+                        const tag = document.createElement('span');
+                        tag.className = 'cv-edited-tag';
+                        tag.textContent = 'edited';
+                        metaRow.insertBefore(tag, metaRow.firstChild);
+                    }
+                }
+            }
+        });
+
+        window.socket.on('circle_message_deleted', function (data) {
+            if (data.circle_id === '{{ circle._id }}') {
+                const msgEl = document.querySelector(`[data-msg-id="${data.id}"]`);
+                if (msgEl) msgEl.remove();
+            }
+        });
+
+        window.socket.on('circle_message_reacted', function (data) {
+            if (data.circle_id === '{{ circle._id }}') {
+                renderMessageReactions(data.id, data.reactions);
+            }
+        });
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+        return text.replace(/[&<>"']/g, function (m) { return map[m]; });
+    }
+
+    function escapeJs(text) {
+        if (!text) return '';
+        return text.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+    }
 })();
 </script>
 {% endblock %}

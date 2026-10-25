@@ -1,3 +1,46 @@
+# Trusted Circles UI & Functional Overhaul
+
+## Model Attribution
+- Model: Gemini 3.8 Flash (High)
+
+## Summary of Changes
+- **Desktop Feed & Chat Layout**:
+  - Implemented desktop toggle switcher (`[ Chat ]` and `[ Feed ]`) above the main section so the Feed is not pushed underneath the chat area.
+  - Chat and Feed are given full prominence and height in their respective active views.
+- **Mobile Responsive Width & Space Utilization**:
+  - Fixed narrow shrink-wrapped cards by adding explicit `width: 100%` and `box-sizing: border-box` to `.cv`, `.cv-grid`, `.cv-main`, `.cv-side`, and `.cv-card`.
+  - Replaced narrow centered "Play and plan" buttons with full-width responsive action cards.
+  - Adjusted mobile container padding (`.container:has(.cv)`) for better horizontal real estate.
+  - Full-width mobile navigation tabs (`Chat | Feed | Plan | Members`) with persistent tab selection via `sessionStorage`.
+- **Chat Scrolling & Interaction Fix**:
+  - Removed `overscroll-behavior: contain` from the chat log so mouse wheel scrolling smoothly chains to page scrolling without trapping the user.
+  - Added floating "Scroll to bottom" button when user scrolls up.
+  - Preserved auto-scroll to latest messages on load and send.
+- **Chat Message Controls (DM Architecture Alignment)**:
+  - Added rich message action toolbar on hover/tap: quick emoji reactions (❤️, 👍, 😂, 🔥), reply quoting, pin/unpin for moderators, inline editing for authors, and deletion for authors/moderators.
+  - Added reaction badges below bubbles showing counts and active toggle states.
+  - Added quoted reply preview above composer and inside message bubbles.
+  - Added pinned message banner at top of chat log.
+  - Real-time Socket.IO synchronization for message sending, editing, deletion, and reactions across Circle members.
+- **Feed Revamp & Engagement Controls**:
+  - Added post editing for post authors and deletion for authors/moderators.
+  - Added pin/unpin post capability for moderators (pinned posts displayed at top with 📌 badge).
+  - Added post reactions bar (❤️, 👍, 🔥, 🎉) with live toggle counts.
+  - Added post comments thread allowing Circle members to discuss posts directly, with comment deletion permissions.
+  - Revamped Poll posts to show option progress bars, percentage, vote counts, total vote tally, and visual vote selection.
+  - Revamped Event posts to show formatted datetime, attendee counter, and RSVP toggle.
+- **Member Invite Bug Fix**:
+  - Fixed bug where owner invited a username and was asked to approve their own invitation.
+  - Direct addition of member by owner/moderator without self-approval loop.
+  - Disallows inviting self or duplicate members with clear notifications.
+  - Added live username autocomplete search endpoint (`/circle/<circle_id>/members/search`) and interactive dropdown UI.
+  - Filtered pending join requests to only external applicants and enriched with applicant avatar and username.
+- **Dynamic Poll Options**:
+  - Replaced hardcoded 3 options with dynamic option manager supporting 2 to 8 options with "+ Add option" and option removal controls.
+- **Validation**:
+  - 9 focused circle tests passed (`tests/test_circles.py`).
+  - Full project test suite passed (596 tests, 0 failures).
+
 # Release: v1.14.0 Android App Release Manifest & APK
 
 ## Model Attribution

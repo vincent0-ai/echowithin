@@ -76,7 +76,26 @@ def circles_page():
     for circle in circles:
         circle['member_count'] = len(circle.get('members', []))
         circle['type_label'] = CIRCLE_TYPES.get(circle.get('circle_type', 'custom'), CIRCLE_TYPES['custom'])[0]
-    return render_template('circles.html', circles=circles, circle_types=CIRCLE_TYPES, active_page='circles', title='Trusted Circles | EchoWithin')
+
+    open_cursor = m.circles_conf.find({
+        'visibility': 'open',
+        'members': {'$ne': user_id}
+    }).sort('updated_at', -1)
+    if hasattr(open_cursor, 'limit'):
+        open_cursor = open_cursor.limit(20)
+    open_circles = list(open_cursor)
+    for oc in open_circles:
+        oc['member_count'] = len(oc.get('members', []))
+        oc['type_label'] = CIRCLE_TYPES.get(oc.get('circle_type', 'custom'), CIRCLE_TYPES['custom'])[0]
+
+    return render_template(
+        'circles.html',
+        circles=circles,
+        open_circles=open_circles,
+        circle_types=CIRCLE_TYPES,
+        active_page='circles',
+        title='Trusted Circles | EchoWithin'
+    )
 
 
 @bp.route('/circles/create', methods=['POST'])
@@ -86,6 +105,9 @@ def create_circle():
     import main as m
     name = request.form.get('name', '').strip()
     circle_type = request.form.get('circle_type', 'custom').strip().lower()
+    visibility = request.form.get('visibility', 'invite_only').strip().lower()
+    if visibility not in ('invite_only', 'open'):
+        visibility = 'invite_only'
     if not name or len(name) > 80 or circle_type not in CIRCLE_TYPES:
         flash('Enter a circle name and choose a type.', 'danger')
         return redirect(url_for('circles.circles_page'))
@@ -96,13 +118,38 @@ def create_circle():
         'owner_id': ObjectId(current_user.id),
         'members': [ObjectId(current_user.id)],
         'roles': {str(current_user.id): 'owner'},
-        'visibility': 'invite_only',
+        'visibility': visibility,
         'approval_required': request.form.get('approval_required') == '1',
         'muted_by': [],
         'created_at': now,
         'updated_at': now
     })
     return redirect(url_for('circles.view_circle', circle_id=str(result.inserted_id)))
+
+
+@bp.route('/circle/<circle_id>/join', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def join_open_circle(circle_id):
+    import main as m
+    circle = m.circles_conf.find_one({'_id': _oid(circle_id)})
+    if not circle:
+        flash('Circle not found.', 'danger')
+        return redirect(url_for('circles.circles_page'))
+    if circle.get('visibility') != 'open':
+        flash('This circle is invite-only.', 'warning')
+        return redirect(url_for('circles.circles_page'))
+    user_id = ObjectId(current_user.id)
+    if user_id not in circle.get('members', []):
+        m.circles_conf.update_one(
+            {'_id': circle['_id']},
+            {
+                '$addToSet': {'members': user_id},
+                '$set': {f'roles.{current_user.id}': 'member', 'updated_at': _now()}
+            }
+        )
+    flash(f"Joined {circle.get('name', 'Circle')}!", 'success')
+    return redirect(url_for('circles.view_circle', circle_id=circle_id))
 
 
 @bp.route('/circle/<circle_id>')
@@ -176,16 +223,31 @@ def view_circle(circle_id):
                 if ObjectId(uid) in user_map
             ]
 
-        # Comments
-        comments = post.get('comments', [])
-        for c in comments:
+        # Comments (hierarchical / nested)
+        raw_comments = post.get('comments', [])
+        comment_dict = {}
+        top_level_comments = []
+
+        for c in raw_comments:
             c['content'] = decrypt_community_note(c.get('content', ''), circle['_id'])
             c_author = user_map.get(c.get('author_id'))
-            c['author_name'] = c_author.get('username', 'Member') if c_author else 'Member'
+            c['author_name'] = c_author.get('username', 'Member') if c_author else c.get('author_name', 'Member')
             c['author_image'] = c_author.get('profile_image_url') if c_author else None
             c['is_mine'] = str(c.get('author_id')) == current_uid_str
-        post['comments'] = comments
-        post['comments_count'] = len(comments)
+            c['replies'] = []
+            comment_dict[c.get('id')] = c
+
+        for c in raw_comments:
+            pid = c.get('parent_id')
+            if pid and pid in comment_dict:
+                if not c.get('reply_to_author'):
+                    c['reply_to_author'] = comment_dict[pid].get('author_name', 'Member')
+                comment_dict[pid]['replies'].append(c)
+            else:
+                top_level_comments.append(c)
+
+        post['comments'] = top_level_comments
+        post['comments_count'] = len(raw_comments)
 
         # Reactions
         post['reactions'] = post.get('reactions', {})
@@ -577,11 +639,19 @@ def comment_circle_post(circle_id, post_id):
 
     data = request.get_json(silent=True) or request.form
     content = data.get('content', '').strip()
+    parent_id = (data.get('parent_id') or '').strip() or None
     if not content or len(content) > 1000:
         if request.is_json or request.headers.get('Accept') == 'application/json':
             return jsonify({'error': 'Comment cannot be empty or over 1000 characters.'}), 400
         flash('Comment cannot be empty.', 'danger')
         return _redirect(circle_id)
+
+    reply_to_author = None
+    if parent_id:
+        for existing_c in post.get('comments', []):
+            if existing_c.get('id') == parent_id:
+                reply_to_author = existing_c.get('author_name', 'Member')
+                break
 
     now = _now()
     comment_id = str(ObjectId())
@@ -590,6 +660,8 @@ def comment_circle_post(circle_id, post_id):
         'author_id': ObjectId(current_user.id),
         'author_name': current_user.username,
         'content': encrypt_community_note(content, circle['_id']),
+        'parent_id': parent_id,
+        'reply_to_author': reply_to_author,
         'created_at': now
     }
     m.circle_posts_conf.update_one(
@@ -605,6 +677,8 @@ def comment_circle_post(circle_id, post_id):
                 'author_name': current_user.username,
                 'author_image': getattr(current_user, 'profile_image_url', None),
                 'content': content,
+                'parent_id': parent_id,
+                'reply_to_author': reply_to_author,
                 'created_at': now.isoformat().replace('+00:00', 'Z')
             }
         })

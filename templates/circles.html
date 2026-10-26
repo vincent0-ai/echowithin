@@ -4,7 +4,7 @@
 <main class="cl">
     <header class="cl-head">
         <h1>Trusted Circles</h1>
-        <p>Private groups for the people you trust.</p>
+        <p>Private and open spaces for the people you connect with.</p>
     </header>
 
     <details class="cl-create" {% if not circles %}open{% endif %}>
@@ -13,18 +13,25 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label>Name<input name="name" maxlength="80" required placeholder="Weekend friends"></label>
             <label>Type<select name="circle_type">{% for key, value in circle_types.items() %}<option value="{{ key }}">{{ value[0] }}</option>{% endfor %}</select></label>
+            <label>Visibility
+                <select name="visibility">
+                    <option value="invite_only">Private (Invite only)</option>
+                    <option value="open">Public (Open to everyone)</option>
+                </select>
+            </label>
             <label class="cl-check"><input type="checkbox" name="approval_required" value="1"><span>Approve new members</span></label>
             <button type="submit" class="btn">Create</button>
         </form>
     </details>
 
     <section aria-label="Your Circles">
+        <h2 style="font-size: 1.15rem; color: var(--primary-dark-color); margin: 0 0 0.75rem;">Your Circles</h2>
         {% if circles %}
         <div class="cl-grid">
             {% for circle in circles %}
             <a class="cl-card" href="{{ url_for('circles.view_circle', circle_id=circle._id) }}">
                 <strong>{{ circle.name }}</strong>
-                <span>{{ circle.type_label }}</span>
+                <span>{{ circle.type_label }}{% if circle.visibility == 'open' %} &bull; Public{% endif %}</span>
                 <span>{{ circle.member_count }} member{{ '' if circle.member_count == 1 else 's' }}</span>
             </a>
             {% endfor %}
@@ -33,6 +40,24 @@
         <p class="cl-empty">No Circles yet.</p>
         {% endif %}
     </section>
+
+    {% if open_circles %}
+    <section aria-label="Explore Open Circles" style="margin-top: 2rem;">
+        <h2 style="font-size: 1.15rem; color: var(--primary-dark-color); margin: 0 0 0.75rem;">Explore Open Circles</h2>
+        <div class="cl-grid">
+            {% for oc in open_circles %}
+            <div class="cl-card cl-open-card">
+                <strong>{{ oc.name }}</strong>
+                <span>{{ oc.type_label }} &bull; {{ oc.member_count }} member{{ '' if oc.member_count == 1 else 's' }}</span>
+                <form method="POST" action="{{ url_for('circles.join_open_circle', circle_id=oc._id) }}" style="margin-top: 0.5rem;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-secondary" style="width: 100%; min-height: 2.2rem; font-size: 0.85rem; padding: 0.35rem 0.6rem;">Join Circle</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
 </main>
 <style nonce="{{ csp_nonce }}">
 .cl { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
@@ -42,7 +67,7 @@
 .cl-create { margin-bottom: 1.5rem; }
 .cl-create summary { display: inline-block; cursor: pointer; list-style: none; }
 .cl-create summary::-webkit-details-marker { display: none; }
-.cl-form { display: grid; grid-template-columns: 1.4fr 1fr auto; gap: .75rem; align-items: end; margin-top: .75rem; padding: 1rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; }
+.cl-form { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: .75rem; align-items: end; margin-top: .75rem; padding: 1rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; }
 .cl-form label { color: var(--text-secondary); font-size: .85rem; min-width: 0; }
 .cl-form input:not([type="checkbox"]), .cl-form select { display: block; width: 100%; box-sizing: border-box; min-height: 2.6rem; margin-top: .3rem; padding: .6rem .7rem; font-size: 1rem; font-family: inherit; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-bg); color: var(--text-dark-color); }
 .cl-check { grid-column: 1 / -1; display: flex; align-items: center; gap: .5rem; }
@@ -51,6 +76,7 @@
 .cl-card:hover { border-color: var(--primary-color); }
 .cl-card strong { color: var(--primary-dark-color); font-size: 1.05rem; overflow-wrap: anywhere; }
 .cl-card span { color: var(--text-secondary); font-size: .85rem; }
+.cl-open-card { justify-content: space-between; }
 @media (max-width: 700px) {
     .cl { padding: 1rem .75rem 2rem; }
     .cl-form { grid-template-columns: 1fr; }

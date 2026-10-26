@@ -97,28 +97,18 @@
 
                         <div class="cv-bubble-wrap">
                             {% if message.reply_to %}
-                            <div class="cv-reply-quote">
+                            <div class="cv-reply-quote" onclick="scrollToMessage('{{ message.reply_to.id }}')">
                                 <span class="cv-reply-quote-author">{{ message.reply_to.author_name }}</span>
                                 <span class="cv-reply-quote-text">{{ message.reply_to.snippet }}</span>
                             </div>
                             {% endif %}
                             <p class="cv-bubble">{{ message.content }}</p>
 
-                            <!-- Hover / Action Toolbar -->
+                            <!-- Desktop Hover / Action Toolbar (Sleek 3-button pill) -->
                             <div class="cv-msg-actions">
                                 <button type="button" class="cv-action-icon" onclick="reactMessage('{{ message._id }}', '❤️')" title="Love">❤️</button>
-                                <button type="button" class="cv-action-icon" onclick="reactMessage('{{ message._id }}', '👍')" title="Thumbs up">👍</button>
-                                <button type="button" class="cv-action-icon" onclick="reactMessage('{{ message._id }}', '🔥')" title="Fire">🔥</button>
                                 <button type="button" class="cv-action-icon" onclick="replyToMessage('{{ message._id }}', '{{ message.author_name|replace("'", "\\'") }}', '{{ message.content[:50]|replace("'", "\\'") }}')" title="Reply"><i class="fas fa-reply"></i></button>
-                                {% if is_mod %}
-                                <button type="button" class="cv-action-icon" onclick="togglePinMessage('{{ message._id }}')" title="Pin"><i class="fas fa-thumbtack"></i></button>
-                                {% endif %}
-                                {% if mine %}
-                                <button type="button" class="cv-action-icon" onclick="editMessage('{{ message._id }}')" title="Edit"><i class="fas fa-pen"></i></button>
-                                {% endif %}
-                                {% if mine or is_mod %}
-                                <button type="button" class="cv-action-icon cv-action-delete" onclick="deleteMessage('{{ message._id }}')" title="Delete"><i class="fas fa-trash"></i></button>
-                                {% endif %}
+                                <button type="button" class="cv-action-icon" onclick="showMobileActions('{{ message._id }}')" title="More actions"><i class="fas fa-ellipsis-h"></i></button>
                             </div>
                         </div>
 
@@ -296,28 +286,74 @@
                             </button>
                         </div>
 
-                        <!-- Comments Section -->
+                        <!-- Comments Section (Nested & Beautiful) -->
                         <div class="cv-comments-section" id="comments-section-{{ post._id }}" style="display: {{ 'block' if post.comments_count > 0 else 'none' }};">
                             <div class="cv-comments-list" id="comments-list-{{ post._id }}">
                                 {% for c in post.comments %}
                                 <div class="cv-comment-item" id="comment-{{ c.id }}">
-                                    <div class="cv-comment-top">
-                                        <strong class="cv-comment-author">{{ c.author_name }}</strong>
-                                        <div class="cv-comment-meta">
-                                            <time class="cv-meta">{{ c.created_at|localtime('%b %d, %H:%M') }}</time>
-                                            {% if c.is_mine or post.is_mine or is_mod %}
-                                            <button type="button" class="cv-icon-btn cv-comment-del" onclick="deleteComment('{{ post._id }}', '{{ c.id }}')" title="Delete comment"><i class="fas fa-times"></i></button>
-                                            {% endif %}
+                                    <div class="cv-comment-main">
+                                        <div class="cv-comment-top">
+                                            <div class="cv-comment-author-wrap">
+                                                {% if c.author_image %}
+                                                <img class="cv-avatar-micro" src="{{ c.author_image }}" alt="">
+                                                {% else %}
+                                                <span class="cv-avatar-micro-init">{{ c.author_name[:1]|upper }}</span>
+                                                {% endif %}
+                                                <strong class="cv-comment-author">{{ c.author_name }}</strong>
+                                            </div>
+                                            <div class="cv-comment-meta">
+                                                <time class="cv-meta">{{ c.created_at|localtime('%b %d, %H:%M') }}</time>
+                                                <button type="button" class="cv-c-btn" onclick="startCommentReply('{{ post._id }}', '{{ c.id }}', '{{ c.author_name|replace("'", "\\'") }}')" title="Reply"><i class="fas fa-reply"></i></button>
+                                                {% if c.is_mine or post.is_mine or is_mod %}
+                                                <button type="button" class="cv-c-btn cv-c-del" onclick="deleteComment('{{ post._id }}', '{{ c.id }}')" title="Delete comment"><i class="fas fa-times"></i></button>
+                                                {% endif %}
+                                            </div>
                                         </div>
+                                        <p class="cv-comment-body">{{ c.content }}</p>
                                     </div>
-                                    <p class="cv-comment-body">{{ c.content }}</p>
+
+                                    <!-- Nested Child Replies -->
+                                    <div class="cv-comment-replies" id="comment-replies-{{ c.id }}">
+                                        {% for r in c.replies %}
+                                        <div class="cv-comment-reply-item" id="comment-{{ r.id }}">
+                                            <div class="cv-comment-top">
+                                                <div class="cv-comment-author-wrap">
+                                                    {% if r.author_image %}
+                                                    <img class="cv-avatar-micro" src="{{ r.author_image }}" alt="">
+                                                    {% else %}
+                                                    <span class="cv-avatar-micro-init">{{ r.author_name[:1]|upper }}</span>
+                                                    {% endif %}
+                                                    <strong class="cv-comment-author">{{ r.author_name }}</strong>
+                                                    {% if r.reply_to_author %}
+                                                    <span class="cv-c-mention">@{{ r.reply_to_author }}</span>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="cv-comment-meta">
+                                                    <time class="cv-meta">{{ r.created_at|localtime('%H:%M') }}</time>
+                                                    <button type="button" class="cv-c-btn" onclick="startCommentReply('{{ post._id }}', '{{ c.id }}', '{{ r.author_name|replace("'", "\\'") }}')" title="Reply"><i class="fas fa-reply"></i></button>
+                                                    {% if r.is_mine or post.is_mine or is_mod %}
+                                                    <button type="button" class="cv-c-btn cv-c-del" onclick="deleteComment('{{ post._id }}', '{{ r.id }}')" title="Delete"><i class="fas fa-times"></i></button>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            <p class="cv-comment-body">{{ r.content }}</p>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
                                 </div>
                                 {% endfor %}
                             </div>
 
+                            <!-- Comment Reply Banner -->
+                            <div class="cv-c-reply-bar" id="comment-reply-bar-{{ post._id }}" style="display: none;">
+                                <span>Replying to <strong id="comment-reply-name-{{ post._id }}"></strong></span>
+                                <button type="button" class="cv-icon-btn" onclick="cancelCommentReply('{{ post._id }}')" title="Cancel reply"><i class="fas fa-times"></i></button>
+                            </div>
+
                             <form class="cv-comment-form" onsubmit="event.preventDefault(); submitComment('{{ post._id }}', this);">
+                                <input type="hidden" name="parent_id" id="comment-parent-id-{{ post._id }}" value="">
                                 <input class="cv-input cv-comment-input" name="content" maxlength="1000" required placeholder="Write a comment..." autocomplete="off">
-                                <button class="btn btn-secondary" type="submit">Post</button>
+                                <button class="btn btn-secondary cv-c-submit-btn" type="submit">Post</button>
                             </form>
                         </div>
                     </article>
@@ -493,6 +529,11 @@
                 </div>
             </section>
         </div>
+    </div>
+
+    <!-- Mobile Message Action Bottom Sheet / Overlay -->
+    <div id="cv-mobile-action-overlay" class="cv-mobile-action-overlay" onclick="if(event.target===this)closeMobileActions()">
+        <div id="cv-mobile-action-menu" class="cv-mobile-action-menu"></div>
     </div>
 </main>
 
@@ -774,50 +815,56 @@
 }
 .cv-bubble {
     margin: 0;
-    padding: .55rem .85rem;
-    border-radius: 14px;
+    padding: .38rem .68rem;
+    border-radius: 16px;
+    border-bottom-left-radius: 4px;
     background: var(--surface-bg);
     border: 1px solid var(--border-color);
     color: var(--text-dark-color);
-    line-height: 1.45;
+    line-height: 1.35;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    font-size: .95rem;
+    font-size: .82rem;
+    box-sizing: border-box;
 }
 .cv-msg-mine .cv-bubble {
     background: var(--primary-color);
     border-color: var(--primary-color);
+    border-radius: 16px;
+    border-bottom-right-radius: 4px;
     color: #fff;
+    box-shadow: 0 1px 3px rgba(62, 34, 23, 0.15);
 }
 
-/* Quoted Reply inside Message */
+/* Quoted Reply inside Message (Clean 1px border, ZERO left borders) */
 .cv-reply-quote {
-    background: rgba(0,0,0,0.06);
-    border-radius: 8px;
-    padding: .3rem .5rem;
-    margin-bottom: .3rem;
-    font-size: .78rem;
-    border-left: 2px solid var(--primary-color);
+    background: rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+    padding: .25rem .5rem;
+    margin-bottom: .25rem;
+    font-size: .72rem;
+    cursor: pointer;
 }
 .cv-msg-mine .cv-reply-quote {
-    background: rgba(255,255,255,0.18);
-    border-left-color: #fff;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.28);
     color: #fff;
 }
 .cv-reply-quote-author { font-weight: 700; display: block; margin-bottom: .1rem; }
-.cv-reply-quote-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.cv-reply-quote-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; opacity: 0.9; }
 
-/* Message Actions Toolbar (Hover & Tap) */
+/* Desktop Hover Actions (Sleek 3-button pill) */
 .cv-msg-actions {
     position: absolute;
-    top: -14px;
+    top: -12px;
     right: 4px;
     display: none;
     align-items: center;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: 20px;
-    padding: 2px 4px;
+    border-radius: 16px;
+    padding: 1px 4px;
     box-shadow: 0 2px 6px rgba(0,0,0,0.12);
     z-index: 10;
 }
@@ -829,11 +876,16 @@
 .cv-msg:focus-within .cv-msg-actions {
     display: flex;
 }
+@media (max-width: 768px) {
+    .cv-msg-actions {
+        display: none !important;
+    }
+}
 .cv-action-icon {
     background: transparent;
     border: none;
     cursor: pointer;
-    font-size: .8rem;
+    font-size: .78rem;
     padding: 3px 5px;
     border-radius: 4px;
     color: var(--text-secondary);
@@ -847,6 +899,108 @@
 }
 .cv-action-delete:hover {
     color: #c62828;
+}
+
+/* Highlighted message on jump/scroll */
+.cv-msg-highlight .cv-bubble {
+    animation: cvHighlight 1.5s ease;
+}
+@keyframes cvHighlight {
+    0% { transform: scale(1.03); box-shadow: 0 0 0 2px var(--primary-color); }
+    100% { transform: scale(1); box-shadow: none; }
+}
+
+/* Mobile Action Bottom Sheet / Overlay (identical pattern to DM messages) */
+.cv-mobile-action-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 2100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(3px);
+    box-sizing: border-box;
+    padding: env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px) env(safe-area-inset-bottom, 16px) env(safe-area-inset-left, 16px);
+}
+.cv-mobile-action-menu {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    width: 86%;
+    max-width: 320px;
+    overflow: hidden;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+    animation: cvPopIn 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-sizing: border-box;
+    margin: auto;
+}
+@keyframes cvPopIn {
+    from { transform: scale(0.85); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+.cv-mobile-quick-rx {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color);
+    text-align: center;
+}
+.cv-mobile-quick-rx-label {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+.cv-mobile-quick-rx-row {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+}
+.cv-mobile-rx-btn {
+    background: var(--surface-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 1.15rem;
+    padding: 5px 8px;
+    cursor: pointer;
+    line-height: 1;
+    transition: transform 0.1s;
+}
+.cv-mobile-rx-btn:active {
+    transform: scale(1.2);
+}
+.cv-mobile-action-item {
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-dark-color);
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 500;
+    font-size: 0.88rem;
+    cursor: pointer;
+    background: transparent;
+    width: 100%;
+    box-sizing: border-box;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    text-align: left;
+    font-family: inherit;
+}
+.cv-mobile-action-item:last-child {
+    border-bottom: none;
+}
+.cv-mobile-action-item i {
+    width: 18px;
+    text-align: center;
+    color: var(--primary-color);
+}
+.cv-mobile-action-item.delete {
+    color: #ef4444;
+}
+.cv-mobile-action-item.delete i {
+    color: #ef4444;
 }
 
 /* Reactions on Message */
@@ -1201,7 +1355,7 @@
     color: var(--primary-color);
 }
 
-/* Comments Thread */
+/* Comments Thread (Nested, Smaller, Clean 1px borders) */
 .cv-comments-section {
     padding-top: .75rem;
     border-top: 1px solid var(--border-color);
@@ -1210,51 +1364,144 @@
 .cv-comments-list {
     display: flex;
     flex-direction: column;
-    gap: .5rem;
-    margin-bottom: .75rem;
+    gap: .45rem;
+    margin-bottom: .65rem;
 }
 .cv-comment-item {
     background: var(--surface-bg);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: .5rem .75rem;
+    padding: .45rem .65rem;
+}
+.cv-comment-main {
+    width: 100%;
 }
 .cv-comment-top {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: .25rem;
+    margin-bottom: .2rem;
+    gap: .4rem;
+}
+.cv-comment-author-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    min-width: 0;
+}
+.cv-avatar-micro {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+.cv-avatar-micro-init {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--primary-light-color, #e0d5cf);
+    color: var(--primary-dark-color);
+    font-size: .65rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
 }
 .cv-comment-author {
     color: var(--primary-dark-color);
-    font-size: .82rem;
+    font-size: .78rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.cv-c-mention {
+    font-size: .7rem;
+    color: var(--primary-color);
+    font-weight: 600;
 }
 .cv-comment-meta {
     display: flex;
     align-items: center;
-    gap: .4rem;
+    gap: .3rem;
+    flex-shrink: 0;
 }
-.cv-comment-del {
-    font-size: .75rem;
+.cv-c-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: .72rem;
     padding: 2px 4px;
+    cursor: pointer;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-family: inherit;
+}
+.cv-c-btn:hover {
+    color: var(--primary-color);
+    background: var(--card-bg);
+}
+.cv-c-del:hover {
+    color: #c62828;
 }
 .cv-comment-body {
     margin: 0;
-    font-size: .88rem;
-    line-height: 1.45;
+    font-size: .8rem;
+    line-height: 1.35;
     color: var(--text-dark-color);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
+
+/* Nested Child Replies */
+.cv-comment-replies {
+    margin-left: 1.25rem;
+    margin-top: .35rem;
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+}
+.cv-comment-reply-item {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: .35rem .55rem;
+}
+
+/* Comment Form & Reply Bar */
+.cv-c-reply-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .3rem .6rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-bottom: 0;
+    border-radius: 6px 6px 0 0;
+    font-size: .74rem;
+    color: var(--text-secondary);
+    margin-bottom: 0;
+}
+.cv-c-reply-bar strong {
+    color: var(--primary-color);
+}
 .cv-comment-form {
     display: flex;
-    gap: .4rem;
+    gap: .35rem;
 }
 .cv-comment-input {
     flex: 1;
-    min-height: 2.3rem;
-    padding: .4rem .65rem;
-    font-size: .88rem;
+    min-height: 2.1rem;
+    padding: .3rem .6rem;
+    font-size: .8rem;
+    border-radius: 6px;
+}
+.cv-c-submit-btn {
+    min-height: 2.1rem;
+    padding: .3rem .65rem;
+    font-size: .8rem;
 }
 
 /* Plan & Play Sidebar */
@@ -1623,6 +1870,13 @@
     toBottom();
 
     // Reply mechanism
+    // Chat Message Tracking & Deduplication
+    const renderedMessageIds = new Set();
+    document.querySelectorAll('.cv-msg[data-msg-id]').forEach(function (el) {
+        const id = el.getAttribute('data-msg-id');
+        if (id) renderedMessageIds.add(String(id));
+    });
+
     window.replyToMessage = function (msgId, authorName, snippet) {
         if (replyBar && replyName && replySnippet && replyToIdInput) {
             replyName.textContent = authorName;
@@ -1637,6 +1891,15 @@
         if (replyBar && replyToIdInput) {
             replyBar.style.display = 'none';
             replyToIdInput.value = '';
+        }
+    };
+
+    window.scrollToMessage = function (targetId) {
+        const target = document.querySelector(`.cv-msg[data-msg-id="${targetId}"]`);
+        if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            target.classList.add('cv-msg-highlight');
+            setTimeout(function () { target.classList.remove('cv-msg-highlight'); }, 1500);
         }
     };
 
@@ -1663,8 +1926,11 @@
                 if (data.success && data.message) {
                     chatInput.value = '';
                     cancelReply();
-                    appendChatMessage(data.message, true);
-                    toBottom(true);
+                    const mid = String(data.message.id);
+                    if (!renderedMessageIds.has(mid)) {
+                        appendChatMessage(data.message, true);
+                        toBottom(true);
+                    }
                 } else if (data.error) {
                     alert(data.error);
                 }
@@ -1675,13 +1941,62 @@
         });
     }
 
+    // Long Press Timer for Mobile Message Actions (prevents sideways scrolling)
+    let longPressTimer = null;
+    function startMsgPress(msgId) {
+        clearTimeout(longPressTimer);
+        longPressTimer = setTimeout(function () {
+            if (navigator.vibrate) navigator.vibrate(20);
+            showMobileActions(msgId);
+        }, 450);
+    }
+    function cancelMsgPress() {
+        clearTimeout(longPressTimer);
+    }
+
+    function bindBubbleTouch(bubble, msgId) {
+        if (!bubble || !msgId) return;
+        bubble.addEventListener('touchstart', function () { startMsgPress(msgId); }, { passive: true });
+        bubble.addEventListener('touchend', cancelMsgPress, { passive: true });
+        bubble.addEventListener('touchmove', cancelMsgPress, { passive: true });
+    }
+
+    // Attach touch listeners to initial message bubbles
+    document.querySelectorAll('.cv-msg[data-msg-id]').forEach(function (msgEl) {
+        const id = msgEl.getAttribute('data-msg-id');
+        const bubble = msgEl.querySelector('.cv-bubble');
+        if (bubble && id) {
+            bindBubbleTouch(bubble, id);
+        }
+    });
+
+    if (log) {
+        log.addEventListener('contextmenu', function (e) {
+            const bubble = e.target.closest('.cv-bubble');
+            if (bubble) {
+                e.preventDefault();
+                const msgEl = bubble.closest('.cv-msg');
+                if (msgEl) {
+                    showMobileActions(msgEl.getAttribute('data-msg-id'));
+                }
+            }
+        });
+    }
+
     function appendChatMessage(msg, isMine) {
+        if (!msg || !msg.id) return;
+        const msgId = String(msg.id);
+        if (renderedMessageIds.has(msgId) || document.querySelector(`[data-msg-id="${msgId}"]`)) {
+            return;
+        }
+        renderedMessageIds.add(msgId);
+
         const emptyEl = document.getElementById('cv-chat-empty');
         if (emptyEl) emptyEl.remove();
 
         const row = document.createElement('div');
         row.className = 'cv-msg' + (isMine ? ' cv-msg-mine' : '');
-        row.setAttribute('data-msg-id', msg.id);
+        row.setAttribute('data-msg-id', msgId);
 
         let html = '';
         if (!isMine) {
@@ -1696,24 +2011,94 @@
 
         html += `<div class="cv-bubble-wrap">`;
         if (msg.reply_to) {
-            html += `<div class="cv-reply-quote"><span class="cv-reply-quote-author">${escapeHtml(msg.reply_to.author_name)}</span><span class="cv-reply-quote-text">${escapeHtml(msg.reply_to.snippet)}</span></div>`;
+            html += `<div class="cv-reply-quote" onclick="scrollToMessage('${escapeJs(msg.reply_to.id)}')"><span class="cv-reply-quote-author">${escapeHtml(msg.reply_to.author_name)}</span><span class="cv-reply-quote-text">${escapeHtml(msg.reply_to.snippet)}</span></div>`;
         }
         html += `<p class="cv-bubble">${escapeHtml(msg.content)}</p>`;
         html += `<div class="cv-msg-actions">
-            <button type="button" class="cv-action-icon" onclick="reactMessage('${msg.id}', '❤️')">❤️</button>
-            <button type="button" class="cv-action-icon" onclick="reactMessage('${msg.id}', '👍')">👍</button>
-            <button type="button" class="cv-action-icon" onclick="reactMessage('${msg.id}', '🔥')">🔥</button>
-            <button type="button" class="cv-action-icon" onclick="replyToMessage('${msg.id}', '${escapeJs(msg.author_name)}', '${escapeJs(msg.content.substring(0, 50))}')"><i class="fas fa-reply"></i></button>`;
-        if (isMine) {
-            html += `<button type="button" class="cv-action-icon" onclick="editMessage('${msg.id}')"><i class="fas fa-pen"></i></button>`;
-        }
-        html += `<button type="button" class="cv-action-icon cv-action-delete" onclick="deleteMessage('${msg.id}')"><i class="fas fa-trash"></i></button></div></div>`;
-        html += `<div class="cv-msg-reactions" data-msg-reactions="${msg.id}"></div>`;
+            <button type="button" class="cv-action-icon" onclick="reactMessage('${msgId}', '❤️')" title="Love">❤️</button>
+            <button type="button" class="cv-action-icon" onclick="replyToMessage('${msgId}', '${escapeJs(msg.author_name)}', '${escapeJs(msg.content.substring(0, 50))}')" title="Reply"><i class="fas fa-reply"></i></button>
+            <button type="button" class="cv-action-icon" onclick="showMobileActions('${msgId}')" title="More"><i class="fas fa-ellipsis-h"></i></button>
+        </div></div>`;
+        html += `<div class="cv-msg-reactions" data-msg-reactions="${msgId}"></div>`;
         html += `<div class="cv-msg-meta-row"><time class="cv-msg-time">${msg.created_at_formatted || 'Now'}</time></div>`;
 
         row.innerHTML = html;
+        const newBubble = row.querySelector('.cv-bubble');
+        if (newBubble) bindBubbleTouch(newBubble, msgId);
         log.appendChild(row);
     }
+
+    // Mobile Action Sheet functions
+    window.showMobileActions = function (msgId) {
+        if (!msgId) return;
+        const msgEl = document.querySelector(`.cv-msg[data-msg-id="${msgId}"]`);
+        if (!msgEl) return;
+
+        const isMine = msgEl.classList.contains('cv-msg-mine');
+        const bubble = msgEl.querySelector('.cv-bubble');
+        const content = bubble ? bubble.textContent : '';
+        const authorEl = msgEl.querySelector('.cv-msg-author');
+        const authorName = isMine ? 'You' : (authorEl ? authorEl.textContent.trim() : 'Member');
+        const snippet = content.substring(0, 60);
+
+        const overlay = document.getElementById('cv-mobile-action-overlay');
+        const menu = document.getElementById('cv-mobile-action-menu');
+        if (!overlay || !menu) return;
+
+        const quickRx = ['❤️', '😂', '😮', '😢', '👍', '🔥'].map(function (em) {
+            return `<button type="button" class="cv-mobile-rx-btn" onclick="closeMobileActions(); reactMessage('${msgId}', '${em}')">${em}</button>`;
+        }).join('');
+
+        let html = `
+            <div class="cv-mobile-quick-rx">
+                <div class="cv-mobile-quick-rx-label">React</div>
+                <div class="cv-mobile-quick-rx-row">${quickRx}</div>
+            </div>
+            <button type="button" class="cv-mobile-action-item" onclick="closeMobileActions(); replyToMessage('${msgId}', '${escapeJs(authorName)}', '${escapeJs(snippet)}')">
+                <i class="fas fa-reply"></i> Reply
+            </button>
+            {% if is_mod %}
+            <button type="button" class="cv-mobile-action-item" onclick="closeMobileActions(); togglePinMessage('${msgId}')">
+                <i class="fas fa-thumbtack"></i> Pin / Unpin
+            </button>
+            {% endif %}
+            <button type="button" class="cv-mobile-action-item" onclick="closeMobileActions(); copyMessageText('${msgId}')">
+                <i class="fas fa-copy"></i> Copy Text
+            </button>
+        `;
+
+        if (isMine) {
+            html += `
+                <button type="button" class="cv-mobile-action-item" onclick="closeMobileActions(); editMessage('${msgId}')">
+                    <i class="fas fa-pen"></i> Edit
+                </button>
+            `;
+        }
+        if (isMine || {{ 'true' if is_mod else 'false' }}) {
+            html += `
+                <button type="button" class="cv-mobile-action-item delete" onclick="closeMobileActions(); deleteMessage('${msgId}')">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            `;
+        }
+
+        menu.innerHTML = html;
+        overlay.style.display = 'flex';
+    };
+
+    window.closeMobileActions = function () {
+        const overlay = document.getElementById('cv-mobile-action-overlay');
+        if (overlay) overlay.style.display = 'none';
+    };
+
+    window.copyMessageText = function (msgId) {
+        const msgEl = document.querySelector(`.cv-msg[data-msg-id="${msgId}"]`);
+        if (!msgEl) return;
+        const bubble = msgEl.querySelector('.cv-bubble');
+        if (bubble && navigator.clipboard) {
+            navigator.clipboard.writeText(bubble.textContent);
+        }
+    };
 
     // Chat Message React
     window.reactMessage = function (msgId, emoji) {
@@ -1819,6 +2204,7 @@
         .then(function (r) { return r.json(); })
         .then(function (data) {
             if (data.success) {
+                renderedMessageIds.delete(String(msgId));
                 const msgEl = document.querySelector(`[data-msg-id="${msgId}"]`);
                 if (msgEl) msgEl.remove();
             } else alert(data.error || 'Failed to delete');
@@ -1973,11 +2359,37 @@
         }
     };
 
-    // Submit Comment
+    // Nested Comments Reply State
+    window.startCommentReply = function (postId, commentId, authorName) {
+        const banner = document.getElementById(`comment-reply-bar-${postId}`);
+        const nameEl = document.getElementById(`comment-reply-name-${postId}`);
+        const parentIdInput = document.getElementById(`comment-parent-id-${postId}`);
+        const sec = document.getElementById(`comments-section-${postId}`);
+        if (sec && sec.style.display === 'none') {
+            sec.style.display = 'block';
+        }
+        if (parentIdInput) parentIdInput.value = commentId;
+        if (nameEl) nameEl.textContent = `@${authorName}`;
+        if (banner) banner.style.display = 'flex';
+        const input = sec ? sec.querySelector('.cv-comment-input') : null;
+        if (input) input.focus();
+    };
+
+    window.cancelCommentReply = function (postId) {
+        const banner = document.getElementById(`comment-reply-bar-${postId}`);
+        const parentIdInput = document.getElementById(`comment-parent-id-${postId}`);
+        if (parentIdInput) parentIdInput.value = '';
+        if (banner) banner.style.display = 'none';
+    };
+
+    // Submit Comment (Top-level or Nested Reply)
     window.submitComment = function (postId, form) {
         const input = form.querySelector('.cv-comment-input');
+        const parentIdInput = form.querySelector('input[name="parent_id"]');
         const content = input.value.trim();
+        const parentId = parentIdInput ? parentIdInput.value.trim() : '';
         if (!content) return;
+
         fetch(`{{ url_for('circles.comment_circle_post', circle_id=circle._id, post_id='POST_ID') }}`.replace('POST_ID', postId), {
             method: 'POST',
             headers: {
@@ -1985,28 +2397,76 @@
                 'X-CSRFToken': csrfToken,
                 'Accept': 'application/json'
             },
-            body: JSON.stringify({ content: content })
+            body: JSON.stringify({ content: content, parent_id: parentId })
         })
         .then(function (r) { return r.json(); })
         .then(function (data) {
             if (data.success && data.comment) {
                 input.value = '';
-                const list = document.getElementById(`comments-list-${postId}`);
-                if (list) {
-                    const item = document.createElement('div');
-                    item.className = 'cv-comment-item';
-                    item.id = `comment-${data.comment.id}`;
-                    item.innerHTML = `
-                        <div class="cv-comment-top">
-                            <strong class="cv-comment-author">${escapeHtml(data.comment.author_name)}</strong>
-                            <div class="cv-comment-meta">
-                                <time class="cv-meta">Just now</time>
-                                <button type="button" class="cv-icon-btn cv-comment-del" onclick="deleteComment('${postId}', '${data.comment.id}')" title="Delete"><i class="fas fa-times"></i></button>
+                cancelCommentReply(postId);
+                const c = data.comment;
+                if (c.parent_id) {
+                    let repliesBox = document.getElementById(`comment-replies-${c.parent_id}`);
+                    if (!repliesBox) {
+                        const parentEl = document.getElementById(`comment-${c.parent_id}`);
+                        if (parentEl) {
+                            repliesBox = document.createElement('div');
+                            repliesBox.className = 'cv-comment-replies';
+                            repliesBox.id = `comment-replies-${c.parent_id}`;
+                            parentEl.appendChild(repliesBox);
+                        }
+                    }
+                    if (repliesBox) {
+                        const replyItem = document.createElement('div');
+                        replyItem.className = 'cv-comment-reply-item';
+                        replyItem.id = `comment-${c.id}`;
+                        replyItem.innerHTML = `
+                            <div class="cv-comment-top">
+                                <div class="cv-comment-author-wrap">
+                                    ${c.author_image ? `<img class="cv-avatar-micro" src="${c.author_image}" alt="">` : `<span class="cv-avatar-micro-init">${(c.author_name || 'M').charAt(0).toUpperCase()}</span>`}
+                                    <strong class="cv-comment-author">${escapeHtml(c.author_name)}</strong>
+                                    ${c.reply_to_author ? `<span class="cv-c-mention">@${escapeHtml(c.reply_to_author)}</span>` : ''}
+                                </div>
+                                <div class="cv-comment-meta">
+                                    <time class="cv-meta">Just now</time>
+                                    <button type="button" class="cv-c-btn" onclick="startCommentReply('${postId}', '${c.parent_id}', '${escapeJs(c.author_name)}')" title="Reply"><i class="fas fa-reply"></i></button>
+                                    <button type="button" class="cv-c-btn cv-c-del" onclick="deleteComment('${postId}', '${c.id}')" title="Delete"><i class="fas fa-times"></i></button>
+                                </div>
                             </div>
-                        </div>
-                        <p class="cv-comment-body">${escapeHtml(data.comment.content)}</p>
-                    `;
-                    list.appendChild(item);
+                            <p class="cv-comment-body">${escapeHtml(c.content)}</p>
+                        `;
+                        repliesBox.appendChild(replyItem);
+                    }
+                } else {
+                    const list = document.getElementById(`comments-list-${postId}`);
+                    if (list) {
+                        const item = document.createElement('div');
+                        item.className = 'cv-comment-item';
+                        item.id = `comment-${c.id}`;
+                        item.innerHTML = `
+                            <div class="cv-comment-main">
+                                <div class="cv-comment-top">
+                                    <div class="cv-comment-author-wrap">
+                                        ${c.author_image ? `<img class="cv-avatar-micro" src="${c.author_image}" alt="">` : `<span class="cv-avatar-micro-init">${(c.author_name || 'M').charAt(0).toUpperCase()}</span>`}
+                                        <strong class="cv-comment-author">${escapeHtml(c.author_name)}</strong>
+                                    </div>
+                                    <div class="cv-comment-meta">
+                                        <time class="cv-meta">Just now</time>
+                                        <button type="button" class="cv-c-btn" onclick="startCommentReply('${postId}', '${c.id}', '${escapeJs(c.author_name)}')" title="Reply"><i class="fas fa-reply"></i></button>
+                                        <button type="button" class="cv-c-btn cv-c-del" onclick="deleteComment('${postId}', '${c.id}')" title="Delete"><i class="fas fa-times"></i></button>
+                                    </div>
+                                </div>
+                                <p class="cv-comment-body">${escapeHtml(c.content)}</p>
+                            </div>
+                            <div class="cv-comment-replies" id="comment-replies-${c.id}"></div>
+                        `;
+                        list.appendChild(item);
+                    }
+                }
+                const toggleBtn = document.querySelector(`button[onclick="toggleComments('${postId}')"]`);
+                if (toggleBtn) {
+                    const total = document.querySelectorAll(`#comments-section-${postId} .cv-comment-item, #comments-section-${postId} .cv-comment-reply-item`).length;
+                    toggleBtn.innerHTML = `<i class="fas fa-comment-alt"></i> Comments (${total})`;
                 }
             } else alert(data.error || 'Failed to add comment');
         });
@@ -2204,6 +2664,7 @@
 
         window.socket.on('circle_message_deleted', function (data) {
             if (data.circle_id === '{{ circle._id }}') {
+                renderedMessageIds.delete(String(data.id));
                 const msgEl = document.querySelector(`[data-msg-id="${data.id}"]`);
                 if (msgEl) msgEl.remove();
             }

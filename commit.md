@@ -1,3 +1,42 @@
+# Trusted Circles Clean UI, Deduplication, Nested Comments & Open Visibility
+
+## Model Attribution
+- Model: Gemini 3.8 Flash (High)
+- Reviewer Assigned: Claude Opus 4
+
+## Summary of Changes
+- **Strict Compliance with Border Rules**:
+  - Removed all `border-left` styles from `.cv-reply-quote` in accordance with AGENTS.md and GEMINI.md mandates.
+  - Standardized on clean, uniform 1px borders (`border: 1px solid var(--border-color);`) and subtle translucent borders (`border: 1px solid rgba(0,0,0,0.1)` / `border: 1px solid rgba(255,255,255,0.28)`).
+- **Message Deduplication Fix**:
+  - Implemented client-side message ID tracking set (`renderedMessageIds = new Set()`) initialized on page load.
+  - Guarded both `appendChatMessage` and socket `circle_message_sent` listener against rendering messages that are already present in the DOM or tracking set.
+  - Eliminated race condition duplicate bubbles between `fetch()` response resolution and real-time socket delivery.
+- **Minimal, Beautiful Group Chat Bubbles & DM-Style Reply Preview**:
+  - Compacted message bubble font size to `0.82rem` with `line-height: 1.35` and `padding: 0.38rem 0.68rem;` tailored for group chat density.
+  - Aligned bubble border curves with DM messages (`border-radius: 16px`, sent `border-bottom-right-radius: 4px`, received `border-bottom-left-radius: 4px`).
+  - Added interactive reply jump scrolling (`scrollToMessage`) with smooth scroll and pulse highlight.
+  - Compacted `#cv-reply-bar` above the composer with uniform 1px borders and dismiss action.
+- **Mobile Long-Press Bottom Sheet (Fix Horizontal Scrolling)**:
+  - Replaced the overflowing horizontal 7-button inline action bar on mobile with `#cv-mobile-action-overlay` modal sheet identical to DM messages.
+  - Mobile action overlay features quick emoji reactions (`❤️`, `😂`, `😮`, `😢`, `👍`, `🔥`) and vertical action options (Reply, Pin/Unpin, Copy Text, Edit, Delete).
+  - Added 450ms touchstart long-press timer with haptic vibration and contextmenu interception on mobile devices.
+  - On screens `<= 768px`, `.cv-msg-actions` is strictly hidden so bubbles never stretch or force sideways scrolling.
+  - On desktop, kept a sleek 3-button pill (React, Reply, More `⋯` opening the action menu).
+- **Nested & Beautiful Comments Thread**:
+  - Stored `parent_id` and resolved `reply_to_author` for comment replies in `blueprints/circles.py`.
+  - Structured comments into a hierarchical tree (`c['replies']`) in `view_circle` without multi-level horizontal layout breakdown.
+  - Rendered top-level comments and indented child replies with micro avatars (20px), author bold tags, `@Author` mention badges, and compact action buttons.
+  - Added `#comment-reply-bar-{{ post._id }}` banner above comment input allowing direct child replies.
+- **Option A: Consolidate Communities into Circles**:
+  - Added `visibility` attribute (`'invite_only'` or `'open'`) to Circle creation.
+  - Updated `circles_page()` to query discoverable public circles (`open_circles`).
+  - Added `POST /circle/<circle_id>/join` endpoint allowing users to discover and join open circles directly.
+  - Added "Explore Open Circles" section on `templates/circles.html` with direct "Join Circle" forms.
+- **Verification**:
+  - 11 unit tests in `tests/test_circles.py` passing.
+  - Full project test suite passed (598 tests, 0 failures).
+
 # Trusted Circles UI & Functional Overhaul
 
 ## Model Attribution
@@ -40,122 +79,3 @@
 - **Validation**:
   - 9 focused circle tests passed (`tests/test_circles.py`).
   - Full project test suite passed (596 tests, 0 failures).
-
-# Release: v1.14.0 Android App Release Manifest & APK
-
-## Model Attribution
-- Model: Gemini (via Antigravity)
-
-## Desktop Vault Long-Press Fix
-
-### Model Attribution
-- Model: Copilot SDK in VS Code
-
-### Summary of Changes
-- Unified desktop and mobile vault trigger handling with Pointer Events.
-- Added native gesture suppression and a profile-picture discovery hint.
-- Bumped the stylesheet asset version.
-- Validation: `python -m pytest tests/test_vault.py -q` (10 passed).
-
-## Summary of Changes
-- **APK Update**:
-  - Built new Android release debug APK for v1.14.0 (versionCode 49) with CommonMark/GFM rendering engine, tap-to-edit, live editor styling, search tag filter chips, version history diffs, offline sync hardening (WorkManager + SQLite v8), and baseline profiles.
-  - Uploaded APK to `static/downloads/app-debug.apk`.
-- **Update Manifest**:
-  - Updated `static/update-manifest.json` with `versionCode = 49`, `versionName = "1.14.0"`, updated changelog, and computed SHA-256 hash.
-
-## Personalized Home and Trusted Circles
-
-### Model Attribution
-- Model: Copilot SDK in VS Code
-
-### Summary of Changes
-- Added the Account Settings Home focus selector so users can change their onboarding focus later.
-- Added separate Trusted Circles collections, indexes, navigation, creation, private feed, invite links, membership, roles, and leave flow.
-- Circle post content is encrypted with the existing application encryption helper; invite tokens are stored hashed and expire after seven days.
-- Kept Trusted Circles separate from Communities.
-- Privacy impact: Circle membership and encrypted posts are stored in dedicated private collections; invite links are limited by expiry and use count.
-- Validation: 48 focused tests passed and changed Python files compiled successfully. Direct template startup validation was blocked by the local MongoDB authentication configuration.
-
-## Trusted Circle Controls and Vault Document Actions
-
-### Model Attribution
-- Model: Copilot SDK in VS Code
-
-### Summary of Changes
-- Added approval-required Circle membership requests with owner/moderator approval and denial.
-- Added Circle mute controls, encrypted polls, and encrypted events.
-- Added direct Vault item deletion controls and a consistent document preview panel with info, download, and delete actions.
-- Preserved bulk selection for deleting multiple Vault items at once.
-- Privacy impact: Circle requests and membership controls remain private to Circle members; Vault deletion continues through the authenticated protected delete endpoints.
-- Validation: 12 focused Vault/onboarding tests passed, Python compilation passed, and `git diff --check` passed.
-
-## Navigation Focus Defaults
-
-### Model Attribution
-- Model: Copilot SDK in VS Code
-
-### Summary of Changes
-- Kept Profile visible as a default top-level destination for every onboarding focus.
-- Limited use-case personalization to the ordering and prioritization of the other direct links.
-- Removed the duplicate Trusted Circles link from the discussion-focused navigation.
-- Kept secondary destinations in More.
-- Validation: 38 onboarding/authentication tests passed and `git diff --check` passed.
-
-## Trusted Circle Roadmap Expansion
-
-### Model Attribution
-- Model: Copilot SDK in VS Code
-
-### Summary of Changes
-- Added QR-compatible invite display using the existing local QR asset.
-- Added username-based invitations and approval workflow integration.
-- Added owner-only moderator/member role controls and member removal.
-- Added private encrypted Circle chat.
-- Added per-post expiry options and a member-only plain-text export.
-- Added Circle-level notification mute/unmute controls.
-- Preserved existing game integration and Circle membership authorization.
-- Privacy impact: Circle chat and post content remain encrypted at rest; exports are generated only after membership authorization and are not stored server-side.
-- Media sharing remains intentionally blocked until a reusable private-media serving path can decrypt and authorize media safely; no plaintext fallback was introduced.
-- Validation: 48 focused tests passed, Circle templates parsed, Python compilation passed, and `git diff --check` passed.
-
-## Circle Activity Integration
-
-### Model Attribution
-- Model: Copilot SDK in VS Code
-
-### Summary of Changes
-- Reviewed the existing game system: PIN-based party rooms support polls, trivia, Would You Rather, Two Truths and a Lie, Story Chain, and Caption This.
-- Added Circle-hosted game links that reuse the existing game creation and lobby flows.
-- Circle-hosted lobbies are tagged to their Circle and shown to members in the Circle activity area.
-- Added Circle-native poll voting and event RSVP actions with encrypted payload updates.
-- Added quick access from Circles to host poll/trivia games and join a game by PIN.
-- Added a Circle lobby index for efficient activity loading.
-- Privacy impact: Circle lobby association is only exposed through a Circle the user belongs to; game creation validates Circle membership.
-- Validation: 48 focused tests passed, Python compilation passed, and `git diff --check` passed.
-
-## Mobile Onboarding Interaction
-
-### Model Attribution
-- Model: Copilot SDK in VS Code
-
-### Summary of Changes
-- Hardened the Home onboarding choice interaction for mobile taps.
-- Added same-origin credentials and explicit JSON success handling before navigating Home.
-- Added a direct navigation fallback instead of relying on a generic reload.
-- Styled the Home focus Change control as a visible button.
-- Privacy impact: no new data is collected; the existing onboarding preference endpoint remains the only persistence path.
-- Validation: 38 onboarding/authentication tests passed and `git diff --check` passed.
-
-## Navigation Focus Refresh and More Menu
-
-### Model Attribution
-- Model: Copilot SDK in VS Code
-
-### Summary of Changes
-- Refresh the authenticated user after a Home focus update so the new navigation arrangement is available immediately.
-- Return to Home only when the focus actually changes; unrelated settings edits retain their existing destination.
-- Show More on desktop and filter out links already prioritized for the selected focus.
-- Keep Profile in the primary navigation and expose Trusted Circles through the secondary menu where appropriate.
-- Privacy impact: no new data is collected or exposed.
-- Validation: 38 onboarding/authentication tests passed and Python compilation passed.

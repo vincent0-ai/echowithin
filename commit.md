@@ -1,3 +1,18 @@
+# Support INTERNAL_APP_URL for Scheduler and Reminder Scripts
+
+## Model Attribution
+- Model: Gemini 3.8 Flash (High)
+- Reviewer Assigned: Claude Opus 4
+
+## Summary of Changes
+- **Internal Loopback Support for Background Schedulers**:
+  - Updated `get_app_url()` in `scripts/process_scheduled_messages.py` to inspect `INTERNAL_APP_URL` prior to `APP_URL`, stripping trailing slashes.
+  - Updated `get_app_url()` in `scripts/calendar_reminders.py` to inspect `INTERNAL_APP_URL` prior to `APP_URL`, stripping trailing slashes.
+  - Enables setting `INTERNAL_APP_URL=http://127.0.0.1:8000` in production environments so that internal scheduler HTTP requests stay on loopback rather than exiting through Cloudflare and generating ~1,700 unnecessary public edge requests per day.
+- **Verification**:
+  - Validated URL precedence and normalization tests with `INTERNAL_APP_URL` and `APP_URL`.
+  - Verified test suites `tests/test_lock_utils.py` and `tests/test_new_features.py` (18 passing).
+
 # Fully Deprecate and Retire Communities Feature in Favor of Trusted Circles
 
 ## Model Attribution

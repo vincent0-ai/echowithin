@@ -19,8 +19,10 @@ load_dotenv()
 
 def get_app_url():
     """Returns the app's base URL."""
+    if os.environ.get('INTERNAL_APP_URL'):
+        return os.environ['INTERNAL_APP_URL'].rstrip('/')
     if os.environ.get('APP_URL'):
-        return os.environ['APP_URL']
+        return os.environ['APP_URL'].rstrip('/')
     # Fallback to localhost if mongo or redis is local
     mongo_conn = os.environ.get('MONGODB_CONNECTION', '')
     redis_host = os.environ.get('REDIS_HOST', '')

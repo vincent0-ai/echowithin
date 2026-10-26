@@ -25,8 +25,10 @@ except ImportError:
 
 def get_app_url():
     """Returns the app's base URL."""
+    if os.environ.get('INTERNAL_APP_URL'):
+        return os.environ['INTERNAL_APP_URL'].rstrip('/')
     if os.environ.get('APP_URL'):
-        return os.environ['APP_URL']
+        return os.environ['APP_URL'].rstrip('/')
     mongo_conn = os.environ.get('MONGODB_CONNECTION', '')
     redis_host = os.environ.get('REDIS_HOST', '')
     if 'localhost' in mongo_conn or '127.0.0.1' in mongo_conn or 'localhost' in redis_host:

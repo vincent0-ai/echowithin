@@ -18,7 +18,7 @@
           <option value="general" {% if user.get('onboarding_use_case', 'general') == 'general' %}selected{% endif %}>A little of everything</option>
           <option value="reflection" {% if user.get('onboarding_use_case') == 'reflection' %}selected{% endif %}>Private reflection</option>
           <option value="relationship" {% if user.get('onboarding_use_case') == 'relationship' %}selected{% endif %}>Relationship growth</option>
-          <option value="discussion" {% if user.get('onboarding_use_case') == 'discussion' %}selected{% endif %}>Discussions and communities</option>
+          <option value="discussion" {% if user.get('onboarding_use_case') == 'discussion' %}selected{% endif %}>Discussions & Circles</option>
           <option value="creative" {% if user.get('onboarding_use_case') == 'creative' %}selected{% endif %}>Shared memories and creativity</option>
           <option value="play" {% if user.get('onboarding_use_case') == 'play' %}selected{% endif %}>Play and connection</option>
         </select>

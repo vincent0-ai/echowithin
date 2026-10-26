@@ -256,7 +256,7 @@ def export_data(username):
         'comments': [],
         'personal_notes': [],
         'direct_messages': [],
-        'communities': [],
+        'circles': [],
         'bonds': [],
         'mood_entries': [],
         'journal_entries': [],
@@ -309,15 +309,16 @@ def export_data(username):
             })
     _safe(_export_dms, None)
 
-    # Communities the user belongs to
-    def _export_communities():
-        for membership in m.community_memberships_conf.find({'user_id': user_id}):
-            export['communities'].append({
-                'community_id': str(membership.get('community_id', '')),
-                'role': membership.get('role', 'member'),
-                'joined_at': str(membership.get('joined_at', '')),
+    # Circles the user belongs to
+    def _export_circles():
+        for circle in m.circles_conf.find({'members': user_id}):
+            export['circles'].append({
+                'circle_id': str(circle.get('_id', '')),
+                'name': circle.get('name', ''),
+                'role': 'creator' if str(circle.get('created_by')) == str(user_id) else 'member',
+                'created_at': str(circle.get('created_at', '')),
             })
-    _safe(_export_communities, None)
+    _safe(_export_circles, None)
 
     # Bonds (relationships) — own contributions only
     def _export_bonds():

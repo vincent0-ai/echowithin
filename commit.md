@@ -1,3 +1,39 @@
+# Fully Deprecate and Retire Communities Feature in Favor of Trusted Circles
+
+## Model Attribution
+- Model: Gemini 3.8 Flash (High)
+- Reviewer Assigned: Claude Opus 4
+
+## Summary of Changes
+- **Core Communities Feature Deprecation**:
+  - Deleted `blueprints/communities.py` (all CRUD routes, community notes, reactions, polls, challenges, checkins, resources).
+  - Deleted obsolete community templates (`templates/communities.html`, `templates/community_space.html`, `templates/admin_communities.html`, `templates/admin_community_vouchers.html`).
+  - Deleted obsolete script `scripts/prune_orphaned_communities.py`.
+  - Deleted test suite `tests/test_communities.py`.
+- **Seamless HTTP 301 Redirect**:
+  - Registered `/communities` and `/communities/<path:subpath>` redirect routes pointing directly to `circles.circles_page` to protect existing bookmarks and links.
+- **Main App & Navigation Updates**:
+  - Unregistered `communities_bp` from `main.py`.
+  - Replaced Communities links with Trusted Circles across `templates/base.html` (including `discussion`, `creative`, and "More" dropdowns).
+  - Updated `templates/home.html` Community card to "Trusted Circles" displaying the user's active circles count (`user_circle_count`).
+  - Updated `blueprints/pages.py` to count and cache `user_circle_count`.
+- **Personal Space & Offline JS Cleanups**:
+  - Updated `templates/personal_space.html` tab navigation from Communities to Trusted Circles (`url_for('circles.circles_page')`).
+  - Removed "Share to Community" button, picker list, and dead handlers from `templates/personal_space.html` and `static/personal_space_offline.js`.
+- **Admin Moderation & Health Metrics**:
+  - Removed community management and voucher routes from `blueprints/admin.py` and action cards from `templates/admin_dashboard.html`.
+  - Updated admin dashboard health checks from `health['communities']` to `health['circles']`.
+- **Sharing & Profile**:
+  - Cleaned community fallback lookup from `blueprints/sharing.py` comment endpoints.
+  - Updated GDPR data export in `blueprints/profile.py` to export user circles instead of community memberships.
+- **Config & Tier Limits**:
+  - Removed deprecated `max_communities` tier limits from `config.py` and context processor.
+- **Documentation & Copy**:
+  - Updated FAQ (`templates/faq.html`), Terms of Service (`templates/terms.html`), Auth (`templates/auth.html`), and Profile Settings (`templates/profile_settings.html`) copy to reference Trusted Circles with open/invite-only visibility.
+- **Test Suite Verification**:
+  - Updated `tests/test_admin_and_tiers.py` and `tests/test_performance.py`.
+  - 587 of 587 tests passing with 0 failures across the complete test suite.
+
 # Trusted Circles Clean UI, Deduplication, Nested Comments & Open Visibility
 
 ## Model Attribution

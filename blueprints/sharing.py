@@ -1753,15 +1753,11 @@ def api_decide_note_proposal(version_id):
 def api_get_note_comments(share_id):
     """Fetch all comments for a shared note, organized into a recursive tree."""
     import main as m
-    is_community = False
     share = m.note_shares_conf.find_one({'share_id': share_id})
     if not share:
-        share = m.community_notes_conf.find_one({'share_id': share_id})
-        if not share:
-            return jsonify([]), 404
-        is_community = True
+        return jsonify([]), 404
 
-    if not is_community:
+    if True:
         # SECURITY: mirror the access checks used by view_shared_note so expired,
         # deactivated, or access-code-gated shares don't enumerate comments.
         if share.get('expires_at'):
@@ -1827,15 +1823,11 @@ def api_get_note_comments(share_id):
 def api_post_note_comment(share_id):
     """Post a new comment on a shared note (login required)."""
     import main as m
-    is_community = False
     share = m.note_shares_conf.find_one({'share_id': share_id})
     if not share:
-        share = m.community_notes_conf.find_one({'share_id': share_id})
-        if not share:
-            return jsonify({'error': 'Share not found'}), 404
-        is_community = True
+        return jsonify({'error': 'Share not found'}), 404
 
-    if not is_community:
+    if True:
         # SECURITY: enforce the same expiry/deactivation/access-code gates as other
         # share endpoints so stale links can't be used to post comments.
         if share.get('expires_at'):
@@ -1878,7 +1870,7 @@ def api_post_note_comment(share_id):
 
     # Promote any pending anonymous unlock notification for this share to this user
     try:
-        if not is_community and share.get('owner_id') and str(share['owner_id']) != str(current_user.id):
+        if share.get('owner_id') and str(share['owner_id']) != str(current_user.id):
             fresh_user = m.users_conf.find_one({'_id': ObjectId(current_user.id)}, {'username': 1})
             v_name = fresh_user.get('username') if fresh_user else current_user.username
             notif_id = session.get(f'notif_id_{share_id}')
@@ -1912,9 +1904,7 @@ def api_post_note_reply(share_id, comment_id):
     import main as m
     share = m.note_shares_conf.find_one({'share_id': share_id})
     if not share:
-        share = m.community_notes_conf.find_one({'share_id': share_id})
-        if not share:
-            return jsonify({'error': 'Share not found'}), 404
+        return jsonify({'error': 'Share not found'}), 404
 
     parent_id = m.safe_object_id(comment_id)
     if not parent_id:
@@ -1966,9 +1956,7 @@ def api_delete_note_comment(share_id, comment_id):
     import main as m
     share = m.note_shares_conf.find_one({'share_id': share_id})
     if not share:
-        share = m.community_notes_conf.find_one({'share_id': share_id})
-        if not share:
-            return jsonify({'error': 'Share not found'}), 404
+        return jsonify({'error': 'Share not found'}), 404
 
     target_id = m.safe_object_id(comment_id)
     if not target_id:
@@ -1981,11 +1969,7 @@ def api_delete_note_comment(share_id, comment_id):
     # Allow delete if user is the comment author or the note owner
     can_delete = str(comment.get('author_id')) == current_user.id or str(share.get('owner_id', share.get('author_id'))) == current_user.id
 
-    # Allow community admin to delete if note belongs to a community
-    if not can_delete and share.get('community_id'):
-        community = m.communities_conf.find_one({'_id': m.safe_object_id(share.get('community_id'))})
-        if community and str(community.get('admin_id')) == current_user.id:
-            can_delete = True
+
 
     if not can_delete:
         return jsonify({'error': 'Unauthorized to delete this comment'}), 403

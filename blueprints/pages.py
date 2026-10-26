@@ -64,15 +64,15 @@ def home():
     user_id_str = str(current_user.id)
     # PERF: Cache per-user counts in Redis (60s TTL) to avoid count_documents on every load
     note_count = None
-    user_community_count = None
+    user_circle_count = None
     if m.redis_cache:
         try:
             cached_nc = m.redis_cache.get(f'home_note_count:{user_id_str}')
-            cached_cc = m.redis_cache.get(f'home_community_count:{user_id_str}')
+            cached_cc = m.redis_cache.get(f'home_circle_count:{user_id_str}')
             if cached_nc is not None:
                 note_count = int(cached_nc)
             if cached_cc is not None:
-                user_community_count = int(cached_cc)
+                user_circle_count = int(cached_cc)
         except Exception:
             pass
     if note_count is None:
@@ -82,13 +82,14 @@ def home():
                 m.redis_cache.setex(f'home_note_count:{user_id_str}', 60, str(note_count))
             except Exception:
                 pass
-    if user_community_count is None:
-        user_community_count = m.communities_conf.count_documents({'members': user_oid})
+    if user_circle_count is None:
+        user_circle_count = m.circles_conf.count_documents({'members': user_oid})
         if m.redis_cache:
             try:
-                m.redis_cache.setex(f'home_community_count:{user_id_str}', 60, str(user_community_count))
+                m.redis_cache.setex(f'home_circle_count:{user_id_str}', 60, str(user_circle_count))
             except Exception:
                 pass
+    user_community_count = user_circle_count
 
     unread_messages = m.direct_messages_conf.count_documents({
         'recipient_id': user_oid,
@@ -170,7 +171,8 @@ def home():
         most_active_member=most_active_member,
         hot_posts=hot_posts,
         note_count=note_count,
-        user_community_count=user_community_count,
+        user_circle_count=user_circle_count,
+        user_community_count=user_circle_count,
         active_now=active_now,
         unread_messages=unread_messages,
         active_bonds=active_bonds,

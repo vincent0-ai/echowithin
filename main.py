@@ -97,7 +97,7 @@ from utils import (linkify_filter, markdown_filter,
     optimize_cloudinary_url, extract_cloudinary_public_id,
     index_post_to_typesense, reindex_all_posts_to_typesense,
     _invalidate_badge_cache, can_dm, fetch_link_preview,
-    cascade_delete_user_data, purge_community_data, prune_orphaned_communities)
+    cascade_delete_user_data, purge_community_data)
 from models import load_user, load_user_from_request
 # Import and register blueprints
 from blueprints.pages import bp as pages_bp
@@ -109,7 +109,6 @@ from blueprints.blog import bp as blog_bp
 from blueprints.notes import bp as notes_bp
 from blueprints.sharing import bp as sharing_bp
 from blueprints.chat import bp as chat_bp
-from blueprints.communities import bp as communities_bp
 from blueprints.circles import bp as circles_bp
 from blueprints.admin import bp as admin_bp
 from blueprints.whisper import bp as whisper_bp
@@ -227,7 +226,7 @@ __all__ = [
     'VAULT_MAX_FILE_SIZE', 'VAULT_KDF_ITERATIONS', 'PREDEFINED_TAGS', '_TAG_KEYWORDS',
     'generate_password_hash', 'check_password_hash',
     'OAuth2Session', 'bleach', 'slugify', 'Message', 'DuplicateKeyError',
-    'cascade_delete_user_data', 'purge_community_data', 'prune_orphaned_communities'
+    'cascade_delete_user_data', 'purge_community_data', 
 ]
 
 
@@ -261,8 +260,14 @@ app.register_blueprint(blog_bp)
 app.register_blueprint(notes_bp)
 app.register_blueprint(sharing_bp)
 app.register_blueprint(chat_bp)
-app.register_blueprint(communities_bp)
 app.register_blueprint(circles_bp)
+
+# Legacy Communities -> Circles Redirect
+@app.route('/communities')
+@app.route('/communities/<path:subpath>')
+def redirect_communities_to_circles(subpath=None):
+    return redirect(url_for('circles.circles_page'), code=301)
+
 app.register_blueprint(admin_bp)
 app.register_blueprint(whisper_bp)
 app.register_blueprint(bonds_bp)
@@ -1913,7 +1918,6 @@ def inject_template_globals():
         ctx['user_max_notes'] = current_user.get_limit('max_notes')
         ctx['user_max_chars'] = current_user.get_limit('max_chars_per_note')
         ctx['user_max_shares'] = current_user.get_limit('max_share_links_per_note')
-        ctx['user_max_communities'] = current_user.get_limit('max_communities')
         # Theme preference for dark mode
         # PERF: served from the cached User object (no DB round-trip per request)
         ctx['theme_preference'] = getattr(current_user, 'theme_preference', 'light')
@@ -1925,7 +1929,6 @@ def inject_template_globals():
         ctx['user_max_notes'] = TIER_LIMITS['free']['max_notes']
         ctx['user_max_chars'] = TIER_LIMITS['free']['max_chars_per_note']
         ctx['user_max_shares'] = TIER_LIMITS['free']['max_share_links_per_note']
-        ctx['user_max_communities'] = TIER_LIMITS['free']['max_communities']
     return ctx
 
 

@@ -126,10 +126,10 @@
             {% endif %}
         </article>
         <article class="home-compact-card">
-            <p class="home-card-label">Community</p>
-            <h2>Find your people</h2>
-            <p>{{ total_members }} members, {{ user_community_count }} space{{ '' if user_community_count == 1 else 's' }} joined, and conversations waiting to be discovered.</p>
-            <a class="home-card-link" href="{{ url_for('communities.communities_page') }}">Explore communities</a>
+            <p class="home-card-label">Circles</p>
+            <h2>Trusted Circles</h2>
+            <p>{{ user_circle_count }} circle{{ '' if user_circle_count == 1 else 's' }} joined, and conversations waiting to be discovered.</p>
+            <a class="home-card-link" href="{{ url_for('circles.circles_page') }}">Explore Circles</a>
         </article>
     </section>
 </main>

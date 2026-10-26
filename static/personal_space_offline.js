@@ -739,10 +739,7 @@
     (function initShareGuidedFlow() {
         const modeSelector = document.getElementById('share-mode-selector');
         const shareConfig = document.getElementById('share-config');
-        const communityPicker = document.getElementById('share-community-picker');
         const backBtn = document.getElementById('back-to-share-modes');
-        const backFromCommunityBtn = document.getElementById('back-from-community');
-        const showAllBtn = document.getElementById('show-all-share-options');
         const permSelect = document.getElementById('share-permissions');
         const expirySelect = document.getElementById('share-expiry');
 
@@ -751,105 +748,11 @@
         function showConfig() {
             modeSelector.style.display = 'none';
             shareConfig.style.display = 'block';
-            if (communityPicker) communityPicker.style.display = 'none';
-        }
-
-        function showCommunityPicker() {
-            modeSelector.style.display = 'none';
-            shareConfig.style.display = 'none';
-            if (communityPicker) {
-                communityPicker.style.display = 'block';
-                loadCommunities();
-            }
         }
 
         function showModes() {
             shareConfig.style.display = 'none';
-            if (communityPicker) communityPicker.style.display = 'none';
             modeSelector.style.display = 'block';
-        }
-
-        // Load communities for the picker
-        function loadCommunities() {
-            const list = document.getElementById('community-picker-list');
-            const empty = document.getElementById('community-picker-empty');
-            if (!list) return;
-            list.innerHTML = '<div style="text-align: center; padding: 1rem; color: #999; font-size: 0.85rem;">Loading...</div>';
-            if (empty) empty.style.display = 'none';
-
-            echoFetch('/api/communities/mine')
-                .then(r => r.json())
-                .then(data => {
-                    if (!data.success || !data.communities || data.communities.length === 0) {
-                        list.innerHTML = '';
-                        if (empty) empty.style.display = 'block';
-                        return;
-                    }
-                    list.innerHTML = '';
-                    data.communities.forEach(comm => {
-                        const card = document.createElement('button');
-                        card.type = 'button';
-                        card.style.cssText = 'display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s; width: 100%;';
-                        card.innerHTML = `
-                            <div style="width: 36px; height: 36px; border-radius: 50%; background: #f0ebe7; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                                <span style="font-size: 1rem;">👥</span>
-                            </div>
-                            <div style="flex: 1; min-width: 0;">
-                                <div style="font-weight: 600; font-size: 0.88rem; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${comm.name}</div>
-                                <div style="font-size: 0.72rem; color: #888;">${comm.member_count} member${comm.member_count !== 1 ? 's' : ''}${comm.is_admin ? ' · Admin' : ''}</div>
-                            </div>
-                        `;
-                        card.addEventListener('mouseenter', () => { card.style.borderColor = 'var(--primary-color)'; card.style.background = '#faf8f7'; });
-                        card.addEventListener('mouseleave', () => { card.style.borderColor = '#eee'; card.style.background = 'white'; });
-                        card.addEventListener('click', () => shareToCommunity(comm.id, comm.name));
-                        list.appendChild(card);
-                    });
-                })
-                .catch(() => {
-                    list.innerHTML = '<div style="text-align: center; padding: 1rem; color: #c0392b; font-size: 0.82rem;">Failed to load communities.</div>';
-                });
-        }
-
-        // Share note to selected community
-        function shareToCommunity(communityId, communityName) {
-            const noteId = window._shareModalNoteId;
-            if (!noteId) return;
-
-            const list = document.getElementById('community-picker-list');
-            if (list) list.innerHTML = '<div style="text-align: center; padding: 1rem; color: #666; font-size: 0.85rem;">Sharing to ' + communityName + '...</div>';
-
-            echoFetch(`/api/personal_post/${noteId}/share-to-community`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
-                },
-                body: JSON.stringify({ community_id: communityId })
-            })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        if (typeof showCustomAlert === 'function') {
-                            showCustomAlert(data.message || 'Note shared to community!', 'success');
-                        } else {
-                            alert(data.message || 'Note shared to community!');
-                        }
-                        closeShareModal();
-                    } else {
-                        if (typeof showCustomAlert === 'function') {
-                            showCustomAlert(data.error || 'Failed to share', 'danger');
-                        } else {
-                            alert(data.error || 'Failed to share');
-                        }
-                        loadCommunities(); // Reload the list
-                    }
-                })
-                .catch(() => {
-                    if (typeof showCustomAlert === 'function') {
-                        showCustomAlert('Network error. Please try again.', 'danger');
-                    }
-                    loadCommunities();
-                });
         }
 
         // Mode button clicks
@@ -864,9 +767,7 @@
                     if (permSelect) permSelect.value = 'edit';
                     if (expirySelect) expirySelect.value = 'never';
                     showConfig();
-                } else if (mode === 'community') {
-                    showCommunityPicker();
-                }
+                                }
             });
 
             // Hover effect
@@ -883,9 +784,6 @@
         // Back buttons
         if (backBtn) {
             backBtn.addEventListener('click', showModes);
-        }
-        if (backFromCommunityBtn) {
-            backFromCommunityBtn.addEventListener('click', showModes);
         }
 
         // Observe the share modal visibility to reset guided flow

@@ -67,9 +67,9 @@
             Notes
             <span class="badge">{{ total_notes_count }}</span>
         </button>
-        <button data-tab="communities" role="tab" aria-selected="false"
-            onclick="window.location.href='{{ url_for('communities.communities_page') }}'">
-            Communities
+        <button data-tab="circles" role="tab" aria-selected="false"
+            onclick="window.location.href='{{ url_for('circles.circles_page') }}'">
+            Trusted Circles
         </button>
         <button class="{{ 'active' if active_tab == 'activity' else '' }}" data-tab="activity" role="tab" aria-selected="{{ 'true' if active_tab == 'activity' else 'false' }}" id="activity-tab-btn" style="position: relative;">
             Activity
@@ -589,16 +589,7 @@
                         </div>
                     </div>
                 </button>
-                <button type="button" class="share-mode-btn" data-mode="community" id="show-all-share-options"
-                    style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
-                    <span style="font-size: 1.5rem;">👥</span>
-                    <div>
-                        <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Share to Community</div>
-                        <div style="font-size: 0.75rem; color: #888;">Post this note to one of your communities
-                        </div>
-                    </div>
-                </button>
-            </div>
+                </div>
         </div>
 
         <div id="share-config" style="display: none;">
@@ -661,24 +652,6 @@
             </button>
         </div>
 
-        <!-- Community Picker (shown when 'Share to Community' is selected) -->
-        <div id="share-community-picker" style="display: none;">
-            <div style="margin-bottom: 0.5rem;">
-                <button type="button" id="back-from-community"
-                    style="background: none; border: none; color: var(--primary-color); font-size: 0.82rem; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;"><i
-                        class="fas fa-arrow-left"></i> Back to options</button>
-            </div>
-            <p style="font-size: 0.85rem; color: #666; margin: 0 0 0.75rem 0;">Select a community to share this note to:
-            </p>
-            <div id="community-picker-list"
-                style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto;">
-                <div style="text-align: center; padding: 2rem; color: #999; font-size: 0.85rem;">Loading communities...
-                </div>
-            </div>
-            <div id="community-picker-empty" style="display: none; text-align: center; padding: 1.5rem; color: #999;">
-                <p style="font-size: 0.85rem; margin: 0 0 0.5rem 0;">You haven't joined any communities yet.</p>
-                <a href="/communities" style="color: var(--primary-color); font-size: 0.82rem;">Browse communities</a>
-            </div>
         </div>
 
         <div id="active-shares-container" style="margin-top: 1.5rem; display: none;">

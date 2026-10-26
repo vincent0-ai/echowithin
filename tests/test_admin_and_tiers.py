@@ -14,12 +14,12 @@ class TestAdminHealthMetrics:
             'redis': {'status': 'healthy', 'used_memory_human': '25M'},
             'rq': {'status': 'healthy', 'queued_jobs': 0, 'failed_jobs': 0},
             'backup': {'status': 'healthy', 'minutes_ago': 45},
-            'communities': {'status': 'healthy', 'total': 12, 'pending_reports': 0},
+            'circles': {'status': 'healthy', 'total': 12},
             'post_moderation': {'status': 'healthy', 'pending_reports': 0, 'ai_flagged': 0}
         }
         assert health['typesense']['status'] == 'healthy'
         assert health['post_moderation']['pending_reports'] == 0
-        assert health['communities']['pending_reports'] == 0
+        assert health['circles']['status'] == 'healthy'
 
 
 class TestPinnedPostsLimit:

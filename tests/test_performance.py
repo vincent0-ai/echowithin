@@ -22,7 +22,7 @@ AUTH_ROUTES = [
     ("Dashboard", "/dashboard"),
     ("Personal Space", "/personal_space"),
     ("Messages", "/messages"),
-    ("Communities", "/communities"),
+    ("Circles", "/circles"),
     ("API: Unread Count", "/api/messages/unread_count"),
     ("API: Badge Counts", "/api/notifications/badge-counts"),
     ("API: Activity Feed", "/api/activity/feed"),

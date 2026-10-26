@@ -127,6 +127,9 @@ def test_share_to_dm_success(auth_client, mock_user, note_id, other_user_id, mon
     assert inserted_dm['message_type'] == 'note_share'
     assert inserted_dm['recipient_id'] == other_user_id
     assert 'link_preview' in inserted_dm
+    decrypted_dm = m.decrypt_dm(inserted_dm['content'], str(mock_user['_id']), str(other_user_id))
+    assert 'Shared Note: Shared Note' not in decrypted_dm
+    assert 'Check this out!' in decrypted_dm
 
 
 def test_share_to_dm_cannot_message(auth_client, mock_user, note_id, other_user_id, monkeypatch):

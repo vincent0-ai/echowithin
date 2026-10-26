@@ -1,3 +1,24 @@
+# Fix Replying Widget Extra Spacing and Eliminate Redundant Shared Note Prefix in DMs
+
+## Model Attribution
+- Model: Gemini 3.8 Flash (High)
+- Reviewer Assigned: Claude Opus 4
+
+## Summary of Changes
+- **Quoted Reply Widget Spacing Optimization (`templates/circle.html`, `blueprints/circles.py`)**:
+  - Removed `white-space: pre-wrap;` inheritance from `.cv-bubble`, scoping it exclusively to `.cv-bubble-text` so inner layout containers such as quoted replies do not preserve unwanted whitespace.
+  - Trimmed Jinja2 template whitespace around `.cv-reply-quote` using `{%- ... -%}` and rendered markup on a single line to prevent indentation newlines from rendering vertical gaps.
+  - Updated `.cv-reply-quote` CSS with `white-space: normal; line-height: 1.25; padding: .2rem .45rem; overflow: hidden;` and tightened author and snippet text sizing.
+  - Normalized quoted reply snippet strings in `blueprints/circles.py` and client-side JS (`replyToMessage` & `appendChatMessage`) using whitespace collapsing (`' '.join(parent_text.split())[:80]` / `replace(/\s+/g, ' ').trim()`) to prevent multi-line parent messages from stretching reply quotes.
+- **Eliminated Redundant "Shared Note" Prefix in DMs (`blueprints/sharing.py`)**:
+  - Updated `api_share_to_dm` to check if the note title is default or untitled.
+  - For default/untitled notes, sends cleanly formatted `{user_message}\n\n{share_url}` or `{share_url}` without redundant repetitive labels (avoiding `"Shared Note: Shared Note https://..."`).
+  - For custom-titled notes, sends `{user_message}\n\n{note_title}\n{share_url}` or `{note_title}\n{share_url}`.
+- **Testing & Verification (`tests/test_share_expansion.py`)**:
+  - Added assertion in `test_share_to_dm_success` confirming `'Shared Note: Shared Note'` is not present in decrypted DM content.
+  - Ran full test suite with 595 tests passing and 0 regressions.
+
+
 # User-Friendly Time Formatting and WhatsApp-Style Minimal In-Bubble Username & Toolbar Alignment
 
 ## Model Attribution

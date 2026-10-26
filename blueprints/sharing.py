@@ -342,7 +342,9 @@ def api_share_to_dm(post_id):
     share_url = url_for('sharing.view_shared_note', share_id=share_id, _external=True)
 
     plain_content = m._decrypt_note_record(note) or ''
-    note_title = note.get('title') or 'Shared Note'
+    raw_title = (note.get('title') or '').strip()
+    is_default_title = not raw_title or raw_title.lower() == 'shared note'
+    note_title = 'Shared Note' if is_default_title else raw_title
     snippet = plain_content[:180].strip()
     if len(plain_content) > 180:
         snippet += '...'
@@ -351,9 +353,15 @@ def api_share_to_dm(post_id):
     recipient_id_str = str(recip_oid)
 
     if user_message:
-        dm_body = f"{user_message}\n\nShared Note: {note_title}\n{share_url}"
+        if is_default_title:
+            dm_body = f"{user_message}\n\n{share_url}"
+        else:
+            dm_body = f"{user_message}\n\n{raw_title}\n{share_url}"
     else:
-        dm_body = f"Shared Note: {note_title}\n{share_url}"
+        if is_default_title:
+            dm_body = share_url
+        else:
+            dm_body = f"{raw_title}\n{share_url}"
 
     encrypted_content = encrypt_dm(dm_body, sender_id_str, recipient_id_str)
     enc_url = encrypt_dm(share_url, sender_id_str, recipient_id_str)

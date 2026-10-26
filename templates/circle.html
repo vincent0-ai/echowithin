@@ -86,19 +86,16 @@
                     <div class="cv-msg{% if mine %} cv-msg-mine{% endif %}{% if same %} cv-msg-cont{% endif %}" data-msg-id="{{ message._id }}">
                         <div class="cv-bubble-row">
                             <div class="cv-bubble">
-                                {% if not mine and not same %}
+                                {%- if not mine and not same -%}
                                 <span class="cv-bubble-author">{{ message.author_name }}</span>
-                                {% endif %}
-                                {% if message.reply_to %}
-                                <div class="cv-reply-quote" onclick="scrollToMessage('{{ message.reply_to.id }}')">
-                                    <span class="cv-reply-quote-author">{{ message.reply_to.author_name }}</span>
-                                    <span class="cv-reply-quote-text">{{ message.reply_to.snippet }}</span>
-                                </div>
-                                {% endif %}
+                                {%- endif -%}
+                                {%- if message.reply_to -%}
+                                <div class="cv-reply-quote" onclick="scrollToMessage('{{ message.reply_to.id }}')"><span class="cv-reply-quote-author">{{ message.reply_to.author_name }}</span><span class="cv-reply-quote-text">{{ message.reply_to.snippet }}</span></div>
+                                {%- endif -%}
                                 <div class="cv-bubble-text">{{ message.content }}</div>
                                 <div class="cv-bubble-meta">
-                                    {% if message.edited %}<span class="cv-edited-tag">edited</span>{% endif %}
-                                    {% if message.created_at %}{{ message.created_at|localtime('%I:%M %p', client_format='time') }}{% endif %}
+                                    {%- if message.edited -%}<span class="cv-edited-tag">edited</span>{%- endif -%}
+                                    {%- if message.created_at -%}{{ message.created_at|localtime('%I:%M %p', client_format='time') }}{%- endif -%}
                                 </div>
                             </div>
 
@@ -830,8 +827,6 @@
     border: 1px solid var(--border-color);
     color: var(--text-dark-color);
     line-height: 1.35;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
     font-size: .82rem;
     box-sizing: border-box;
     display: flex;
@@ -859,28 +854,48 @@
     user-select: none;
 }
 
-/* Quoted Reply inside Message (Clean 1px border, ZERO left borders) */
+/* Quoted Reply inside Message (Compact, clean 1px border, zero extra height) */
 .cv-reply-quote {
     background: rgba(0, 0, 0, 0.05);
     border: 1px solid rgba(0, 0, 0, 0.1);
     border-radius: 6px;
-    padding: .25rem .5rem;
+    padding: .2rem .45rem;
     margin-bottom: .25rem;
     font-size: .72rem;
     cursor: pointer;
+    white-space: normal;
+    line-height: 1.25;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 .cv-msg-mine .cv-reply-quote {
     background: rgba(255, 255, 255, 0.16);
     border: 1px solid rgba(255, 255, 255, 0.28);
     color: #fff;
 }
-.cv-reply-quote-author { font-weight: 700; display: block; margin-bottom: .1rem; }
-.cv-reply-quote-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; opacity: 0.9; }
+.cv-reply-quote-author {
+    font-weight: 700;
+    display: block;
+    margin-bottom: .1rem;
+    font-size: .68rem;
+    line-height: 1.15;
+}
+.cv-reply-quote-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    opacity: 0.85;
+    font-size: .7rem;
+    line-height: 1.2;
+}
 
 .cv-bubble-text {
     word-break: break-word;
     font-size: .82rem;
     line-height: 1.35;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 /* Bubble Meta (Time & Edited tag inside bubble at bottom right) */
@@ -1941,7 +1956,7 @@
     window.replyToMessage = function (msgId, authorName, snippet) {
         if (replyBar && replyName && replySnippet && replyToIdInput) {
             replyName.textContent = authorName;
-            replySnippet.textContent = snippet;
+            replySnippet.textContent = (snippet || '').replace(/\s+/g, ' ').trim();
             replyToIdInput.value = msgId;
             replyBar.style.display = 'flex';
             if (chatInput) chatInput.focus();
@@ -2071,7 +2086,8 @@
             html += `<span class="cv-bubble-author">${escapeHtml(msg.author_name || 'Member')}</span>`;
         }
         if (msg.reply_to) {
-            html += `<div class="cv-reply-quote" onclick="scrollToMessage('${escapeJs(msg.reply_to.id)}')"><span class="cv-reply-quote-author">${escapeHtml(msg.reply_to.author_name)}</span><span class="cv-reply-quote-text">${escapeHtml(msg.reply_to.snippet)}</span></div>`;
+            const cleanSnip = (msg.reply_to.snippet || '').replace(/\s+/g, ' ').trim();
+            html += `<div class="cv-reply-quote" onclick="scrollToMessage('${escapeJs(msg.reply_to.id)}')"><span class="cv-reply-quote-author">${escapeHtml(msg.reply_to.author_name)}</span><span class="cv-reply-quote-text">${escapeHtml(cleanSnip)}</span></div>`;
         }
         html += `<div class="cv-bubble-text">${escapeHtml(msg.content)}</div>`;
         html += `<div class="cv-bubble-meta"><time class="cv-msg-time">${escapeHtml(msg.created_at_formatted || 'Now')}</time></div>`;

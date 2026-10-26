@@ -338,7 +338,7 @@ def create_circle_message(circle_id):
                 reply_to = {
                     'id': str(parent['_id']),
                     'author_name': parent_author.get('username', 'Member') if parent_author else 'Member',
-                    'snippet': parent_text[:80] + ('...' if len(parent_text) > 80 else '')
+                    'snippet': ' '.join(parent_text.split())[:80] + ('...' if len(' '.join(parent_text.split())) > 80 else '')
                 }
         except Exception:
             reply_to = None

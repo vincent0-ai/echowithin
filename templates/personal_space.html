@@ -573,7 +573,7 @@
             <p style="font-size: 0.85rem; color: #666; margin: 0 0 0.75rem 0;">What would you like to do?</p>
             <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                 <button type="button" class="share-mode-btn" data-mode="simple"
-                    style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                    style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
                     <span style="font-size: 1.5rem;">📄</span>
                     <div>
                         <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Simple Share</div>
@@ -581,15 +581,30 @@
                     </div>
                 </button>
                 <button type="button" class="share-mode-btn" data-mode="collaborate"
-                    style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                    style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
                     <span style="font-size: 1.5rem;">✏️</span>
                     <div>
                         <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Collaborate</div>
-                        <div style="font-size: 0.75rem; color: #888;">Let someone edit, with version control & proposals
-                        </div>
+                        <div style="font-size: 0.75rem; color: #888;">Let someone edit, with version control & proposals</div>
                     </div>
                 </button>
-                </div>
+                <button type="button" class="share-mode-btn" data-mode="direct_message"
+                    style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                    <span style="font-size: 1.5rem;">💬</span>
+                    <div>
+                        <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Send in Message</div>
+                        <div style="font-size: 0.75rem; color: #888;">Send a private note link directly to a friend in chat</div>
+                    </div>
+                </button>
+                <button type="button" class="share-mode-btn" data-mode="circle_feed"
+                    style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                    <span style="font-size: 1.5rem;">⭕</span>
+                    <div>
+                        <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Post to Trusted Circle</div>
+                        <div style="font-size: 0.75rem; color: #888;">Share this note to your circle's discussion feed</div>
+                    </div>
+                </button>
+            </div>
         </div>
 
         <div id="share-config" style="display: none;">
@@ -649,6 +664,65 @@
             <button id="generate-share-link" class="btn comment-btn"
                 style="width: 100%; padding: 0.75rem; font-weight: 600; border-radius: 8px;">
                 Generate Share Link
+            </button>
+        </div>
+
+        <!-- Send via Message Panel -->
+        <div id="share-message-config" style="display: none;">
+            <div style="margin-bottom: 0.75rem;">
+                <button type="button" id="back-from-message-modes"
+                    style="background: none; border: none; color: var(--primary-color); font-size: 0.82rem; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;">
+                    <i class="fas fa-arrow-left"></i> Back to options
+                </button>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.88rem;">Select Recipient</label>
+                <div id="share-dm-recipient-loading" style="font-size: 0.82rem; color: #888; padding: 0.5rem 0;">Loading contacts...</div>
+                <select id="share-dm-recipient-select" style="display: none; width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd; background: #fff; font-size: 0.88rem;">
+                </select>
+                <div id="share-dm-no-recipients" style="display: none; padding: 0.75rem; background: #faf8f7; border: 1px solid #eee; border-radius: 8px; font-size: 0.82rem; color: #777;">
+                    No active chat contacts found. Start a conversation in <a href="/messages" style="color: var(--primary-color); font-weight: 600;">Messages</a> first.
+                </div>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.88rem;">Permissions</label>
+                <select id="share-dm-permissions" style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd; background: #fff; font-size: 0.88rem;">
+                    <option value="view">View Only</option>
+                    <option value="edit">Can Edit</option>
+                </select>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.88rem;">Message (Optional)</label>
+                <textarea id="share-dm-message" rows="2" placeholder="Add a personal note..." style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd; font-size: 0.88rem; resize: vertical; box-sizing: border-box;"></textarea>
+            </div>
+            <button type="button" id="btn-send-dm-share" class="btn comment-btn" style="width: 100%; padding: 0.75rem; font-weight: 600; border-radius: 8px;">
+                Send Link in Message
+            </button>
+        </div>
+
+        <!-- Post to Circle Feed Panel -->
+        <div id="share-circle-config" style="display: none;">
+            <div style="margin-bottom: 0.75rem;">
+                <button type="button" id="back-from-circle-modes"
+                    style="background: none; border: none; color: var(--primary-color); font-size: 0.82rem; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;">
+                    <i class="fas fa-arrow-left"></i> Back to options
+                </button>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.88rem;">Select Circle</label>
+                <div id="share-circle-loading" style="font-size: 0.82rem; color: #888; padding: 0.5rem 0;">Loading circles...</div>
+                <select id="share-circle-select" style="display: none; width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd; background: #fff; font-size: 0.88rem;">
+                </select>
+                <div id="share-circle-empty" style="display: none; padding: 0.75rem; background: #faf8f7; border: 1px solid #eee; border-radius: 8px; font-size: 0.82rem; color: #777;">
+                    You have not joined any circles yet. <a href="/circles" style="color: var(--primary-color); font-weight: 600;">Join or create a Circle</a>.
+                </div>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.88rem;">Caption (Optional)</label>
+                <textarea id="share-circle-caption" rows="2" placeholder="Write something to accompany your shared note..." style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd; font-size: 0.88rem; resize: vertical; box-sizing: border-box;"></textarea>
+            </div>
+            <button type="button" id="btn-post-circle-share" class="btn comment-btn" style="width: 100%; padding: 0.75rem; font-weight: 600; border-radius: 8px;">
+                Post to Circle Feed
             </button>
         </div>
 

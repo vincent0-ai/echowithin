@@ -1,3 +1,35 @@
+# Expand Share Note to Direct Messages and Trusted Circle Feed
+
+## Model Attribution
+- Model: Gemini 3.8 Flash (High)
+- Reviewer Assigned: Claude Opus 4
+
+## Summary of Changes
+- **Share Note via Direct Message**:
+  - Added `POST /api/personal_post/<post_id>/share-to-dm` endpoint allowing users to send a note directly to a contact in chat.
+  - Automatically generates an active share link, constructs encrypted DM body, and injects encrypted `link_preview` with note title, snippet preview, and destination URL.
+  - Emits real-time Socket.IO `new_dm` to recipient room and confirms to sender room.
+  - Dispatches push notifications for the recipient.
+- **Post Note to Trusted Circle Feed**:
+  - Added `POST /api/personal_post/<post_id>/share-to-circle` endpoint allowing users to post their note directly to a Trusted Circle discussion feed.
+  - Generates share link and creates a `kind='shared_note'` post encrypted with circle key (`encrypt_community_note`).
+  - Stores note title, caption, snippet preview, and share URL in the post payload.
+- **Unified Recipients Discovery**:
+  - Added `GET /api/share/recipients` returning the user's available DM contacts (recent chat partners, bond partners, accepted DM permissions) and joined circles.
+- **Personal Space Share Modal Enhancements**:
+  - Added "Send in Message" and "Post to Trusted Circle" options to the guided share mode selector in `templates/personal_space.html`.
+  - Added dedicated recipient and circle selection panels with permissions dropdown and optional message/caption textareas.
+  - Styled with uniform 1px borders (`border: 1px solid var(--border-color);`), strictly adhering to zero `border-left` rules.
+  - Updated `static/personal_space_offline.js` to dynamically fetch recipients, populate dropdowns, and handle DM/Circle share submissions with error resilience.
+- **Circle Feed Shared Note Card**:
+  - Updated `templates/circle.html` to render rich, responsive note cards for `shared_note` posts in the circle feed.
+  - Displays author caption, note icon, title, snippet preview, and an "Open Note" button linking to the shared note.
+  - Reactions (❤️, 👍, 🔥, 🎉) and nested comments thread work seamlessly for shared note posts.
+- **Testing & Verification**:
+  - Added 7 unit tests in `tests/test_share_expansion.py` covering recipients discovery, DM sharing, permissions enforcement, circle feed posting, and feed template rendering.
+  - All 594 project tests passing (0 failures).
+
+
 # Support INTERNAL_APP_URL for Scheduler and Reminder Scripts
 
 ## Model Attribution

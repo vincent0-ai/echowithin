@@ -259,6 +259,24 @@
                                     <span class="cv-meta cv-attendee-count">{{ post.attending_count }} attending</span>
                                 </div>
                             </div>
+                            {% elif post.kind == 'shared_note' %}
+                            {% if post.payload.caption %}
+                            <p class="cv-text cv-post-content" style="margin-bottom: 0.65rem;">{{ post.payload.caption }}</p>
+                            {% endif %}
+                            <div class="cv-shared-note-card" style="border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem 1rem; background: var(--card-bg, #faf8f7); display: flex; flex-direction: column; gap: 0.4rem;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;">
+                                    <div style="display: flex; align-items: center; gap: 0.45rem;">
+                                        <span style="font-size: 1.15rem;">📝</span>
+                                        <strong style="font-size: 0.92rem; color: var(--text-color, #3e2217);">{{ post.payload.note_title|default('Shared Note', true) }}</strong>
+                                    </div>
+                                    <a href="{{ post.payload.share_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm" style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.65rem; font-size: 0.78rem; text-decoration: none; border-radius: 6px; background: var(--primary-color, #3e2217); color: white;">
+                                        <i class="fas fa-external-link-alt"></i> Open Note
+                                    </a>
+                                </div>
+                                {% if post.payload.snippet %}
+                                <p style="font-size: 0.82rem; color: #666; margin: 0; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">{{ post.payload.snippet }}</p>
+                                {% endif %}
+                            </div>
                             {% else %}
                             <p class="cv-text cv-post-content">{{ post.payload.content }}</p>
                             {% endif %}

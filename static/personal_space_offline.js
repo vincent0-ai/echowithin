@@ -739,20 +739,111 @@
     (function initShareGuidedFlow() {
         const modeSelector = document.getElementById('share-mode-selector');
         const shareConfig = document.getElementById('share-config');
+        const messageConfig = document.getElementById('share-message-config');
+        const circleConfig = document.getElementById('share-circle-config');
         const backBtn = document.getElementById('back-to-share-modes');
+        const backMsgBtn = document.getElementById('back-from-message-modes');
+        const backCircleBtn = document.getElementById('back-from-circle-modes');
         const permSelect = document.getElementById('share-permissions');
         const expirySelect = document.getElementById('share-expiry');
 
-        if (!modeSelector || !shareConfig) return;
+        if (!modeSelector) return;
 
-        function showConfig() {
-            modeSelector.style.display = 'none';
-            shareConfig.style.display = 'block';
+        let _cachedRecipients = null;
+
+        function _esc(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
         function showModes() {
-            shareConfig.style.display = 'none';
-            modeSelector.style.display = 'block';
+            if (shareConfig) shareConfig.style.display = 'none';
+            if (messageConfig) messageConfig.style.display = 'none';
+            if (circleConfig) circleConfig.style.display = 'none';
+            if (modeSelector) modeSelector.style.display = 'block';
+        }
+
+        function showConfig() {
+            if (modeSelector) modeSelector.style.display = 'none';
+            if (messageConfig) messageConfig.style.display = 'none';
+            if (circleConfig) circleConfig.style.display = 'none';
+            if (shareConfig) shareConfig.style.display = 'block';
+        }
+
+        async function fetchRecipients() {
+            if (_cachedRecipients) return _cachedRecipients;
+            try {
+                const fetcher = window.echoFetch || fetch;
+                const res = await fetcher('/api/share/recipients');
+                const data = await res.json();
+                if (data.success) {
+                    _cachedRecipients = data;
+                    return data;
+                }
+            } catch (e) {
+                console.error('Failed to fetch recipients', e);
+            }
+            return { contacts: [], circles: [] };
+        }
+
+        async function showMessageConfig() {
+            if (modeSelector) modeSelector.style.display = 'none';
+            if (shareConfig) shareConfig.style.display = 'none';
+            if (circleConfig) circleConfig.style.display = 'none';
+            if (messageConfig) messageConfig.style.display = 'block';
+
+            const loading = document.getElementById('share-dm-recipient-loading');
+            const select = document.getElementById('share-dm-recipient-select');
+            const empty = document.getElementById('share-dm-no-recipients');
+            const sendBtn = document.getElementById('btn-send-dm-share');
+
+            if (loading) loading.style.display = 'block';
+            if (select) select.style.display = 'none';
+            if (empty) empty.style.display = 'none';
+
+            const data = await fetchRecipients();
+            if (loading) loading.style.display = 'none';
+
+            if (!data.contacts || data.contacts.length === 0) {
+                if (empty) empty.style.display = 'block';
+                if (sendBtn) sendBtn.disabled = true;
+            } else {
+                if (select) {
+                    select.innerHTML = data.contacts.map(c => `<option value="${c.user_id}">${_esc(c.username)}</option>`).join('');
+                    select.style.display = 'block';
+                }
+                if (sendBtn) sendBtn.disabled = false;
+            }
+        }
+
+        async function showCircleConfig() {
+            if (modeSelector) modeSelector.style.display = 'none';
+            if (shareConfig) shareConfig.style.display = 'none';
+            if (messageConfig) messageConfig.style.display = 'none';
+            if (circleConfig) circleConfig.style.display = 'block';
+
+            const loading = document.getElementById('share-circle-loading');
+            const select = document.getElementById('share-circle-select');
+            const empty = document.getElementById('share-circle-empty');
+            const postBtn = document.getElementById('btn-post-circle-share');
+
+            if (loading) loading.style.display = 'block';
+            if (select) select.style.display = 'none';
+            if (empty) empty.style.display = 'none';
+
+            const data = await fetchRecipients();
+            if (loading) loading.style.display = 'none';
+
+            if (!data.circles || data.circles.length === 0) {
+                if (empty) empty.style.display = 'block';
+                if (postBtn) postBtn.disabled = true;
+            } else {
+                if (select) {
+                    select.innerHTML = data.circles.map(c => `<option value="${c.circle_id}">${_esc(c.name)} (${c.member_count} member${c.member_count !== 1 ? 's' : ''})</option>`).join('');
+                    select.style.display = 'block';
+                }
+                if (postBtn) postBtn.disabled = false;
+            }
         }
 
         // Mode button clicks
@@ -767,7 +858,11 @@
                     if (permSelect) permSelect.value = 'edit';
                     if (expirySelect) expirySelect.value = 'never';
                     showConfig();
-                                }
+                } else if (mode === 'direct_message') {
+                    showMessageConfig();
+                } else if (mode === 'circle_feed') {
+                    showCircleConfig();
+                }
             });
 
             // Hover effect
@@ -776,14 +871,129 @@
                 btn.style.background = '#faf8f7';
             });
             btn.addEventListener('mouseleave', () => {
-                btn.style.borderColor = '#eee';
+                btn.style.borderColor = 'var(--border-color)';
                 btn.style.background = 'white';
             });
         });
 
         // Back buttons
-        if (backBtn) {
-            backBtn.addEventListener('click', showModes);
+        if (backBtn) backBtn.addEventListener('click', showModes);
+        if (backMsgBtn) backMsgBtn.addEventListener('click', showModes);
+        if (backCircleBtn) backCircleBtn.addEventListener('click', showModes);
+
+        // Action: Send in Message
+        const sendDmBtn = document.getElementById('btn-send-dm-share');
+        if (sendDmBtn) {
+            sendDmBtn.addEventListener('click', async () => {
+                const noteId = window._shareModalNoteId;
+                if (!noteId) return;
+
+                const recipientSelect = document.getElementById('share-dm-recipient-select');
+                const recipientId = recipientSelect ? recipientSelect.value : '';
+                if (!recipientId) {
+                    alert('Please select a recipient');
+                    return;
+                }
+
+                const permissions = document.getElementById('share-dm-permissions').value || 'view';
+                const message = (document.getElementById('share-dm-message').value || '').trim();
+
+                sendDmBtn.disabled = true;
+                const origText = sendDmBtn.textContent;
+                sendDmBtn.textContent = 'Sending...';
+
+                try {
+                    const fetcher = window.echoFetch || fetch;
+                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+                    const resp = await fetcher(`/api/personal_post/${noteId}/share-to-dm`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify({
+                            recipient_id: recipientId,
+                            permissions: permissions,
+                            message: message
+                        })
+                    });
+                    const resData = await resp.json();
+                    if (resData.success) {
+                        if (typeof showCustomAlert === 'function') {
+                            showCustomAlert(resData.message || 'Note sent in message!', 'success');
+                        } else {
+                            alert(resData.message || 'Note sent in message!');
+                        }
+                        if (window.closeShareModal) window.closeShareModal();
+                    } else {
+                        alert(resData.error || 'Failed to send message');
+                    }
+                } catch (err) {
+                    alert('Network error while sending message.');
+                } finally {
+                    sendDmBtn.disabled = false;
+                    sendDmBtn.textContent = origText;
+                }
+            });
+        }
+
+        // Action: Post to Circle Feed
+        const postCircleBtn = document.getElementById('btn-post-circle-share');
+        if (postCircleBtn) {
+            postCircleBtn.addEventListener('click', async () => {
+                const noteId = window._shareModalNoteId;
+                if (!noteId) return;
+
+                const circleSelect = document.getElementById('share-circle-select');
+                const circleId = circleSelect ? circleSelect.value : '';
+                if (!circleId) {
+                    alert('Please select a circle');
+                    return;
+                }
+
+                const caption = (document.getElementById('share-circle-caption').value || '').trim();
+
+                postCircleBtn.disabled = true;
+                const origText = postCircleBtn.textContent;
+                postCircleBtn.textContent = 'Posting...';
+
+                try {
+                    const fetcher = window.echoFetch || fetch;
+                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+                    const resp = await fetcher(`/api/personal_post/${noteId}/share-to-circle`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify({
+                            circle_id: circleId,
+                            caption: caption,
+                            permissions: 'view'
+                        })
+                    });
+                    const resData = await resp.json();
+                    if (resData.success) {
+                        if (typeof showCustomAlert === 'function') {
+                            showCustomAlert(resData.message || 'Note posted to circle feed!', 'success');
+                        } else {
+                            alert(resData.message || 'Note posted to circle feed!');
+                        }
+                        if (window.closeShareModal) window.closeShareModal();
+                    } else {
+                        alert(resData.error || 'Failed to post to circle');
+                    }
+                } catch (err) {
+                    alert('Network error while posting to circle.');
+                } finally {
+                    postCircleBtn.disabled = false;
+                    postCircleBtn.textContent = origText;
+                }
+            });
         }
 
         // Observe the share modal visibility to reset guided flow
@@ -791,7 +1001,8 @@
         if (shareModal) {
             const observer = new MutationObserver(() => {
                 if (shareModal.style.display === 'flex') {
-                    // Reset to mode selector when modal opens
+                    // Invalidate cached recipients on each open so fresh contacts/circles are fetched
+                    _cachedRecipients = null;
                     showModes();
                 }
             });

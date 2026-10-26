@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, session, current_app, abort, make_response
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
-import datetime, hashlib, secrets, os
+import datetime, hashlib, secrets, os, json
 from security import limits, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip
 
 bp = Blueprint('sharing', __name__, template_folder='templates')
@@ -201,6 +201,318 @@ def api_create_share(post_id):
         'success': True,
         'share_url': share_url,
         'share_id': share_id
+    })
+
+
+@bp.route('/api/share/recipients', methods=['GET'])
+@login_required
+@limits(calls=30, period=60)
+def api_get_share_recipients():
+    """Return available DM contacts and joined circles for the share note dialog."""
+    import main as m
+    user_oid = ObjectId(current_user.id)
+
+    # 1. Gather DM contacts (recent conversations, bond partners, accepted DM permissions)
+    contact_ids = set()
+
+    # Recent messages
+    pipeline = [
+        {'$match': {'$or': [{'sender_id': user_oid}, {'recipient_id': user_oid}]}},
+        {'$sort': {'timestamp': -1}},
+        {'$group': {'_id': {'$cond': [{'$eq': ['$sender_id', user_oid]}, '$recipient_id', '$sender_id']}}},
+        {'$limit': 25}
+    ]
+    for row in m.direct_messages_conf.aggregate(pipeline):
+        if row.get('_id'):
+            contact_ids.add(row['_id'])
+
+    # Bond partners
+    for bond in m.bonds_conf.find({'$or': [{'user_a_id': user_oid}, {'user_b_id': user_oid}], 'status': {'$ne': 'deleted'}}):
+        partner_id = bond.get('user_b_id') if bond.get('user_a_id') == user_oid else bond.get('user_a_id')
+        if partner_id:
+            contact_ids.add(partner_id)
+
+    # Accepted DM permissions
+    for perm in m.dm_permissions_conf.find({
+        '$or': [{'requester_id': user_oid}, {'target_id': user_oid}],
+        'status': 'accepted'
+    }):
+        other_id = perm.get('target_id') if perm.get('requester_id') == user_oid else perm.get('requester_id')
+        if other_id:
+            contact_ids.add(other_id)
+
+    contacts = []
+    if contact_ids:
+        contact_ids.discard(user_oid)
+        users = list(m.users_conf.find(
+            {'_id': {'$in': list(contact_ids)}},
+            {'username': 1, 'profile_image_url': 1, 'is_demo_bot': 1}
+        ).sort('username', 1))
+
+        for u in users:
+            u_name = u.get('username', 'User')
+            if u_name.startswith('Maya_DemoPartner'):
+                u_name = 'Maya (Demo Partner)'
+            contacts.append({
+                'user_id': str(u['_id']),
+                'username': u_name,
+                'profile_image': u.get('profile_image_url')
+            })
+
+    # 2. Gather user's joined circles
+    circles = []
+    for circle in m.circles_conf.find({'members': user_oid}).sort('name', 1):
+        circles.append({
+            'circle_id': str(circle['_id']),
+            'name': circle.get('name', 'Circle'),
+            'visibility': circle.get('visibility', 'invite_only'),
+            'member_count': len(circle.get('members', []))
+        })
+
+    return jsonify({
+        'success': True,
+        'contacts': contacts,
+        'circles': circles
+    })
+
+
+@bp.route('/api/personal_post/<post_id>/share-to-dm', methods=['POST'])
+@login_required
+@limits(calls=15, period=60)
+def api_share_to_dm(post_id):
+    """Share a note directly to a user via direct message."""
+    import main as m
+    from security import encrypt_dm
+    from utils import can_dm
+
+    obj_id = m.safe_object_id(post_id)
+    if not obj_id:
+        return jsonify({'error': 'Invalid note ID'}), 400
+
+    note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+    if getattr(current_user, 'is_guest', False):
+        return jsonify({'error': 'Guest accounts cannot share notes. Please create a free account.'}), 403
+
+    data = request.get_json() or {}
+    recipient_id = data.get('recipient_id', '').strip()
+    permissions = data.get('permissions', 'view')
+    if permissions not in ('view', 'edit'):
+        permissions = 'view'
+    user_message = data.get('message', '').strip()
+
+    recip_oid = m.safe_object_id(recipient_id)
+    if not recip_oid:
+        return jsonify({'error': 'Invalid recipient ID'}), 400
+
+    if str(recip_oid) == str(current_user.id):
+        return jsonify({'error': 'You cannot send a note to yourself'}), 400
+
+    recipient = m.users_conf.find_one({'_id': recip_oid}, {'username': 1, 'blocked_user_ids': 1, 'is_demo_bot': 1})
+    if not recipient:
+        return jsonify({'error': 'Recipient not found'}), 404
+
+    if not can_dm(current_user.id, recipient_id):
+        return jsonify({'error': 'You do not have permission to message this user'}), 403
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    share_id = secrets.token_urlsafe(16)
+    m.note_shares_conf.insert_one({
+        'share_id': share_id,
+        'note_id': obj_id,
+        'owner_id': ObjectId(current_user.id),
+        'permissions': permissions,
+        'access_code_hash': None,
+        'expires_at': None,
+        'created_at': now,
+        'surprise_theme': 'none',
+        'valentine_photo': None,
+        'valentine_audio': None,
+        'valentine_document': None,
+        'valentine_photo_hash': None,
+        'valentine_audio_hash': None,
+        'valentine_document_hash': None,
+        'use_typewriter': False,
+        'auto_approve': False,
+        'unlock_date': None
+    })
+
+    share_url = url_for('sharing.view_shared_note', share_id=share_id, _external=True)
+
+    plain_content = m._decrypt_note_record(note) or ''
+    note_title = note.get('title') or 'Shared Note'
+    snippet = plain_content[:180].strip()
+    if len(plain_content) > 180:
+        snippet += '...'
+
+    sender_id_str = str(current_user.id)
+    recipient_id_str = str(recip_oid)
+
+    if user_message:
+        dm_body = f"{user_message}\n\nShared Note: {note_title}\n{share_url}"
+    else:
+        dm_body = f"Shared Note: {note_title}\n{share_url}"
+
+    encrypted_content = encrypt_dm(dm_body, sender_id_str, recipient_id_str)
+    enc_url = encrypt_dm(share_url, sender_id_str, recipient_id_str)
+    enc_title = encrypt_dm(note_title, sender_id_str, recipient_id_str)
+    enc_desc = encrypt_dm(snippet or 'Click to open note', sender_id_str, recipient_id_str)
+    enc_img = encrypt_dm('', sender_id_str, recipient_id_str)
+
+    message_doc = {
+        'sender_id': ObjectId(current_user.id),
+        'recipient_id': recip_oid,
+        'content': encrypted_content,
+        'timestamp': now,
+        'is_read': False,
+        'message_type': 'note_share',
+        'link_preview': {
+            'url': enc_url,
+            'title': enc_title,
+            'description': enc_desc,
+            'image': enc_img
+        }
+    }
+    res = m.direct_messages_conf.insert_one(message_doc)
+    doc_id = str(message_doc.get('_id') or getattr(res, 'inserted_id', '') or secrets.token_hex(12))
+    m.hidden_chats_conf.delete_one({'user_id': recip_oid, 'partner_id': ObjectId(current_user.id)})
+
+    socket_payload = {
+        'id': doc_id,
+        'sender_id': sender_id_str,
+        'recipient_id': recipient_id_str,
+        'sender_username': current_user.username,
+        'content': dm_body,
+        'timestamp': now.isoformat().replace('+00:00', 'Z'),
+        'is_read': False,
+        'message_type': 'note_share',
+        'link_preview': {
+            'url': share_url,
+            'title': note_title,
+            'description': snippet or 'Click to open note',
+            'image': ''
+        }
+    }
+    if hasattr(m, 'socketio') and m.socketio:
+        m.socketio.emit('new_dm', socket_payload, room=f"user_{recipient_id_str}")
+        m.socketio.emit('message_confirmed', socket_payload, room=f"user_{sender_id_str}")
+
+    try:
+        from notifications import send_push_notification_async
+        send_push_notification_async(
+            recipient_id_str,
+            f"{current_user.username} shared a note",
+            note_title,
+            url=url_for('chat.messages_page', _external=True),
+            tag=f"dm-{current_user.id}",
+            category="dms"
+        )
+    except Exception:
+        pass
+
+    return jsonify({
+        'success': True,
+        'message': f'Note shared with {recipient.get("username", "user")} in chat!',
+        'share_url': share_url
+    })
+
+
+@bp.route('/api/personal_post/<post_id>/share-to-circle', methods=['POST'])
+@login_required
+@limits(calls=15, period=60)
+def api_share_to_circle(post_id):
+    """Post a shared note directly into a Trusted Circle feed."""
+    import main as m
+    from security import encrypt_community_note
+
+    obj_id = m.safe_object_id(post_id)
+    if not obj_id:
+        return jsonify({'error': 'Invalid note ID'}), 400
+
+    note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+    if getattr(current_user, 'is_guest', False):
+        return jsonify({'error': 'Guest accounts cannot share notes. Please create a free account.'}), 403
+
+    data = request.get_json() or {}
+    circle_id = data.get('circle_id', '').strip()
+    caption = data.get('caption', '').strip()
+    permissions = data.get('permissions', 'view')
+    if permissions not in ('view', 'edit'):
+        permissions = 'view'
+
+    c_oid = m.safe_object_id(circle_id)
+    if not c_oid:
+        return jsonify({'error': 'Invalid Circle ID'}), 400
+
+    circle = m.circles_conf.find_one({'_id': c_oid, 'members': ObjectId(current_user.id)})
+    if not circle:
+        return jsonify({'error': 'Circle not found or you are not a member'}), 404
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    share_id = secrets.token_urlsafe(16)
+    m.note_shares_conf.insert_one({
+        'share_id': share_id,
+        'note_id': obj_id,
+        'owner_id': ObjectId(current_user.id),
+        'permissions': permissions,
+        'access_code_hash': None,
+        'expires_at': None,
+        'created_at': now,
+        'surprise_theme': 'none',
+        'valentine_photo': None,
+        'valentine_audio': None,
+        'valentine_document': None,
+        'valentine_photo_hash': None,
+        'valentine_audio_hash': None,
+        'valentine_document_hash': None,
+        'use_typewriter': False,
+        'auto_approve': False,
+        'unlock_date': None
+    })
+
+    share_url = url_for('sharing.view_shared_note', share_id=share_id)
+
+    plain_content = m._decrypt_note_record(note) or ''
+    note_title = note.get('title') or 'Shared Note'
+    snippet = plain_content[:200].strip()
+    if len(plain_content) > 200:
+        snippet += '...'
+
+    post_payload = {
+        'caption': caption,
+        'note_title': note_title,
+        'share_id': share_id,
+        'share_url': share_url,
+        'snippet': snippet,
+        'note_id': str(obj_id)
+    }
+
+    encrypted_post_content = encrypt_community_note(json.dumps(post_payload), c_oid)
+
+    post_doc = {
+        'circle_id': c_oid,
+        'author_id': ObjectId(current_user.id),
+        'kind': 'shared_note',
+        'content': encrypted_post_content,
+        'created_at': now,
+        'expires_at': None,
+        'reactions': {},
+        'comments': [],
+        'is_pinned': False
+    }
+    m.circle_posts_conf.insert_one(post_doc)
+    m.circles_conf.update_one({'_id': c_oid}, {'$set': {'updated_at': now}})
+
+    return jsonify({
+        'success': True,
+        'message': f'Note posted to "{circle.get("name")}" feed!',
+        'share_url': share_url,
+        'circle_id': str(c_oid)
     })
 
 

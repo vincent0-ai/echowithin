@@ -84,28 +84,26 @@
                     {% set mine = message.is_mine %}
                     {% set same = ns.prev == message.author_name %}
                     <div class="cv-msg{% if mine %} cv-msg-mine{% endif %}{% if same %} cv-msg-cont{% endif %}" data-msg-id="{{ message._id }}">
-                        {% if not mine and not same %}
-                        <div class="cv-msg-author-row">
-                            {% if message.author_image %}
-                            <img class="cv-avatar-tiny" src="{{ message.author_image }}" alt="" loading="lazy">
-                            {% else %}
-                            <span class="cv-avatar-initial">{{ message.author_name[:1]|upper }}</span>
-                            {% endif %}
-                            <span class="cv-msg-author">{{ message.author_name }}</span>
-                        </div>
-                        {% endif %}
-
-                        <div class="cv-bubble-wrap">
-                            {% if message.reply_to %}
-                            <div class="cv-reply-quote" onclick="scrollToMessage('{{ message.reply_to.id }}')">
-                                <span class="cv-reply-quote-author">{{ message.reply_to.author_name }}</span>
-                                <span class="cv-reply-quote-text">{{ message.reply_to.snippet }}</span>
+                        <div class="cv-bubble-row">
+                            <div class="cv-bubble">
+                                {% if not mine and not same %}
+                                <span class="cv-bubble-author">{{ message.author_name }}</span>
+                                {% endif %}
+                                {% if message.reply_to %}
+                                <div class="cv-reply-quote" onclick="scrollToMessage('{{ message.reply_to.id }}')">
+                                    <span class="cv-reply-quote-author">{{ message.reply_to.author_name }}</span>
+                                    <span class="cv-reply-quote-text">{{ message.reply_to.snippet }}</span>
+                                </div>
+                                {% endif %}
+                                <div class="cv-bubble-text">{{ message.content }}</div>
+                                <div class="cv-bubble-meta">
+                                    {% if message.edited %}<span class="cv-edited-tag">edited</span>{% endif %}
+                                    {% if message.created_at %}{{ message.created_at|localtime('%I:%M %p', client_format='time') }}{% endif %}
+                                </div>
                             </div>
-                            {% endif %}
-                            <p class="cv-bubble">{{ message.content }}</p>
 
-                            <!-- Desktop Hover / Action Toolbar (Sleek 3-button pill) -->
-                            <div class="cv-msg-actions">
+                            <!-- Desktop Hover Action Toolbar (Sleek 3-button pill placed beside bubble in flex row) -->
+                            <div class="cv-msg-actions" aria-label="Message options">
                                 <button type="button" class="cv-action-icon" onclick="reactMessage('{{ message._id }}', '❤️')" title="Love">❤️</button>
                                 <button type="button" class="cv-action-icon" onclick="replyToMessage('{{ message._id }}', '{{ message.author_name|replace("'", "\\'") }}', '{{ message.content[:50]|replace("'", "\\'") }}')" title="Reply"><i class="fas fa-reply"></i></button>
                                 <button type="button" class="cv-action-icon" onclick="showMobileActions('{{ message._id }}')" title="More actions"><i class="fas fa-ellipsis-h"></i></button>
@@ -119,11 +117,6 @@
                                 {{ emoji }} <span class="cv-reaction-count">{{ uids|length }}</span>
                             </button>
                             {% endfor %}
-                        </div>
-
-                        <div class="cv-msg-meta-row">
-                            {% if message.edited %}<span class="cv-edited-tag">edited</span>{% endif %}
-                            {% if message.created_at %}<time class="cv-msg-time">{{ message.created_at|localtime('%H:%M') }}</time>{% endif %}
                         </div>
                     </div>
                     {% set ns.prev = message.author_name %}
@@ -188,7 +181,7 @@
                                 {% endif %}
                                 <div class="cv-post-author-text">
                                     <span class="cv-post-name">{{ post.author_name }}</span>
-                                    <time class="cv-meta">{{ post.created_at|localtime('%b %d, %Y · %H:%M') }}</time>
+                                    <time class="cv-meta">{{ post.created_at|localtime('%b %d, %Y · %I:%M %p') }}</time>
                                 </div>
                             </div>
                             <div class="cv-post-badges">
@@ -249,7 +242,7 @@
                             <div class="cv-event-card">
                                 <div class="cv-event-time">
                                     <i class="fas fa-calendar-check"></i>
-                                    <span>{{ post.payload.starts_at|localtime('%A, %b %d, %Y · %H:%M') if post.payload.starts_at else 'TBD' }}</span>
+                                    <span>{{ (post.event_date or post.payload.starts_at)|localtime('%a, %b %d, %Y · %I:%M %p', client_format='event') if (post.event_date or post.payload.starts_at) else 'TBD' }}</span>
                                 </div>
                                 <div class="cv-event-rsvp">
                                     <button type="button" class="btn {% if post.is_attending %}btn-secondary{% else %}btn-primary{% endif %}" onclick="toggleRsvp('{{ post._id }}', this)">
@@ -320,7 +313,7 @@
                                                 <strong class="cv-comment-author">{{ c.author_name }}</strong>
                                             </div>
                                             <div class="cv-comment-meta">
-                                                <time class="cv-meta">{{ c.created_at|localtime('%b %d, %H:%M') }}</time>
+                                                <time class="cv-meta">{{ c.created_at|localtime('%b %d · %I:%M %p') }}</time>
                                                 <button type="button" class="cv-c-btn" onclick="startCommentReply('{{ post._id }}', '{{ c.id }}', '{{ c.author_name|replace("'", "\\'") }}')" title="Reply"><i class="fas fa-reply"></i></button>
                                                 {% if c.is_mine or post.is_mine or is_mod %}
                                                 <button type="button" class="cv-c-btn cv-c-del" onclick="deleteComment('{{ post._id }}', '{{ c.id }}')" title="Delete comment"><i class="fas fa-times"></i></button>
@@ -347,7 +340,7 @@
                                                     {% endif %}
                                                 </div>
                                                 <div class="cv-comment-meta">
-                                                    <time class="cv-meta">{{ r.created_at|localtime('%H:%M') }}</time>
+                                                    <time class="cv-meta">{{ r.created_at|localtime('%I:%M %p', client_format='time') }}</time>
                                                     <button type="button" class="cv-c-btn" onclick="startCommentReply('{{ post._id }}', '{{ c.id }}', '{{ r.author_name|replace("'", "\\'") }}')" title="Reply"><i class="fas fa-reply"></i></button>
                                                     {% if r.is_mine or post.is_mine or is_mod %}
                                                     <button type="button" class="cv-c-btn cv-c-del" onclick="deleteComment('{{ post._id }}', '{{ r.id }}')" title="Delete"><i class="fas fa-times"></i></button>
@@ -794,6 +787,7 @@
     max-height: calc(100vh - 350px);
     min-height: 360px;
     overflow-y: auto;
+    overflow-x: hidden;
     overscroll-behavior: auto; /* DO NOT TRAP SCROLL */
     display: flex;
     flex-direction: column;
@@ -806,8 +800,8 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    max-width: 82%;
-    margin-top: .6rem;
+    max-width: 84%;
+    margin-top: .45rem;
     position: relative;
 }
 .cv-msg-cont { margin-top: .15rem; }
@@ -815,27 +809,23 @@
     align-self: flex-end;
     align-items: flex-end;
 }
-.cv-msg-author-row {
+
+.cv-bubble-row {
     display: flex;
     align-items: center;
-    gap: .35rem;
-    margin: 0 .25rem .2rem;
-}
-.cv-msg-author {
-    color: var(--primary-dark-color);
-    font-size: .78rem;
-    font-weight: 700;
-}
-.cv-bubble-wrap {
-    position: relative;
-    display: inline-block;
+    gap: 6px;
     max-width: 100%;
+    position: relative;
 }
+.cv-msg-mine .cv-bubble-row {
+    flex-direction: row-reverse;
+}
+
 .cv-bubble {
     margin: 0;
-    padding: .38rem .68rem;
-    border-radius: 16px;
-    border-bottom-left-radius: 4px;
+    padding: .35rem .65rem .25rem;
+    border-radius: 14px;
+    border-bottom-left-radius: 3px;
     background: var(--surface-bg);
     border: 1px solid var(--border-color);
     color: var(--text-dark-color);
@@ -844,14 +834,29 @@
     overflow-wrap: anywhere;
     font-size: .82rem;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-width: 64px;
+    max-width: 100%;
 }
 .cv-msg-mine .cv-bubble {
     background: var(--primary-color);
     border-color: var(--primary-color);
-    border-radius: 16px;
-    border-bottom-right-radius: 4px;
+    border-radius: 14px;
+    border-bottom-right-radius: 3px;
     color: #fff;
     box-shadow: 0 1px 3px rgba(62, 34, 23, 0.15);
+}
+
+/* WhatsApp-style minimal and small author inside received message */
+.cv-bubble-author {
+    display: block;
+    font-size: .72rem;
+    font-weight: 700;
+    color: var(--primary-dark-color);
+    margin-bottom: 2px;
+    line-height: 1.2;
+    user-select: none;
 }
 
 /* Quoted Reply inside Message (Clean 1px border, ZERO left borders) */
@@ -872,27 +877,61 @@
 .cv-reply-quote-author { font-weight: 700; display: block; margin-bottom: .1rem; }
 .cv-reply-quote-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; opacity: 0.9; }
 
-/* Desktop Hover Actions (Sleek 3-button pill) */
-.cv-msg-actions {
-    position: absolute;
-    top: -12px;
-    right: 4px;
-    display: none;
+.cv-bubble-text {
+    word-break: break-word;
+    font-size: .82rem;
+    line-height: 1.35;
+}
+
+/* Bubble Meta (Time & Edited tag inside bubble at bottom right) */
+.cv-bubble-meta {
+    display: flex;
     align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    margin-top: 2px;
+    font-size: .62rem;
+    opacity: 0.85;
+    user-select: none;
+}
+.cv-msg-mine .cv-bubble-meta,
+.cv-msg-mine .cv-bubble-meta time,
+.cv-msg-mine .cv-bubble-meta .cv-edited-tag {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+.cv-bubble-meta time {
+    font-size: .62rem;
+    color: var(--text-secondary);
+}
+.cv-bubble-meta .cv-edited-tag {
+    font-size: .62rem;
+    font-style: italic;
+    color: var(--text-secondary);
+}
+
+/* Desktop Hover Actions (Sleek 3-button pill placed beside bubble in flex row) */
+.cv-msg-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
     border-radius: 16px;
-    padding: 1px 4px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-    z-index: 10;
-}
-.cv-msg-mine .cv-msg-actions {
-    right: auto;
-    left: 4px;
+    padding: 2px 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    transform: scale(0.92);
+    flex-shrink: 0;
+    user-select: none;
+    z-index: 5;
 }
 .cv-msg:hover .cv-msg-actions,
 .cv-msg:focus-within .cv-msg-actions {
-    display: flex;
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1);
 }
 @media (max-width: 768px) {
     .cv-msg-actions {
@@ -910,6 +949,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    line-height: 1;
 }
 .cv-action-icon:hover {
     color: var(--primary-color);
@@ -1027,6 +1067,9 @@
     flex-wrap: wrap;
     gap: .25rem;
     margin-top: .25rem;
+}
+.cv-msg-mine .cv-msg-reactions {
+    justify-content: flex-end;
 }
 .cv-reaction-pill {
     display: inline-flex;
@@ -1977,6 +2020,12 @@
         bubble.addEventListener('touchstart', function () { startMsgPress(msgId); }, { passive: true });
         bubble.addEventListener('touchend', cancelMsgPress, { passive: true });
         bubble.addEventListener('touchmove', cancelMsgPress, { passive: true });
+        bubble.addEventListener('contextmenu', function (e) {
+            if (window.innerWidth <= 768) {
+                e.preventDefault();
+                showMobileActions(msgId);
+            }
+        });
     }
 
     // Attach touch listeners to initial message bubbles
@@ -2016,29 +2065,25 @@
         row.className = 'cv-msg' + (isMine ? ' cv-msg-mine' : '');
         row.setAttribute('data-msg-id', msgId);
 
-        let html = '';
+        let html = '<div class="cv-bubble-row">';
+        html += '<div class="cv-bubble">';
         if (!isMine) {
-            html += `<div class="cv-msg-author-row">`;
-            if (msg.author_image) {
-                html += `<img class="cv-avatar-tiny" src="${msg.author_image}" alt="">`;
-            } else {
-                html += `<span class="cv-avatar-initial">${(msg.author_name || 'U').charAt(0).toUpperCase()}</span>`;
-            }
-            html += `<span class="cv-msg-author">${escapeHtml(msg.author_name || 'Member')}</span></div>`;
+            html += `<span class="cv-bubble-author">${escapeHtml(msg.author_name || 'Member')}</span>`;
         }
-
-        html += `<div class="cv-bubble-wrap">`;
         if (msg.reply_to) {
             html += `<div class="cv-reply-quote" onclick="scrollToMessage('${escapeJs(msg.reply_to.id)}')"><span class="cv-reply-quote-author">${escapeHtml(msg.reply_to.author_name)}</span><span class="cv-reply-quote-text">${escapeHtml(msg.reply_to.snippet)}</span></div>`;
         }
-        html += `<p class="cv-bubble">${escapeHtml(msg.content)}</p>`;
-        html += `<div class="cv-msg-actions">
+        html += `<div class="cv-bubble-text">${escapeHtml(msg.content)}</div>`;
+        html += `<div class="cv-bubble-meta"><time class="cv-msg-time">${escapeHtml(msg.created_at_formatted || 'Now')}</time></div>`;
+        html += '</div>';
+
+        html += `<div class="cv-msg-actions" aria-label="Message options">
             <button type="button" class="cv-action-icon" onclick="reactMessage('${msgId}', '❤️')" title="Love">❤️</button>
             <button type="button" class="cv-action-icon" onclick="replyToMessage('${msgId}', '${escapeJs(msg.author_name)}', '${escapeJs(msg.content.substring(0, 50))}')" title="Reply"><i class="fas fa-reply"></i></button>
-            <button type="button" class="cv-action-icon" onclick="showMobileActions('${msgId}')" title="More"><i class="fas fa-ellipsis-h"></i></button>
+            <button type="button" class="cv-action-icon" onclick="showMobileActions('${msgId}')" title="More actions"><i class="fas fa-ellipsis-h"></i></button>
         </div></div>`;
+
         html += `<div class="cv-msg-reactions" data-msg-reactions="${msgId}"></div>`;
-        html += `<div class="cv-msg-meta-row"><time class="cv-msg-time">${msg.created_at_formatted || 'Now'}</time></div>`;
 
         row.innerHTML = html;
         const newBubble = row.querySelector('.cv-bubble');
@@ -2054,8 +2099,9 @@
 
         const isMine = msgEl.classList.contains('cv-msg-mine');
         const bubble = msgEl.querySelector('.cv-bubble');
-        const content = bubble ? bubble.textContent : '';
-        const authorEl = msgEl.querySelector('.cv-msg-author');
+        const textNode = msgEl.querySelector('.cv-bubble-text') || bubble;
+        const content = textNode ? textNode.textContent : '';
+        const authorEl = msgEl.querySelector('.cv-bubble-author');
         const authorName = isMine ? 'You' : (authorEl ? authorEl.textContent.trim() : 'Member');
         const snippet = content.substring(0, 60);
 
@@ -2112,9 +2158,9 @@
     window.copyMessageText = function (msgId) {
         const msgEl = document.querySelector(`.cv-msg[data-msg-id="${msgId}"]`);
         if (!msgEl) return;
-        const bubble = msgEl.querySelector('.cv-bubble');
-        if (bubble && navigator.clipboard) {
-            navigator.clipboard.writeText(bubble.textContent);
+        const textNode = msgEl.querySelector('.cv-bubble-text') || msgEl.querySelector('.cv-bubble');
+        if (textNode && navigator.clipboard) {
+            navigator.clipboard.writeText(textNode.textContent);
         }
     };
 
@@ -2158,7 +2204,8 @@
         if (!msgEl) return;
         const bubble = msgEl.querySelector('.cv-bubble');
         if (!bubble) return;
-        const currentText = bubble.textContent;
+        const textNode = msgEl.querySelector('.cv-bubble-text') || bubble;
+        const currentText = textNode.textContent;
 
         const editWrap = document.createElement('div');
         editWrap.className = 'cv-edit-wrap';
@@ -2175,7 +2222,7 @@
 
         editWrap.querySelector('.cv-edit-cancel').onclick = function () {
             editWrap.remove();
-            bubble.style.display = 'block';
+            bubble.style.display = 'flex';
         };
 
         editWrap.querySelector('.cv-edit-save').onclick = function () {
@@ -2193,10 +2240,10 @@
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.success) {
-                    bubble.textContent = newContent;
+                    textNode.textContent = newContent;
                     editWrap.remove();
-                    bubble.style.display = 'block';
-                    const metaRow = msgEl.querySelector('.cv-msg-meta-row');
+                    bubble.style.display = 'flex';
+                    const metaRow = bubble.querySelector('.cv-bubble-meta');
                     if (metaRow && !metaRow.querySelector('.cv-edited-tag')) {
                         const tag = document.createElement('span');
                         tag.className = 'cv-edited-tag';
@@ -2208,7 +2255,6 @@
         };
     };
 
-    // Chat Message Delete
     window.deleteMessage = function (msgId) {
         if (!confirm('Delete this message?')) return;
         fetch(`{{ url_for('circles.delete_circle_message', circle_id=circle._id, message_id='MSG_ID') }}`.replace('MSG_ID', msgId), {
@@ -2667,9 +2713,9 @@
             if (data.circle_id === '{{ circle._id }}') {
                 const msgEl = document.querySelector(`[data-msg-id="${data.id}"]`);
                 if (msgEl) {
-                    const bubble = msgEl.querySelector('.cv-bubble');
-                    if (bubble) bubble.textContent = data.content;
-                    const metaRow = msgEl.querySelector('.cv-msg-meta-row');
+                    const textNode = msgEl.querySelector('.cv-bubble-text') || msgEl.querySelector('.cv-bubble');
+                    if (textNode) textNode.textContent = data.content;
+                    const metaRow = msgEl.querySelector('.cv-bubble-meta');
                     if (metaRow && !metaRow.querySelector('.cv-edited-tag')) {
                         const tag = document.createElement('span');
                         tag.className = 'cv-edited-tag';

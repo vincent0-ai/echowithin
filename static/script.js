@@ -83,6 +83,23 @@ function convertToLocalTime() {
                     month: 'short',
                     day: 'numeric'
                 });
+            } else if (formatKind === 'time') {
+                localTimeString = date.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                });
+            } else if (formatKind === 'event' || formatKind === 'weekday-datetime') {
+                localTimeString = date.toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                });
+
             } else {
                 // Format options for display
                 const options = {

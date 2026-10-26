@@ -222,6 +222,12 @@ def view_circle(circle_id):
                 for uid in attending
                 if ObjectId(uid) in user_map
             ]
+            starts_at_raw = post['payload'].get('starts_at')
+            if starts_at_raw:
+                try:
+                    post['event_date'] = parse_iso_utc(starts_at_raw)
+                except Exception:
+                    post['event_date'] = None
 
         # Comments (hierarchical / nested)
         raw_comments = post.get('comments', [])
@@ -359,7 +365,7 @@ def create_circle_message(circle_id):
         'author_image': getattr(current_user, 'profile_image_url', None),
         'content': content,
         'created_at': now.isoformat().replace('+00:00', 'Z'),
-        'created_at_formatted': now.strftime('%H:%M'),
+        'created_at_formatted': now.strftime('%I:%M %p').lstrip('0'),
         'reply_to': reply_to,
         'reactions': {}
     }

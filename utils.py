@@ -311,6 +311,12 @@ def from_timestamp_filter(timestamp):
 def to_iso_filter(dt):
     """Convert a datetime object to ISO 8601 format string for JavaScript parsing."""
     try:
+        if isinstance(dt, str) and dt:
+            from security import parse_iso_utc
+            try:
+                dt = parse_iso_utc(dt)
+            except Exception:
+                pass
         if isinstance(dt, datetime.datetime):
             # Ensure timezone awareness
             if dt.tzinfo is None:
@@ -326,6 +332,12 @@ def to_local_filter(dt):
     Previously this converted to a fixed server timezone; now we leave
     conversion to the client's browser."""
     try:
+        if isinstance(dt, str) and dt:
+            from security import parse_iso_utc
+            try:
+                dt = parse_iso_utc(dt)
+            except Exception:
+                pass
         if isinstance(dt, datetime.datetime):
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=datetime.timezone.utc)
@@ -585,6 +597,12 @@ def localtime_filter(dt, fmt='%b %d, %Y at %I:%M %p', client_format=None):
     (e.g. 'month-year') so a date-only label is not expanded to a full
     timestamp by the JS converter."""
     try:
+        if isinstance(dt, str) and dt:
+            from security import parse_iso_utc
+            try:
+                dt = parse_iso_utc(dt)
+            except Exception:
+                pass
         if isinstance(dt, datetime.datetime):
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=datetime.timezone.utc)

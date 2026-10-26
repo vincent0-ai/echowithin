@@ -1,3 +1,34 @@
+# User-Friendly Time Formatting and WhatsApp-Style Minimal In-Bubble Username & Toolbar Alignment
+
+## Model Attribution
+- Model: Gemini 3.8 Flash (High)
+- Reviewer Assigned: Claude Opus 4
+
+## Summary of Changes
+- **User-Friendly Post and Event Time Formatting**:
+  - Enhanced `localtime_filter` in `utils.py` to automatically detect and parse ISO strings via `parse_iso_utc()`. Unparsed ISO strings (such as `2026-10-30T06:06:00Z`) are no longer dumped as raw text.
+  - Added support for `data-time-format="event"` / `"weekday-datetime"` and `data-time-format="time"` in `static/script.js` `convertToLocalTime()`.
+  - Formatted circle events in `templates/circle.html` with `%a, %b %d, %Y · %I:%M %p` (e.g. `Fri, Oct 30, 2026, 6:06 AM`).
+  - Pre-parsed event `starts_at` into `post['event_date']` using timezone-aware UTC datetime (`parse_iso_utc`) in `blueprints/circles.py`.
+  - Formatted post created times (`%b %d, %Y · %I:%M %p`) and comment/reply times with user-friendly 12-hour local time formatting.
+- **WhatsApp-Style Minimal Sender Username Inside Message Bubble**:
+  - In `templates/circle.html`, moved received message author usernames from an external top row (`.cv-msg-author-row`) to inside the message bubble (`.cv-bubble-author`), matching the WhatsApp group chat layout.
+  - Styled with minimal `.72rem`, bold weight, and distinct accent color, avoiding redundant vertical spacing.
+  - Retained clean consecutive sender grouping (omits repeated author name for rapid consecutive messages from the same sender).
+- **Message Action Toolbar Alignment & Horizontal Scroll Fix**:
+  - Re-architected `.cv-msg-actions` from absolute coordinate positioning into a responsive flex layout alongside the bubble via `.cv-bubble-row`.
+  - Sent messages (`.cv-msg-mine`) reverse flex direction (`flex-direction: row-reverse`), anchoring the action toolbar to the *inner* side of the bubble (to the left), preventing it from overflowing the right edge of the screen or chat container.
+  - Received messages place the action toolbar to the right of the bubble in open space, eliminating any overlap with sender headers or content.
+  - Added `overflow-x: hidden;` to `.cv-chat-log` to prevent horizontal scrolling across all screen sizes.
+  - On mobile/touch devices (<= 768px), desktop hover actions remain strictly hidden (`display: none !important`), and message actions are handled via long-press bottom sheet overlay.
+  - Added mobile `contextmenu` listener on bubbles to trigger mobile action sheet cleanly without native browser selection conflict.
+  - Updated real-time `appendChatMessage`, `showMobileActions`, `copyMessageText`, `editMessage`, and socket `circle_message_edited` handlers to work seamlessly with the new bubble structure.
+- **Testing & Quality Assurance**:
+  - Added test `test_string_iso_emits_proper_local_time` in `tests/test_new_features.py` validating ISO string handling and client format tags.
+  - Verified full test suite passes with 595 passed tests and 0 failures.
+  - Adhered strictly to AGENTS.md rules: zero hardcoded credentials, zero thick left borders, minimal user-facing copy, strict timezone-aware UTC.
+
+
 # Expand Share Note to Direct Messages and Trusted Circle Feed
 
 ## Model Attribution

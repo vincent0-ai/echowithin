@@ -292,3 +292,11 @@ class TestLocalTimeFilter:
 
         assert 'data-time-format' not in html
         assert ' UTC</time>' in html
+
+    def test_string_iso_emits_proper_local_time(self):
+        from utils import localtime_filter
+
+        html = str(localtime_filter('2026-10-30T06:06:00Z', '%a, %b %d, %Y', 'event'))
+        assert 'data-time-format="event"' in html
+        assert 'datetime="2026-10-30T06:06:00Z"' in html
+        assert 'Fri, Oct 30, 2026' in html

@@ -660,6 +660,14 @@
   });
 
   if (socket) {
+    socket.on('connect', function () {
+      if (state.roomId) {
+        socket.emit('join_air_room', {
+          room_id: state.roomId,
+          bond_id: new URLSearchParams(window.location.search).get('bond_id') || undefined
+        });
+      }
+    });
     socket.on('air_room_joined', function (d) {
       state.player = d.player; state.isHost = d.is_host;
       state.opponentPresent = d.is_host ? !!d.guest_name : true;

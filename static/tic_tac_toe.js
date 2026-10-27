@@ -744,6 +744,16 @@
     state.socket = io({ transports: ['websocket', 'polling'] });
     window._gameSocket = state.socket;
 
+    state.socket.on('connect', () => {
+      if (state.roomId) {
+        state.socket.emit('join_ttt_room', {
+          room_id: state.roomId,
+          bond_id: state.bondId,
+          tournament_id: state.tournamentId
+        });
+      }
+    });
+
     state.socket.on('ttt_room_joined', data => {
       state.roomId = data.room_id;
       window._gameRoomId = data.room_id;

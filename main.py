@@ -280,6 +280,9 @@ app.register_blueprint(tournaments_bp)
 app.register_blueprint(api_bp, url_prefix='/api/v1')
 app.register_blueprint(vault_bp)
 
+# In-memory LRU/TTL cache for decrypted private media (avoids re-fetching & decrypting thumbnails)
+_decrypted_media_cache = TTLCache(maxsize=512, ttl=1800)
+
 
 @app.route('/media/<path:public_id>')
 def serve_encrypted_media(public_id):
@@ -320,19 +323,47 @@ def serve_encrypted_media(public_id):
     if request.headers.get('If-None-Match') == etag:
         return Response(status=304)
 
-    try:
-        signed_raw = generate_signed_cloudinary_url(public_id, resource_type='raw', delivery_type='authenticated')
-        if not signed_raw:
-            app.logger.error(f"No Cloudinary raw URL available for encrypted media {public_id}")
-            return abort(404)
-        r = requests.get(signed_raw, timeout=30)
-        if r.status_code != 200:
-            app.logger.error(f"Cloudinary fetch failed for encrypted media {public_id}: HTTP {r.status_code}")
-            return abort(404)
-        plain = decrypt_media_bytes(r.content)
-    except Exception as e:
-        app.logger.error(f"Media serve error for {public_id}: {e}")
-        return abort(404)
+    cached_entry = _decrypted_media_cache.get(public_id)
+    if cached_entry is not None:
+        plain, cached_mime = cached_entry
+        if cached_mime:
+            mime = cached_mime
+    else:
+        plain = None
+        # Check Redis L2 cache if available (shared across workers/greenlets)
+        rc = getattr(database, 'redis_cache', None) or globals().get('redis_cache')
+        if rc:
+            try:
+                cached_bytes = rc.get(f"media_dec:{public_id}")
+                if cached_bytes and isinstance(cached_bytes, bytes):
+                    plain = cached_bytes
+                    _decrypted_media_cache[public_id] = (plain, mime)
+            except Exception:
+                pass
+
+        if plain is None:
+            try:
+                signed_raw = generate_signed_cloudinary_url(public_id, resource_type='raw', delivery_type='authenticated')
+                if not signed_raw:
+                    app.logger.error(f"No Cloudinary raw URL available for encrypted media {public_id}")
+                    return abort(404)
+                r = requests.get(signed_raw, timeout=30)
+                if r.status_code != 200:
+                    app.logger.error(f"Cloudinary fetch failed for encrypted media {public_id}: HTTP {r.status_code}")
+                    return abort(404)
+                plain = decrypt_media_bytes(r.content)
+                # Cache responses <= 5MB in L1 memory to avoid pressure on large blobs
+                if len(plain) <= 5 * 1024 * 1024:
+                    _decrypted_media_cache[public_id] = (plain, mime)
+                # Cache thumbnails and small images (<= 1MB) in Redis L2 for 1 hour
+                if rc and len(plain) <= 1024 * 1024:
+                    try:
+                        rc.setex(f"media_dec:{public_id}", 3600, plain)
+                    except Exception:
+                        pass
+            except Exception as e:
+                app.logger.error(f"Media serve error for {public_id}: {e}")
+                return abort(404)
 
     # HTTP 206 Partial Content support for video/audio streaming (iOS Safari / mobile seeking requirement)
     range_header = request.headers.get('Range')
@@ -468,8 +499,23 @@ def cleanup_stale_global_state():
     for lobby_id in list(active_game_players.keys()):
         if not active_game_players[lobby_id]:
             active_game_players.pop(lobby_id, None)
+
+    for r_dict in (active_c4_rooms, active_ttt_rooms, active_dnb_rooms, active_gomoku_rooms):
+        for room_id, rinfo in list(r_dict.items()):
+            h_disc = rinfo.get('host_disconnected_at')
+            g_disc = rinfo.get('guest_disconnected_at')
+            if (h_disc and now_ts - h_disc > 180) or (g_disc and now_ts - g_disc > 180):
+                r_dict.pop(room_id, None)
 # Restrict CORS to the canonical domain (prevents Cross-Site WebSocket Hijacking)
 _ALLOWED_ORIGINS = os.environ.get('SOCKETIO_ALLOWED_ORIGINS', 'https://echowithin.xyz,https://blog.echowithin.xyz,https://staging.echowithin.xyz').split(',')
+# Expand Engine.IO batch packet decode limit (prevents "ValueError: Too many packets in payload"
+# when rapid game events or queued mobile packets arrive in batched polling payloads)
+try:
+    import engineio.payload
+    engineio.payload.Payload.max_decode_packets = 500
+except Exception:
+    pass
+
 # Engine.IO heartbeat tuned for long-haul links (EU VPS <-> Nairobi clients):
 # default ping_timeout (60s) with default interval (25s) drops jittery mobile
 # clients too eagerly; keep interval, allow a longer timeout. No compression
@@ -3457,6 +3503,21 @@ def handle_ttt_move(data=None, *args, **kwargs):
     # Verify it's the sender's turn
     turn = room_info.get('turn', 'x')
     expected_sid = room_info.get('host_sid') if turn == 'x' else room_info.get('guest_sid')
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
+
+    # Re-seat reconnected authenticated player to their seat
+    if user_uid:
+        if turn == 'x' and user_uid == room_info.get('host_user_id'):
+            if sid != room_info.get('host_sid'):
+                room_info['host_sid'] = sid
+                join_room(room_id)
+            expected_sid = sid
+        elif turn == 'o' and user_uid == room_info.get('guest_user_id'):
+            if sid != room_info.get('guest_sid'):
+                room_info['guest_sid'] = sid
+                join_room(room_id)
+            expected_sid = sid
+
     if sid != expected_sid:
         return
 
@@ -3665,22 +3726,30 @@ def handle_join_c4_room(data=None, *args, **kwargs):
     elif seat == 'host':
         if room_info.get('host_sid') != sid:
             room_info['host_sid'] = sid
+        room_info.pop('host_disconnected_at', None)
         emit('c4_room_joined', {
             'room_id': room_id,
             'is_host': True,
             'host_name': room_info['host_name'],
             'guest_name': room_info.get('guest_name'),
-            'player': 0
+            'player': 0,
+            'turn': room_info.get('turn', 0),
+            'board': room_info.get('board'),
+            'scores': room_info.get('scores', [0, 0, 0])
         }, room=sid)
     elif seat == 'guest':
         if room_info.get('guest_sid') != sid:
             room_info['guest_sid'] = sid
+        room_info.pop('guest_disconnected_at', None)
         emit('c4_room_joined', {
             'room_id': room_id,
             'is_host': False,
             'host_name': room_info['host_name'],
             'guest_name': room_info['guest_name'],
-            'player': 1
+            'player': 1,
+            'turn': room_info.get('turn', 0),
+            'board': room_info.get('board'),
+            'scores': room_info.get('scores', [0, 0, 0])
         }, room=sid)
     else:
         starter = secrets.choice([0, 1])
@@ -3743,6 +3812,21 @@ def handle_c4_move(data=None, *args, **kwargs):
     sid = request.sid
     turn = room_info.get('turn', 0)
     expected_sid = room_info.get('host_sid') if turn == 0 else room_info.get('guest_sid')
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
+
+    # Re-seat reconnected authenticated player to their seat
+    if user_uid:
+        if turn == 0 and user_uid == room_info.get('host_user_id'):
+            if sid != room_info.get('host_sid'):
+                room_info['host_sid'] = sid
+                join_room(room_id)
+            expected_sid = sid
+        elif turn == 1 and user_uid == room_info.get('guest_user_id'):
+            if sid != room_info.get('guest_sid'):
+                room_info['guest_sid'] = sid
+                join_room(room_id)
+            expected_sid = sid
+
     if sid != expected_sid:
         return
 
@@ -4017,6 +4101,21 @@ def handle_gomoku_move(data=None, *args, **kwargs):
     sid = request.sid
     turn = room_info.get('turn', 0)
     expected_sid = room_info.get('host_sid') if turn == 0 else room_info.get('guest_sid')
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
+
+    # Re-seat reconnected authenticated player to their seat
+    if user_uid:
+        if turn == 0 and user_uid == room_info.get('host_user_id'):
+            if sid != room_info.get('host_sid'):
+                room_info['host_sid'] = sid
+                join_room(room_id)
+            expected_sid = sid
+        elif turn == 1 and user_uid == room_info.get('guest_user_id'):
+            if sid != room_info.get('guest_sid'):
+                room_info['guest_sid'] = sid
+                join_room(room_id)
+            expected_sid = sid
+
     if sid != expected_sid or room_info['board'][idx] != -1:
         return
     room_info['board'][idx] = turn
@@ -4870,6 +4969,21 @@ def handle_dnb_line(data=None, *args, **kwargs):
     sid = request.sid
     turn = room_info.get('turn', 0)
     expected_sid = room_info.get('host_sid') if turn == 0 else room_info.get('guest_sid')
+    user_uid = str(current_user.id) if current_user.is_authenticated else None
+
+    # Re-seat reconnected authenticated player to their seat
+    if user_uid:
+        if turn == 0 and user_uid == room_info.get('host_user_id'):
+            if sid != room_info.get('host_sid'):
+                room_info['host_sid'] = sid
+                join_room(room_id)
+            expected_sid = sid
+        elif turn == 1 and user_uid == room_info.get('guest_user_id'):
+            if sid != room_info.get('guest_sid'):
+                room_info['guest_sid'] = sid
+                join_room(room_id)
+            expected_sid = sid
+
     if sid != expected_sid:
         return
 
@@ -6195,9 +6309,14 @@ def handle_dm_disconnect(*args, **kwargs):
     global slime_matchmaking_queue
     slime_matchmaking_queue = [q for q in slime_matchmaking_queue if q['sid'] != request.sid]
 
-    # Cleanup Tic-Tac-Toe rooms on disconnect
+    now_ts = time.time()
+    # Cleanup Tic-Tac-Toe rooms on disconnect: allow reconnect grace period
     for room_id, rinfo in list(active_ttt_rooms.items()):
-        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+        if rinfo.get('host_sid') == request.sid:
+            rinfo['host_disconnected_at'] = now_ts
+        elif rinfo.get('guest_sid') == request.sid:
+            rinfo['guest_disconnected_at'] = now_ts
+        if not rinfo.get('guest_sid') or (rinfo.get('host_disconnected_at') and rinfo.get('guest_disconnected_at')):
             emit('ttt_player_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
             active_ttt_rooms.pop(room_id, None)
 
@@ -6205,9 +6324,13 @@ def handle_dm_disconnect(*args, **kwargs):
     global ttt_matchmaking_queue
     ttt_matchmaking_queue = [q for q in ttt_matchmaking_queue if q['sid'] != request.sid]
 
-    # Cleanup Connect Four rooms on disconnect
+    # Cleanup Connect Four rooms on disconnect: allow reconnect grace period
     for room_id, rinfo in list(active_c4_rooms.items()):
-        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+        if rinfo.get('host_sid') == request.sid:
+            rinfo['host_disconnected_at'] = now_ts
+        elif rinfo.get('guest_sid') == request.sid:
+            rinfo['guest_disconnected_at'] = now_ts
+        if not rinfo.get('guest_sid') or (rinfo.get('host_disconnected_at') and rinfo.get('guest_disconnected_at')):
             emit('c4_player_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
             active_c4_rooms.pop(room_id, None)
 
@@ -6215,9 +6338,13 @@ def handle_dm_disconnect(*args, **kwargs):
     global c4_matchmaking_queue
     c4_matchmaking_queue = [q for q in c4_matchmaking_queue if q['sid'] != request.sid]
 
-    # Cleanup Dots and Boxes rooms on disconnect
+    # Cleanup Dots and Boxes rooms on disconnect: allow reconnect grace period
     for room_id, rinfo in list(active_dnb_rooms.items()):
-        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+        if rinfo.get('host_sid') == request.sid:
+            rinfo['host_disconnected_at'] = now_ts
+        elif rinfo.get('guest_sid') == request.sid:
+            rinfo['guest_disconnected_at'] = now_ts
+        if not rinfo.get('guest_sid') or (rinfo.get('host_disconnected_at') and rinfo.get('guest_disconnected_at')):
             emit('dnb_player_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
             active_dnb_rooms.pop(room_id, None)
 

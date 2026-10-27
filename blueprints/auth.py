@@ -959,10 +959,15 @@ def start_guest_tour():
     
     envelope_keys = generate_user_envelope_keys()
     
+    guest_id = ObjectId()
+    guest_id_str = str(guest_id)
+    partner_id = ObjectId()
+
     guest_doc = {
+        '_id': guest_id,
         'username': username,
         'email': email,
-        'password': m.generate_password_hash(secrets.token_urlsafe(16)),
+        'password': 'pbkdf2:sha256:600000$tour_ephemeral$00000000000000000000000000000000',
         'is_confirmed': True,
         'is_guest': True,
         'guest_expires_at': now + datetime.timedelta(minutes=20),
@@ -970,31 +975,27 @@ def start_guest_tour():
         'notification_preference': 'weekly',
         **envelope_keys
     }
-    
-    res = m.users_conf.insert_one(guest_doc)
-    inserted_id = getattr(res, 'inserted_id', None)
-    guest_id = inserted_id if isinstance(inserted_id, ObjectId) else ObjectId()
-    guest_id_str = str(guest_id)
-    
+
+    p_env = generate_user_envelope_keys()
+    partner_doc = {
+        '_id': partner_id,
+        'username': f"Maya_DemoPartner_{guest_token}",
+        'email': f"maya_{guest_token}@tour.echowithin.internal",
+        'password': 'pbkdf2:sha256:600000$tour_ephemeral$00000000000000000000000000000000',
+        'is_confirmed': True,
+        'is_demo_bot': True,
+        'is_guest': True,
+        'guest_expires_at': now + datetime.timedelta(minutes=20),
+        'join_date': now,
+        **p_env
+    }
+
+    m.users_conf.insert_many([guest_doc, partner_doc])
+
     # Warm up Fernet encryption keys for guest
     warm_user_fernet(guest_id_str)
-    
-    # --- 1. Pre-fill Demo Notes ---
-    def _insert_demo_note(content, reference='', tags=None):
-        g_oid = ObjectId(guest_id_str)
-        enc = m.encrypt_note(content, user_id=guest_id_str)
-        res = m.personal_posts_conf.insert_one({
-            'user_id': g_oid,
-            'content_owner_id': g_oid,
-            'content': enc,
-            'encrypted': True,
-            'reference': reference,
-            'tags': tags or [],
-            'created_at': now
-        })
-        ins = getattr(res, 'inserted_id', None)
-        return ins if isinstance(ins, ObjectId) else ObjectId()
 
+    # --- 1. Pre-fill Demo Notes (Batched into a single write) ---
     note1_content = (
         "# Welcome to EchoWithin\n\n"
         "This is your private, end-to-end encrypted personal space.\n\n"
@@ -1004,36 +1005,49 @@ def start_guest_tour():
         "* **Surprise Note Sharing**: Share themed notes with music and animations.\n"
         "* **Rich Formatting**: Markdown, tags, checklists, and code blocks."
     )
-    _insert_demo_note(note1_content, reference="Getting Started", tags=["Welcome", "Privacy", "Guide"])
-    
     note2_content = (
         "## Sensitive Note Demo\n\n"
         "This note demonstrates confidential storage. Try clicking the Lock button or setting an App Lock PIN."
     )
-    n2_id = _insert_demo_note(note2_content, reference="Confidential", tags=["PIN-Protected", "Security"])
-    m.personal_posts_conf.update_one({'_id': n2_id if isinstance(n2_id, ObjectId) else ObjectId(n2_id)}, {'$set': {'is_locked': True}})
-    
     note3_content = (
         "## Surprise Link Demo Note\n\n"
         "Surprise a friend or partner. Turn any note into an interactive surprise link complete with music, animations, and photos."
     )
-    _insert_demo_note(note3_content, reference="Surprise Idea", tags=["Surprise", "Sharing"])
-    
-    # --- 2. Pre-fill Per-Guest Disposable Demo Partner & Active Bond ---
-    p_env = generate_user_envelope_keys()
-    p_res = m.users_conf.insert_one({
-        'username': f"Maya_DemoPartner_{guest_token}",
-        'email': f"maya_{guest_token}@tour.echowithin.internal",
-        'password': m.generate_password_hash(secrets.token_urlsafe(16)),
-        'is_confirmed': True,
-        'is_demo_bot': True,
-        'is_guest': True,
-        'guest_expires_at': now + datetime.timedelta(minutes=20),
-        'join_date': now,
-        **p_env
-    })
-    p_ins = getattr(p_res, 'inserted_id', None)
-    partner_id = p_ins if isinstance(p_ins, ObjectId) else ObjectId()
+
+    enc1 = m.encrypt_note(note1_content, user_id=guest_id_str)
+    enc2 = m.encrypt_note(note2_content, user_id=guest_id_str)
+    enc3 = m.encrypt_note(note3_content, user_id=guest_id_str)
+
+    m.personal_posts_conf.insert_many([
+        {
+            'user_id': guest_id,
+            'content_owner_id': guest_id,
+            'content': enc1,
+            'encrypted': True,
+            'reference': "Getting Started",
+            'tags': ["Welcome", "Privacy", "Guide"],
+            'created_at': now
+        },
+        {
+            'user_id': guest_id,
+            'content_owner_id': guest_id,
+            'content': enc2,
+            'encrypted': True,
+            'reference': "Confidential",
+            'tags': ["PIN-Protected", "Security"],
+            'is_locked': True,
+            'created_at': now
+        },
+        {
+            'user_id': guest_id,
+            'content_owner_id': guest_id,
+            'content': enc3,
+            'encrypted': True,
+            'reference': "Surprise Idea",
+            'tags': ["Surprise", "Sharing"],
+            'created_at': now
+        }
+    ])
         
     section_names = ['mood','qotd','journal','goals','habits','insights','album','bucketlist','recommendations','pulses','countdowns']
     init_sections = {s: now for s in section_names}

@@ -137,3 +137,79 @@ class TestNetcodeRelayProtocol:
             'SocketIO must be constructed with ping_timeout=120, got: %r' % (calls,)
         assert any('ping_interval' in str(c) and '25' in str(c) for c in calls), \
             'SocketIO must be constructed with ping_interval=25'
+
+    def test_engineio_max_decode_packets_expanded(self):
+        import engineio.payload
+        assert engineio.payload.Payload.max_decode_packets >= 500, \
+            f"Expected max_decode_packets >= 500, got {engineio.payload.Payload.max_decode_packets}"
+
+    def test_c4_move_accepts_reconnected_authenticated_user(self, app):
+        import main as m
+        from bson import ObjectId
+        user_a_id = str(ObjectId())
+        user_b_id = str(ObjectId())
+        room_id = 'test_c4_reconnect'
+        m.active_c4_rooms[room_id] = {
+            'host_sid': 'old_host_sid',
+            'host_name': 'HostUser',
+            'host_user_id': user_a_id,
+            'guest_sid': 'guest_sid',
+            'guest_name': 'GuestUser',
+            'guest_user_id': user_b_id,
+            'board': [[-1] * m.C4_COLS for _ in range(m.C4_ROWS)],
+            'turn': 0,
+            'scores': [0, 0, 0]
+        }
+        handlers = {call.args[0].__name__: call.args[0] for call in m.socketio.on.mock_calls if call.args and callable(call.args[0])}
+        move_fn = handlers.get('handle_c4_move', m.handle_c4_move)
+        try:
+            with app.test_request_context():
+                user_obj = MagicMock()
+                user_obj.is_authenticated = True
+                user_obj.id = user_a_id
+                req = MagicMock()
+                req.sid = 'new_reconnected_sid'
+                with patch.object(m, 'current_user', user_obj), \
+                     patch.object(m, 'request', req), \
+                     patch.object(m, 'join_room') as mock_join, \
+                     patch.object(m, 'emit') as mock_emit:
+                    move_fn({'room_id': room_id, 'col': 3})
+                    # Host sid should have been updated to the new connected sid
+                    assert m.active_c4_rooms[room_id]['host_sid'] == 'new_reconnected_sid'
+                    mock_join.assert_called_with(room_id)
+                    assert mock_emit.called
+                    call_args = mock_emit.call_args
+                    assert call_args[0][0] == 'c4_move_made'
+                    assert call_args[0][1]['col'] == 3
+        finally:
+            m.active_c4_rooms.pop(room_id, None)
+
+    def test_decrypted_media_cache_hit(self):
+        import main as m
+        test_key = 'test_public_id_sample'
+        m._decrypted_media_cache[test_key] = (b'cached_image_bytes', 'image/jpeg')
+        assert test_key in m._decrypted_media_cache
+        data, mime = m._decrypted_media_cache[test_key]
+        assert data == b'cached_image_bytes'
+        assert mime == 'image/jpeg'
+        m._decrypted_media_cache.pop(test_key, None)
+
+    def test_bond_calendar_cache_and_invalidation(self):
+        from blueprints.bonds import _bond_calendar_cache, _invalidate_bond_calendar_cache
+        test_bond_id = 'test_bond_cal_123'
+        cache_key = f"{test_bond_id}:user1:2026-10-01:2026-11-15"
+        _bond_calendar_cache[cache_key] = {'events': [], 'today': '2026-10-27'}
+        assert cache_key in _bond_calendar_cache
+        _invalidate_bond_calendar_cache(test_bond_id)
+        assert cache_key not in _bond_calendar_cache
+
+    def test_send_push_async_delegation(self):
+        from blueprints.bonds import _send_push_async
+        mock_m = MagicMock()
+        mock_fn = MagicMock()
+        mock_fn.queue = MagicMock()
+        mock_m.send_push_notification_to_user = mock_fn
+
+        _send_push_async(mock_m, 'u123', 'Title', 'Body', tag='test-tag')
+        assert mock_fn.queue.called
+        assert not mock_fn.called

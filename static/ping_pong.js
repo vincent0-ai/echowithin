@@ -1130,7 +1130,16 @@
     if (state.socket) return;
     if (typeof io === 'undefined') return;
 
-    state.socket = io();
+    state.socket = io({ transports: ['websocket', 'polling'] });
+    state.socket.on('connect', () => {
+      if (state.roomId) {
+        state.socket.emit('join_pong_room', {
+          room_id: state.roomId,
+          bond_id: state.bondId,
+          tournament_id: state.tournamentId
+        });
+      }
+    });
     window._gameSocket = state.socket;
 
     state.socket.on('pong_room_joined', (data) => {

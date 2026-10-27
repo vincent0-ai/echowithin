@@ -1229,6 +1229,16 @@
       GameState.socket = io({ transports: ['websocket', 'polling'] });
       window._gameSocket = GameState.socket;
 
+      GameState.socket.on('connect', () => {
+        if (GameState.roomId) {
+          GameState.socket.emit('join_slime_room', {
+            room_id: GameState.roomId,
+            bond_id: GameState.bondId,
+            tournament_id: GameState.tournamentId
+          });
+        }
+      });
+
       GameState.socket.on('slime_room_joined', (data) => {
         GameState.roomId = data.room_id;
         window._gameRoomId = data.room_id;

@@ -8,6 +8,33 @@ import random
 import secrets
 from security import limits
 from blueprints.game_registry import BOND_GAME_LABELS, bond_games, game_route
+from cachetools import TTLCache
+
+# In-memory TTL cache for aggregated bond calendar payloads (invalidated on event mutations)
+_bond_calendar_cache = TTLCache(maxsize=512, ttl=60)
+
+def _invalidate_bond_calendar_cache(bond_id):
+    """Purge cached calendar calculations for a bond when events/goals/countdowns mutate."""
+    prefix = f"{str(bond_id)}:"
+    keys = [k for k in list(_bond_calendar_cache.keys()) if k.startswith(prefix)]
+    for k in keys:
+        _bond_calendar_cache.pop(k, None)
+
+def _send_push_async(m, user_id_str, title, body, url=None, tag=None, extra_data=None, category=None):
+    """Dispatch push notification asynchronously via RQ worker if available, avoiding blocking the HTTP request."""
+    fn = getattr(m, 'send_push_notification_to_user', None)
+    if not fn:
+        return
+    try:
+        if hasattr(fn, 'queue'):
+            fn.queue(str(user_id_str), title=title, body=body, url=url, tag=tag, extra_data=extra_data, category=category)
+            return
+    except Exception:
+        pass
+    try:
+        fn(str(user_id_str), title=title, body=body, url=url, tag=tag, extra_data=extra_data, category=category)
+    except Exception:
+        pass
 
 def csrf_exempt(view):
     """Mark view as exempt from CSRF protection."""
@@ -4617,12 +4644,14 @@ def api_bond_habit_toggle(habit_id):
         }, room=f"user_{partner_id}")
 
         if new_status:
-            m.send_push_notification_to_user(
+            _send_push_async(
+                m,
                 partner_id,
                 f"{current_user.username} completed a habit ✓",
                 "Your partner checked off a daily habit.",
                 url=url_for('bonds.bonds_page', _external=True),
-                tag=f'bond-habit-toggle-{habit_id}'
+                tag=f'bond-habit-toggle-{habit_id}',
+                category='habits'
             )
 
         _on_bond_action(bond_doc, 'habits', current_user.id)
@@ -5614,7 +5643,12 @@ def api_bond_calendar_get(bond_id):
         start_date = request.args.get('start', '').strip()
         end_date = request.args.get('end', '').strip()
 
-        calendar_data = _get_aggregated_bond_calendar(bond_doc, start_date, end_date, current_user.id)
+        cache_key = f"{bond_id}:{user_id_str}:{start_date}:{end_date}"
+        calendar_data = _bond_calendar_cache.get(cache_key)
+        if calendar_data is None:
+            calendar_data = _get_aggregated_bond_calendar(bond_doc, start_date, end_date, current_user.id)
+            _bond_calendar_cache[cache_key] = calendar_data
+
         return jsonify({
             'success': True,
             **calendar_data
@@ -5736,14 +5770,17 @@ def api_bond_calendar_create_event(bond_id):
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
 
-        m.send_push_notification_to_user(
+        _send_push_async(
+            m,
             partner_id,
             f"{current_user.username} added a calendar event",
             f'"{title}" on {start_date_str}',
             url=url_for('bonds.bonds_page', _external=True),
-            tag=f'bond-event-{res.inserted_id}'
+            tag=f'bond-event-{res.inserted_id}',
+            category='calendar'
         )
 
+        _invalidate_bond_calendar_cache(bond_id)
         _on_bond_action(bond_doc, 'calendar', current_user.id)
 
         return jsonify({
@@ -5847,7 +5884,8 @@ def api_bond_calendar_edit_event(event_id):
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
 
-        m.send_push_notification_to_user(
+        _send_push_async(
+            m,
             partner_id,
             f"{current_user.username} updated a calendar event",
             f'"{title}" on {start_date_str}',
@@ -5856,6 +5894,7 @@ def api_bond_calendar_edit_event(event_id):
             category='calendar'
         )
 
+        _invalidate_bond_calendar_cache(bond_id)
         _on_bond_action(bond_doc, 'calendar', current_user.id)
 
         return jsonify({'success': True, 'event_id': event_id})
@@ -5905,7 +5944,8 @@ def api_bond_calendar_delete_event(event_id):
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
 
-        m.send_push_notification_to_user(
+        _send_push_async(
+            m,
             partner_id,
             f"{current_user.username} removed a calendar event",
             f'"{event_title}" was removed from the calendar',
@@ -5914,6 +5954,7 @@ def api_bond_calendar_delete_event(event_id):
             category='calendar'
         )
 
+        _invalidate_bond_calendar_cache(bond_id)
         _on_bond_action(bond_doc, 'calendar', current_user.id)
 
         return jsonify({'success': True})
@@ -5973,7 +6014,8 @@ def api_bond_calendar_event_rsvp(event_id):
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
 
-        m.send_push_notification_to_user(
+        _send_push_async(
+            m,
             partner_id,
             f"{current_user.username} responded to \"{event_title}\"",
             f'{current_user.username} said {rsvp_label} for "{event_title}"',
@@ -5982,6 +6024,7 @@ def api_bond_calendar_event_rsvp(event_id):
             category='calendar'
         )
 
+        _invalidate_bond_calendar_cache(bond_id)
         _on_bond_action(bond_doc, 'calendar', current_user.id)
 
         return jsonify({'success': True, 'status': rsvp_status})
@@ -8423,7 +8466,8 @@ def api_bond_challenge(bond_id):
 
     # Push notification
     try:
-        m.send_push_notification_to_user(
+        _send_push_async(
+            m,
             partner_id,
             title=f"{current_user.username} challenged you!",
             body=f"Play {BOND_GAME_LABELS[game]} in your bond space",

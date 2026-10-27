@@ -323,9 +323,15 @@
         // Optimistic UI (Commit 4): start the drop animation instantly;
         // finishDrop paints only (no turn flip / win eval / sound — the
         // server echo does all three). Silent here avoids double sound.
-        state.echoPending = { col, player: state.myPlayer };
+        const moveSeq = Date.now();
+        state.echoPending = { col, player: state.myPlayer, seq: moveSeq };
         startDropAnimation(col, getDropRow(col), state.turn);
         state.socket.emit('c4_move', { room_id: state.roomId, col });
+        setTimeout(() => {
+          if (state.echoPending && state.echoPending.seq === moveSeq) {
+            state.echoPending = null;
+          }
+        }, 5000);
       }
       return;
     }
@@ -880,6 +886,16 @@
     state.socket = io({ transports: ['websocket', 'polling'] });
     window._gameSocket = state.socket;
 
+    state.socket.on('connect', () => {
+      if (state.roomId) {
+        state.socket.emit('join_c4_room', {
+          room_id: state.roomId,
+          bond_id: state.bondId,
+          tournament_id: state.tournamentId
+        });
+      }
+    });
+
     state.socket.on('c4_room_joined', data => {
       state.roomId = data.room_id;
       window._gameRoomId = data.room_id;
@@ -887,10 +903,18 @@
       state.myPlayer = data.player;
       state.opponentJoined = !!data.guest_name;
       state.opponentName = data.is_host ? (data.guest_name || 'Opponent') : (data.host_name || 'Host');
+      state.echoPending = null;
 
       if (state.opponentJoined) {
         setMatchStatus(`Match Found! Playing vs ${state.opponentName} (You are ${state.myPlayer === 0 ? 'Amber' : 'Gold'})`, 'found');
-        resetGame();
+        if (data && data.board) {
+          state.board = data.board;
+        } else {
+          resetGame();
+        }
+        if (data && data.scores) {
+          state.scores = data.scores;
+        }
         if (data && data.turn !== undefined && data.turn !== null) {
           state.turn = data.turn;
         }

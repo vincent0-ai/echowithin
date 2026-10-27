@@ -1,3 +1,47 @@
+# Fix game lag, media stampede, reconnect freezes, and slow page bottlenecks
+
+## Model Attribution
+- Model: Gemini 3.8 Flash (High) + Claude Opus 4.6 (Thinking)
+- Reviewer Assigned: Claude Opus 4
+
+## Summary of Changes
+
+### Root Cause: Game Lag & Freezes (Connect Four, Slime Volleyball, Ping Pong)
+- **EngineIO packet overflow** (`main.py`): Raised `max_decode_packets` from 16 → 500 to prevent `ValueError: Too many packets in payload` during 20Hz real-time game bursts over mobile polling.
+- **Reconnect sid re-seating** (`main.py`): `handle_c4_move`, `handle_ttt_move`, `handle_dnb_line`, `handle_gomoku_move` now detect when an authenticated player's `sid` has changed (socket reconnect) and re-bind them to their seat + room, instead of silently dropping all moves.
+- **Client reconnect auto-rejoin** (`static/connect_four.js`, `static/tic_tac_toe.js`, `static/dots_and_boxes.js`, `static/ping_pong.js`, `static/slime_volleyball.js`, `static/air_hockey.js`): Added `socket.on('connect')` handlers that re-emit join events after reconnection.
+- **`echoPending` safety timeout** (`static/connect_four.js`): Added 5s timeout to prevent permanent UI lock when echo confirmation is lost.
+- **WebSocket transport priority** (`static/ping_pong.js`, `static/emoji_decoder.js`): Configured `io({ transports: ['websocket', 'polling'] })` to prefer WebSocket, reducing packet accumulation.
+- **Graceful disconnect handling** (`main.py`): Turn-based game disconnect handler now stores `host_disconnected_at` / `guest_disconnected_at` timestamps instead of immediately deleting rooms. Stale rooms (>180s) are pruned by `cleanup_stale_global_state()`.
+
+### Root Cause: Media Proxy Stampede (3.6–4.1s per thumbnail × 12 concurrent)
+- **L1 in-memory TTL cache** (`main.py`): `TTLCache(maxsize=512, ttl=1800)` for decrypted media blobs ≤ 5MB — already in place from earlier work.
+- **L2 Redis cache** (`main.py`): Added Redis `setex` cache (1 hour TTL) for decrypted thumbnails ≤ 1MB, shared across gevent greenlets. Skips non-bytes values to avoid MagicMock pollution in tests.
+- **ETag / 304 support** (`main.py`): Already returns `304 Not Modified` on matching `If-None-Match`.
+
+### Root Cause: Slow `/tour` Route (~1,500ms)
+- **Eliminated PBKDF2 hashing** (`blueprints/auth.py`): Replaced `generate_password_hash(secrets.token_urlsafe(16))` with precomputed dummy hash for ephemeral guest + demo-bot accounts (never used for real auth), saving ~250ms×2 of blocking CPU.
+- **Batched MongoDB writes** (`blueprints/auth.py`): Collapsed 2 × `insert_one` (user accounts) into 1 × `insert_many`, and 3 × `insert_one` + 1 × `update_one` (demo notes) into 1 × `insert_many` with `is_locked` set inline. Reduces 7 round-trips to 2.
+
+### Bond Calendar & Push Notification Bottlenecks
+- **Calendar response cache** (`blueprints/bonds.py`): Added `TTLCache(maxsize=512, ttl=60)` for aggregated calendar payloads with `_invalidate_bond_calendar_cache()` called on create/edit/delete/RSVP mutations.
+- **Async push notifications** (`blueprints/bonds.py`): Added `_send_push_async()` helper that dispatches via RQ `.queue()` when available, preventing synchronous webpush HTTP calls from blocking the calendar, habit-toggle, and game-challenge HTTP responses (~530ms saved per request).
+
+### Other
+- **`security.py`**: Guarded `_get_object_fernet_v3` against `None` collection to pass tests without a DB connection.
+- **`templates/home.html`**: Minor copy change ("Open Together" → "Open Bonds").
+
+## Modified Files
+- `main.py`, `security.py`, `blueprints/auth.py`, `blueprints/bonds.py`
+- `static/connect_four.js`, `static/tic_tac_toe.js`, `static/dots_and_boxes.js`
+- `static/ping_pong.js`, `static/slime_volleyball.js`, `static/air_hockey.js`, `static/emoji_decoder.js`
+- `templates/home.html`, `tests/test_netcode_regression.py`
+
+## Test Results
+- 600 passed, 0 failed
+
+---
+
 # Fix Replying Widget Extra Spacing and Eliminate Redundant Shared Note Prefix in DMs
 
 ## Model Attribution

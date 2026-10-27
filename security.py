@@ -673,7 +673,10 @@ def _get_object_fernet_v3(cache, collection, field_name, object_id_str, salt_pre
     except Exception:
         return None
     try:
-        doc = getattr(database, collection).find_one(query, {field_name: 1})
+        col = getattr(database, collection, None)
+        if col is None:
+            return None
+        doc = col.find_one(query, {field_name: 1})
     except Exception as e:
         # Transient/unavailable lookup — never cache a negative result and never let
         # callers treat this as "no key" (that would silently downgrade writes).

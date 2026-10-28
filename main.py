@@ -1442,7 +1442,23 @@ def record_match_result(game, room_id, players, winner_id, score=None, metadata=
             upsert=True
         )
 
-    # Upsert bond head-to-head if bond_id is provided
+    # Auto-detect bond when both players are bond partners but joined outside
+    # a bond challenge (e.g. via the games page or matchmaking).
+    if not bond_id:
+        try:
+            auto_bond = bonds_conf.find_one({
+                'status': 'active',
+                '$or': [
+                    {'user_a_id': ObjectId(p1_id), 'user_b_id': ObjectId(p2_id)},
+                    {'user_a_id': ObjectId(p2_id), 'user_b_id': ObjectId(p1_id)}
+                ]
+            }, {'_id': 1})
+            if auto_bond:
+                bond_id = str(auto_bond['_id'])
+        except Exception as e:
+            app.logger.warning(f"Bond auto-detect failed for match {room_id}: {e}")
+
+    # Upsert bond head-to-head if bond_id is known (explicit or auto-detected)
     if bond_id:
         try:
             bond_oid = ObjectId(bond_id)

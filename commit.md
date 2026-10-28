@@ -258,3 +258,22 @@
 - **Validation**:
   - 9 focused circle tests passed (`tests/test_circles.py`).
   - Full project test suite passed (596 tests, 0 failures).
+
+# Fix circles data races, missing notifications, memory-match tracking, mobile card reveal
+## Model Attribution
+- Model: Gemini 3.8 Flash (High) + Claude Opus 4.6 (Thinking)
+- Reviewer Assigned: Claude Opus 4
+
+## Files changed
+- blueprints/circles.py: atomic reaction toggle, optimistic-lock encrypted-blob writes (poll votes, RSVP), sanitized export filename, batched pending-request user fetch, muted_by cleanup on remove/leave
+- blueprints/circles.py: member push notifications on message/post/comment honoring muted_by; content-free push copy
+- main.py: memory_match added to GAMES_WITH_MATCH_TRACKING; once-per-board result recorded on completion (winner = most pairs, tie = draw); flag reset on new deal
+- templates/memory_match.html: <=600px cards switch from 3D flip to opacity cross-fade (fixes clipped/flash-of-back reveal on mobile); matched highlight uses solid tint + pop (box-shadow glow dropped by Safari)
+- tests: test_circles.py (14), test_game_stats.py (3) all passing
+
+## Design decisions
+- Poll votes/RSVP stay in the encrypted per-circle blob; guarded by updated_at optimistic lock with 5 retries, 409 surfaced to user on contention rather than silent vote loss
+- Co-op games (Emoji Decoder, Word Duet, Sudoku, Crossword, This or That) intentionally NOT tracked — no clean 1v1 winner
+
+## Privacy impact
+- New push notifications carry member content only in titles as usernames + circle name; body text is content-free; muted_by respected on every path

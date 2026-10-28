@@ -17,7 +17,6 @@ from security import encrypt_community_note, decrypt_community_note, parse_iso_u
 bp = Blueprint('circles', __name__, template_folder='templates')
 
 CIRCLE_TYPES = {
-    'couple': ('Couple', 'Mood, memories, anniversaries, and a shared journal.'),
     'friends': ('Friends', 'Events, polls, games, and a photo album.'),
     'study': ('Study', 'Goals, schedules, and focus sessions.'),
     'family': ('Family', 'Calendar, announcements, and shared photos.'),
@@ -1150,6 +1149,40 @@ def change_member_role(circle_id, member_id):
     if role not in ('moderator', 'member'):
         abort(400)
     m.circles_conf.update_one({'_id': circle['_id']}, {'$set': {'roles.' + str(member_oid): role, 'updated_at': _now()}})
+    return _redirect(circle_id)
+
+
+@bp.route('/circle/<circle_id>/transfer', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def transfer_ownership(circle_id):
+    """Hand ownership to an existing member. Single atomic flip: the new
+    owner's role row and owner_id move together, so there is never a moment
+    with two owners or none.
+    """
+    import main as m
+    circle = _get_circle(circle_id)
+    if str(circle.get('owner_id')) != str(current_user.id):
+        abort(403)
+    new_owner_oid = _oid(request.form.get('new_owner_id', ''))
+    if new_owner_oid == circle.get('owner_id') or new_owner_oid not in circle.get('members', []):
+        abort(400)
+    now = _now()
+    # One update: owner_id swap, both role rows, and current_user's mute
+    # setting cleanup in a single atomic $set/$unset.
+    m.circles_conf.update_one(
+        {'_id': circle['_id'], 'owner_id': circle.get('owner_id')},
+        {
+            '$set': {
+                'owner_id': new_owner_oid,
+                f'roles.{new_owner_oid}': 'owner',
+                f'roles.{current_user.id}': 'moderator',
+                'updated_at': now
+            }
+        }
+    )
+    new_owner = m.users_conf.find_one({'_id': new_owner_oid}, {'username': 1})
+    flash(f"Ownership transferred to {new_owner.get('username', 'member') if new_owner else 'member'}.", 'success')
     return _redirect(circle_id)
 
 

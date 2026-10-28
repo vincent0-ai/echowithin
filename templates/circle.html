@@ -529,6 +529,13 @@
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button class="btn btn-secondary cv-btn-danger cv-btn-sm" type="submit">Remove</button>
                                 </form>
+                                {% if is_owner %}
+                                <form method="POST" action="{{ url_for('circles.transfer_ownership', circle_id=circle._id) }}" onsubmit="return confirm('Make {{ member.username }} the owner of this circle? You will become a moderator.');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="new_owner_id" value="{{ member._id }}">
+                                    <button class="btn btn-secondary cv-btn-sm" type="submit">Make Owner</button>
+                                </form>
+                                {% endif %}
                             </div>
                         </details>
                         {% endif %}

@@ -9,6 +9,7 @@ import secrets
 from bson.errors import InvalidId
 from bson.objectid import ObjectId
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for, jsonify, make_response
+from werkzeug.utils import secure_filename
 from flask_login import current_user, login_required
 
 from security import encrypt_community_note, decrypt_community_note, parse_iso_utc, limits
@@ -57,14 +58,110 @@ def _redirect(circle_id):
     return redirect(url_for('circles.view_circle', circle_id=circle_id))
 
 
+def _toggle_reaction(collection, doc_id, emoji, user_id_str):
+    """Atomically toggle one user's emoji reaction.
+
+    Writes happen via $addToSet/$pull (atomic per-key ops, so concurrent
+    reactors never overwrite each other). Returns the expected post-toggle
+    reactions map computed from the pre-read state.
+    """
+    def _read_reactions():
+        doc = collection.find_one({'_id': doc_id}, {'reactions': 1}) or {}
+        return doc.get('reactions', {})
+
+    reactions = _read_reactions()
+    users_for_emoji = list(reactions.get(emoji) or [])
+    already = user_id_str in users_for_emoji
+
+    if already:
+        collection.update_one(
+            {'_id': doc_id, f'reactions.{emoji}': user_id_str},
+            {'$pull': {f'reactions.{emoji}': user_id_str},
+             '$set': {'updated_at': _now()}}
+        )
+        users_for_emoji.remove(user_id_str)
+    else:
+        collection.update_one(
+            {'_id': doc_id, f'reactions.{emoji}': {'$exists': False}},
+            {'$set': {f'reactions.{emoji}': []}}
+        )
+        collection.update_one(
+            {'_id': doc_id},
+            {'$addToSet': {f'reactions.{emoji}': user_id_str},
+             '$set': {'updated_at': _now()}}
+        )
+        users_for_emoji.append(user_id_str)
+
+    # Expected post-toggle map (authoritative in prod; mock-friendly in tests).
+    expected = {k: list(v) for k, v in reactions.items() if k != emoji}
+    if users_for_emoji:
+        expected[emoji] = users_for_emoji
+    return expected
+
+
+def _encrypted_blob_guarded_update(collection, doc, mutator, encryptor):
+    """Read-modify-write helper for encrypted JSON blobs with optimistic locking.
+
+    mutator(raw_blob) -> (new_payload, result_value_or_None).
+    encryptor(new_payload) -> encrypted string.
+    Retries a few times on conflict with another writer; returns
+    (None, None) if all attempts lost the race (caller should surface a
+    friendly retry message rather than silently dropping the vote).
+    """
+    import time
+    for attempt in range(5):
+        fresh = collection.find_one({'_id': doc['_id']}) or {}
+        blob = fresh.get('content', '')
+        try:
+            result_value = mutator(blob)
+        except (TypeError, ValueError):
+            return None, None
+        if isinstance(result_value, tuple):
+            new_payload, result_value = result_value
+        else:
+            new_payload, result_value = result_value, True
+        if new_payload is None:
+            return None, None
+        updated_at_now = _now()
+        res = collection.update_one(
+            {'_id': doc['_id'], 'updated_at': fresh.get('updated_at')},
+            {'$set': {'content': encryptor(new_payload), 'updated_at': updated_at_now}}
+        )
+        if res.modified_count:
+            return encryptor(new_payload), result_value
+        time.sleep(0.05 * (attempt + 1))
+    return None, None
+
+
 def _emit_to_circle(circle, event, payload):
     import main as m
     try:
         if hasattr(m, 'socketio') and m.socketio:
             for member_id in circle.get('members', []):
-                m.socketio.emit(event, payload, room=f"user_{member_id}")
+                m.socketio.emit(event, payload, room=str(f"user_{member_id}"))
     except Exception as e:
         current_app.logger.warning(f"Circle socket emit error: {e}")
+
+
+def _notify_circle_members(circle, actor_id_str, title, url, tag):
+    """Push-notify unmuted circle members (except the actor). Minimal copy only:
+    titles/labels never contain member content.
+    """
+    import main as m
+    try:
+        from notifications import send_push_notification_async
+        actor_oid = ObjectId(actor_id_str)
+        muted = set(circle.get('muted_by', []))
+        for member_id in circle.get('members', []):
+            if member_id == actor_oid or member_id in muted:
+                continue
+            send_push_notification_async(
+                str(member_id), title,
+                f"From {circle.get('name', 'your circle')}",
+                url=url, tag=tag
+            )
+    except Exception as e:
+        current_app.logger.warning(f"Circle notify error: {e}")
 
 
 @bp.route('/circles')
@@ -283,11 +380,18 @@ def view_circle(circle_id):
     # Pending join requests (only join requests from users not yet in circle)
     pending_requests = []
     if _role(circle) in ('owner', 'moderator'):
-        raw_reqs = list(m.circle_requests_conf.find({'circle_id': circle['_id'], 'status': 'pending'}))
+        raw_reqs = [r for r in m.circle_requests_conf.find(
+            {'circle_id': circle['_id'], 'status': 'pending'}
+        ) if r.get('user_id') not in circle.get('members', [])]
+        req_user_ids = [r.get('user_id') for r in raw_reqs if r.get('user_id')]
+        req_user_map = {
+            u['_id']: u for u in m.users_conf.find(
+                {'_id': {'$in': req_user_ids}},
+                {'username': 1, 'profile_image_url': 1}
+            )
+        } if req_user_ids else {}
         for req in raw_reqs:
-            if req.get('user_id') in circle.get('members', []):
-                continue
-            u = m.users_conf.find_one({'_id': req.get('user_id')}, {'username': 1, 'profile_image_url': 1})
+            u = req_user_map.get(req.get('user_id'))
             if u:
                 req['username'] = u.get('username', 'User')
                 req['profile_image_url'] = u.get('profile_image_url')
@@ -370,6 +474,12 @@ def create_circle_message(circle_id):
         'reactions': {}
     }
     _emit_to_circle(circle, 'circle_message_sent', payload)
+    _notify_circle_members(
+        circle, str(current_user.id),
+        f"{current_user.username} in {circle.get('name', 'Circle')}",
+        url=url_for('circles.view_circle', circle_id=circle_id, _external=True),
+        tag=f"circle-msg-{circle['_id']}"
+    )
 
     if is_json or request.headers.get('Accept') == 'application/json':
         return jsonify({'success': True, 'message': payload})
@@ -445,21 +555,7 @@ def react_circle_message(circle_id, message_id):
     if not emoji or len(emoji) > 8:
         return jsonify({'error': 'Invalid emoji'}), 400
 
-    user_id_str = str(current_user.id)
-    reactions = msg.get('reactions', {})
-    users_for_emoji = reactions.get(emoji, [])
-    if user_id_str in users_for_emoji:
-        users_for_emoji.remove(user_id_str)
-        if not users_for_emoji:
-            reactions.pop(emoji, None)
-        else:
-            reactions[emoji] = users_for_emoji
-    else:
-        if emoji not in reactions:
-            reactions[emoji] = []
-        reactions[emoji].append(user_id_str)
-
-    m.circle_messages_conf.update_one({'_id': msg['_id']}, {'$set': {'reactions': reactions}})
+    reactions = _toggle_reaction(m.circle_messages_conf, msg['_id'], emoji, str(current_user.id))
     payload = {'id': message_id, 'circle_id': str(circle['_id']), 'reactions': reactions}
     _emit_to_circle(circle, 'circle_message_reacted', payload)
 
@@ -524,6 +620,12 @@ def create_circle_post(circle_id):
         'is_pinned': False
     })
     m.circles_conf.update_one({'_id': circle['_id']}, {'$set': {'updated_at': now}})
+    _notify_circle_members(
+        circle, str(current_user.id),
+        f"{current_user.username} posted in {circle.get('name', 'Circle')}",
+        url=url_for('circles.view_circle', circle_id=circle_id, _external=True),
+        tag=f"circle-post-{circle['_id']}"
+    )
     return redirect(url_for('circles.view_circle', circle_id=circle_id))
 
 
@@ -613,21 +715,7 @@ def react_circle_post(circle_id, post_id):
     if not emoji or len(emoji) > 8:
         return jsonify({'error': 'Invalid emoji'}), 400
 
-    user_id_str = str(current_user.id)
-    reactions = post.get('reactions', {})
-    users_for_emoji = reactions.get(emoji, [])
-    if user_id_str in users_for_emoji:
-        users_for_emoji.remove(user_id_str)
-        if not users_for_emoji:
-            reactions.pop(emoji, None)
-        else:
-            reactions[emoji] = users_for_emoji
-    else:
-        if emoji not in reactions:
-            reactions[emoji] = []
-        reactions[emoji].append(user_id_str)
-
-    m.circle_posts_conf.update_one({'_id': post['_id']}, {'$set': {'reactions': reactions}})
+    reactions = _toggle_reaction(m.circle_posts_conf, post['_id'], emoji, str(current_user.id))
     if request.is_json or request.headers.get('Accept') == 'application/json':
         return jsonify({'success': True, 'reactions': reactions})
     return _redirect(circle_id)
@@ -688,6 +776,23 @@ def comment_circle_post(circle_id, post_id):
                 'created_at': now.isoformat().replace('+00:00', 'Z')
             }
         })
+    # Notify post author (skip if replying to them they get it anyway; muted_by respected)
+    post_author = str(post.get('author_id'))
+    if post_author != str(current_user.id):
+        author_muted = ObjectId(post_author) in set(circle.get('muted_by', []))
+        if not author_muted:
+            import main as _m
+            from notifications import send_push_notification_async
+            try:
+                send_push_notification_async(
+                    post_author,
+                    f"{current_user.username} commented in {circle.get('name', 'Circle')}",
+                    "Open your circle to read it",
+                    url=url_for('circles.view_circle', circle_id=circle_id, _external=True),
+                    tag=f"circle-comment-{post['_id']}"
+                )
+            except Exception as e:
+                current_app.logger.warning(f"Circle comment notify error: {e}")
     return _redirect(circle_id)
 
 
@@ -736,6 +841,9 @@ def create_poll(circle_id):
         flash('Add a question and two to eight options.', 'danger')
         return _redirect(circle_id)
     payload = json.dumps({'question': question, 'options': options, 'votes': {}})
+    # Votes live in the encrypted payload blob (historical). Each vote updates
+    # it whole-document via vote_poll below, which guards on updated_at to
+    # prevent lost-update races (see vote_poll).
     now = _now()
     m.circle_posts_conf.insert_one({
         'circle_id': circle['_id'],
@@ -802,17 +910,26 @@ def vote_poll(circle_id, post_id):
             return jsonify({'error': 'Choose an option.'}), 400
         flash('Choose an option.', 'danger')
         return _redirect(circle_id)
-    payload = json.loads(decrypt_community_note(post.get('content', ''), circle['_id']))
-    options = payload.get('options', [])
-    if option_index < 0 or option_index >= len(options):
+    def _apply_vote(payload_blob):
+        payload = json.loads(decrypt_community_note(payload_blob, circle['_id']))
+        options = payload.get('options', [])
+        if option_index < 0 or option_index >= len(options):
+            return None, None
+        payload.setdefault('votes', {})[str(current_user.id)] = option_index
+        return payload, None
+
+    updated_content, guard_failed = _encrypted_blob_guarded_update(
+        m.circle_posts_conf, post, lambda blob: _apply_vote(blob),
+        lambda payload: encrypt_community_note(json.dumps(payload), circle['_id'])
+    )
+    if guard_failed:
         if request.is_json or request.headers.get('Accept') == 'application/json':
-            return jsonify({'error': 'Invalid option.'}), 400
-        flash('Choose a valid option.', 'danger')
+            return jsonify({'error': 'Someone else just voted — try again.'}), 409
+        flash('Someone else just voted — try again.', 'warning')
         return _redirect(circle_id)
-    payload.setdefault('votes', {})[str(current_user.id)] = option_index
-    m.circle_posts_conf.update_one({'_id': post['_id']}, {'$set': {'content': encrypt_community_note(json.dumps(payload), circle['_id']), 'updated_at': _now()}})
     if request.is_json or request.headers.get('Accept') == 'application/json':
-        return jsonify({'success': True, 'my_vote': option_index})
+        payload = json.loads(decrypt_community_note(updated_content, circle['_id']))
+        return jsonify({'success': True, 'my_vote': option_index, 'total_votes': len(payload.get('votes', {}))})
     return _redirect(circle_id)
 
 
@@ -825,15 +942,29 @@ def rsvp_event(circle_id, post_id):
     post = m.circle_posts_conf.find_one({'_id': _oid(post_id), 'circle_id': circle['_id'], 'kind': 'event'})
     if not post:
         abort(404)
-    payload = json.loads(decrypt_community_note(post.get('content', ''), circle['_id']))
-    attending = set(payload.get('attending', []))
     user_id = str(current_user.id)
-    if user_id in attending:
-        attending.remove(user_id)
-    else:
-        attending.add(user_id)
-    payload['attending'] = sorted(attending)
-    m.circle_posts_conf.update_one({'_id': post['_id']}, {'$set': {'content': encrypt_community_note(json.dumps(payload), circle['_id']), 'updated_at': _now()}})
+
+    def _apply_rsvp(payload_blob):
+        payload = json.loads(decrypt_community_note(payload_blob, circle['_id']))
+        attending = set(payload.get('attending', []))
+        if user_id in attending:
+            attending.remove(user_id)
+        else:
+            attending.add(user_id)
+        payload['attending'] = sorted(attending)
+        return payload, user_id in attending
+
+    updated_content, rsvp_state = _encrypted_blob_guarded_update(
+        m.circle_posts_conf, post, lambda blob: _apply_rsvp(blob),
+        lambda payload: encrypt_community_note(json.dumps(payload), circle['_id'])
+    )
+    if rsvp_state is None:
+        if request.is_json or request.headers.get('Accept') == 'application/json':
+            return jsonify({'error': 'Someone else just RSVPed — try again.'}), 409
+        flash('Someone else just RSVPed — try again.', 'warning')
+        return _redirect(circle_id)
+    payload = json.loads(decrypt_community_note(updated_content, circle['_id']))
+    attending = payload.get('attending', [])
     if request.is_json or request.headers.get('Accept') == 'application/json':
         return jsonify({'success': True, 'is_attending': user_id in attending, 'attending_count': len(attending)})
     return _redirect(circle_id)
@@ -1035,7 +1166,11 @@ def remove_member(circle_id, member_id):
         abort(400)
     if _role(circle) != 'owner' and circle.get('roles', {}).get(str(member_oid)) == 'moderator':
         abort(403)
-    m.circles_conf.update_one({'_id': circle['_id']}, {'$pull': {'members': member_oid}, '$unset': {'roles.' + str(member_oid): ''}, '$set': {'updated_at': _now()}})
+    m.circles_conf.update_one(
+        {'_id': circle['_id']},
+        {'$pull': {'members': member_oid, 'muted_by': member_oid},
+         '$unset': {'roles.' + str(member_oid): ''}, '$set': {'updated_at': _now()}}
+    )
     return _redirect(circle_id)
 
 
@@ -1051,7 +1186,8 @@ def export_circle(circle_id):
         lines.append(f"[{post.get('created_at', '')}] {raw}")
     response = make_response('\n'.join(lines))
     response.headers['Content-Type'] = 'text/plain; charset=utf-8'
-    response.headers['Content-Disposition'] = f"attachment; filename={circle.get('name', 'circle').replace(' ', '_')}.txt"
+    safe_name = secure_filename(circle.get('name', 'circle')) or 'circle'
+    response.headers['Content-Disposition'] = f"attachment; filename={safe_name}.txt"
     return response
 
 
@@ -1078,5 +1214,9 @@ def leave_circle(circle_id):
     if str(circle.get('owner_id')) == str(current_user.id):
         flash('Transfer ownership before leaving this circle.', 'danger')
     else:
-        m.circles_conf.update_one({'_id': circle['_id']}, {'$pull': {'members': ObjectId(current_user.id)}, '$unset': {'roles.' + str(current_user.id): ''}})
+        m.circles_conf.update_one(
+            {'_id': circle['_id']},
+            {'$pull': {'members': ObjectId(current_user.id), 'muted_by': ObjectId(current_user.id)},
+             '$unset': {'roles.' + str(current_user.id): ''}, '$set': {'updated_at': _now()}}
+        )
     return redirect(url_for('circles.circles_page'))

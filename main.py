@@ -1300,7 +1300,7 @@ database.community_tournaments_conf = community_tournaments_conf
 
 # --- Match History Recording & ELO ---
 GAMES_WITH_MATCH_TRACKING = ('tic_tac_toe', 'connect_four', 'dots_and_boxes', 'ping_pong', 'slime_volleyball',
-                             'gomoku', 'whack_a_mole', 'air_hockey')
+                             'gomoku', 'whack_a_mole', 'air_hockey', 'memory_match')
 ELO_DEFAULT = 1200
 ELO_FLOOR = 100
 
@@ -2690,6 +2690,7 @@ def handle_memory_start_game(data=None, *args, **kwargs):
     room_info['turn'] = 1
     room_info['flipped'] = []
     room_info['matched'] = set()
+    room_info['result_recorded'] = False
     emit('memory_start_game', {
         'size': room_info['content']['size'],
         'cards': room_info['content']['cards'],
@@ -2749,6 +2750,28 @@ def handle_memory_flip_card(data=None, *args, **kwargs):
     }, room=room_id)
     if not is_match:
         emit('memory_turn_change', {'turn': room_info['turn']}, room=room_id)
+
+    # Record the finished duel once (competitive Memory Match has a winner:
+    # most pairs matched). Restart resets the flag via memory_start_game.
+    if complete and room_info.get('host_user_id') and room_info.get('guest_user_id') \
+            and not room_info.get('result_recorded'):
+        scores = room_info.get('scores', {})
+        s1, s2 = scores.get('1', 0), scores.get('2', 0)
+        winner_id = None
+        if s1 != s2:
+            winner_id = room_info['host_user_id'] if s1 > s2 else room_info['guest_user_id']
+        record_match_result(
+            game='memory_match', room_id=room_id,
+            players=[
+                {'user_id': room_info['host_user_id'], 'username': room_info.get('host_name', 'P1'), 'side': '1'},
+                {'user_id': room_info['guest_user_id'], 'username': room_info.get('guest_name', 'P2'), 'side': '2'}
+            ],
+            winner_id=winner_id,
+            score={'p1': s1, 'p2': s2},
+            metadata={'mode': 'online'},
+            bond_id=room_info.get('bond_id')
+        )
+        room_info['result_recorded'] = True
 
 # --- Multiplayer Matchmaking Helper ---
 def broadcast_matchmaking_queue(queue, event_name):

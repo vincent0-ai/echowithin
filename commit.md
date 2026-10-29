@@ -294,3 +294,10 @@
 - Privacy impact: unchanged — uploads remain server-side encrypted before Cloudinary; temp files deleted in finally
 - Tests: 623 passed locally; pushed to origin/main
 - Model attribution: Claude (agent)
+
+## 720p compression fallback (e53cac0)
+- Context: user's real-world video compressed to 10.4MB on an online tool — still over Cloudinary's 10MB raw cap. Adds a third FFmpeg pass that downscales to 720p (after bitrate pass + 70% retry both miss) so compression matches what online tools achieve.
+- video_utils.py: `_run_ffmpeg` gains a `scale` param; fallback chain = bitrate pass → 70% retry → 720p downscale with recomputed bitrate → clear failure message.
+- Verified locally with FFmpeg: 56.9MB/400s/1080p → 5.8MB pass 1 (fits); 720p fallback chain independently verified at 8.4MB.
+- Tests: 623 passed; pushed to origin/main.
+- Model attribution: Claude (agent)

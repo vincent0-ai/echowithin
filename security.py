@@ -1049,7 +1049,12 @@ def _get_media_fernet():
 
 
 def encrypt_media_bytes(data):
-    """Encrypts raw media bytes for storage. Accepts bytes/bytearray or a file-like object."""
+    """Encrypts raw media bytes for storage. Accepts bytes/bytearray or a file-like object.
+
+    WARNING: peaks at roughly 7x the payload size in RAM (the base64 + CBC
+    pipeline copies the buffer several times). Callers handling large media
+    should drop their plaintext reference immediately after this returns.
+    """
     if data is None:
         return None
     if hasattr(data, 'read'):

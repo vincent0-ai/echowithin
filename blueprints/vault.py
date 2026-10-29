@@ -562,8 +562,11 @@ def vault_upload():
                 out.write(chunk)
 
         upload_bytes, mime = _prepare_for_cloudinary(raw_path, mime)
+        # Encrypt last so only one large buffer is live at a time. Fernet peaks at
+        # several times the payload, so holding the plaintext too roughly doubles
+        # worst-case RAM for big videos.
         encrypted_bytes = encrypt_media_bytes(upload_bytes)
-        del upload_bytes
+        upload_bytes = None  # release the plaintext reference before uploading
         upload_result = cloudinary.uploader.upload(
             encrypted_bytes,
             folder='vault_items',

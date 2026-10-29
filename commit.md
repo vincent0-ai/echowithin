@@ -301,3 +301,13 @@
 - Verified locally with FFmpeg: 56.9MB/400s/1080p → 5.8MB pass 1 (fits); 720p fallback chain independently verified at 8.4MB.
 - Tests: 623 passed; pushed to origin/main.
 - Model attribution: Claude (agent)
+
+## Root cause of vault large-upload failures (06b5974)
+- Real bug: Cloudinary caps the ENCRYPTED payload at 10MB, but Fernet inflates data ~1.334x. The code compressed videos to 10MB of *plaintext*, which encrypts to ~14MB and is always rejected (the recurring `Got 12478284. Maximum is 10485760`).
+- Effective plaintext ceiling is now 7.50 MiB (computed, not guessed): any video over that is compressed before upload, so uploads that used to fail now either fit or return a clear message instead of burning CPU for 80s.
+- security.py: added `encrypted_size_for()` and `max_plaintext_for_encrypted_limit()`, derived from cryptography.fernet's actual token layout (PKCS7 + 57-byte header + base64). Verified against real Fernet output across 14 sizes.
+- blueprints/vault.py, blueprints/chat.py (DM/Whisper image+video): compress against the plaintext budget instead of the encrypted cap.
+- tests/test_encrypted_size_budget.py: 24 regression tests, including one asserting the OLD behaviour would overflow.
+- Note: videos longer than ~5-6 min still cannot fit 10MB at watchable quality by design; they now get a fast, clear error.
+- Tests: 647 passed.
+- Model attribution: Claude (agent)

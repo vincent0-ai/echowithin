@@ -538,7 +538,24 @@
     lastHostSeq: -1,   // last accepted host seq (stale-drop, Commit 2)
     lastInputSeq: 0,   // host-side: newest guest input seq seen (echoed as ack)
     hostAck: 0,        // guest-side: newest input seq the host has acked
-    lastHostRally: 0   // guest-side: last rallyCount seen (bounce SFX trigger)
+    lastHostRally: 0,  // guest-side: last rallyCount seen (bounce SFX trigger)
+    // Interpolation snapshots for smooth remote movement
+    p1Buffer: [],
+    p2Buffer: [],
+    // Server-assigned match generation. Every ranked award is keyed by
+    // (room, matchNo): a late snapshot or duplicate end-of-match report from
+    // an older generation can never pay out twice.
+    matchNo: 0,
+    resolvedMatchNo: -1,
+    rematchRequested: false,
+    localRestartPending: false,
+    opponentWantsRematch: false,
+    // Connection quality (green/yellow/red chip), fed by net_ping RTT.
+    rttMs: 0,
+    lastPingAt: 0,
+    // Host-side paddle path, used to resolve the host's own collisions at
+    // the same input age the guest pays over the network.
+    ownHist: []
   };
 
   function applyDifficulty(diff) {
@@ -625,6 +642,54 @@
     GameState.ball.vy = 8 * (cfg.serveSpeedScale || 1.0);
     GameState.serveState = 'PLAYING';
     if (!GameState.isPaused) SFX.whistle();
+  }
+
+  // --- Host input delay (fairness) -----------------------------------------
+  // The guest's input needs ~RTT/2 to reach the host, so the host resolves its
+  // own hits against where its slime actually was RTT/2 ago. Rendering stays
+  // instant; only collision resolution is delayed, which removes the host's
+  // built-in reaction head start without rewriting the simulation.
+  const HOST_INPUT_DELAY_MAX_MS = 120;
+
+  function hostShadowSlime() {
+    if (!(GameState.mode === 'online' && GameState.isHost)) return GameState.p1;
+    const delay = Math.min(HOST_INPUT_DELAY_MAX_MS, Math.max(0, (GameState.rttMs || 0) / 2));
+    const hist = GameState.ownHist;
+    if (delay < 12 || !hist.length) return GameState.p1;
+    const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const t = nowMs - delay;
+    if (t <= hist[0].t) return hist[0];
+    for (let i = hist.length - 1; i > 0; i--) {
+      const a = hist[i - 1], b = hist[i];
+      if (a.t <= t && t <= b.t) {
+        const span = Math.max(1, b.t - a.t);
+        const f = (t - a.t) / span;
+        return {
+          x: a.x + (b.x - a.x) * f,
+          y: a.y + (b.y - a.y) * f,
+          vx: b.vx, vy: b.vy, r: SLIME_R
+        };
+      }
+    }
+    return hist[hist.length - 1];
+  }
+
+  function resolveHostHit() {
+    const shadow = hostShadowSlime();
+    if (shadow === GameState.p1) return GameState.ball.bounceSlime(GameState.p1);
+    const hit = GameState.ball.bounceSlime(shadow);
+    if (hit) {
+      // Re-anchor the separation to the visible slime so a delayed hit never
+      // leaves the ball rendered inside it.
+      const p = GameState.p1;
+      const dx = GameState.ball.x - p.x;
+      const dy = Math.max(0, GameState.ball.y - p.y);
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const totalR = GameState.ball.r + p.r;
+      GameState.ball.x = p.x + (dx / d) * totalR;
+      GameState.ball.y = p.y + (dy / d) * totalR;
+    }
+    return hit;
   }
 
   function update(dt = TIMESTEP) {
@@ -776,11 +841,24 @@
         GameState.p1.update(dt);
         GameState.p2.update(dt); // Guest updated via socket input
 
+        // Record the host's own path for delayed collision resolution.
+        {
+          const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+          GameState.ownHist.push({
+            t: nowMs,
+            x: GameState.p1.x, y: GameState.p1.y,
+            vx: GameState.p1.vx, vy: GameState.p1.vy
+          });
+          while (GameState.ownHist.length && nowMs - GameState.ownHist[0].t > 600) {
+            GameState.ownHist.shift();
+          }
+        }
+
         const subDt = dt / SUB_STEPS;
         for (let s = 0; s < SUB_STEPS; s++) {
           GameState.ball.applyGravity(subDt);
           GameState.ball.move(subDt);
-          GameState.ball.bounceSlime(GameState.p1);
+          resolveHostHit();
           GameState.ball.bounceSlime(GameState.p2);
 
           const groundHit = GameState.ball.checkEdges(subDt);
@@ -928,6 +1006,15 @@
   }
 
   function endGame(winner) {
+    // One award per match, keyed by the server's match generation.
+    // Double-fire was possible when a restart cleared gameOver while the
+    // previous match's winning-score snapshot was still in flight.
+    if (GameState.gameOver) return;
+    if (GameState.mode === 'online') {
+      if (GameState.resolvedMatchNo === GameState.matchNo) return;
+      GameState.resolvedMatchNo = GameState.matchNo;
+    }
+
     GameState.gameOver = true;
     GameState.winner = winner;
     SFX.win();
@@ -961,6 +1048,11 @@
       GameState.winStreak = 0;
       setSavedSlimeStreak(GameState.mode, GameState.difficulty, 0);
     }
+
+    // Server-side ELO / match history for online duels: the host reports the
+    // result once, keyed by room + match generation, so the server can
+    // dedupe it (see handle_slime_match_end).
+    endMatchResult(winner);
 
     const modal = document.getElementById('game-over-banner');
     if (modal) {
@@ -1002,16 +1094,50 @@
 
   // NOTE: a restart triggered BY a remote event must never re-emit, or two
   // clients bounce restarts back and forth forever (same echo-loop class as
-  // the pong score storm). Local restarts emit; remote ones only apply.
-  function restartMatch(fromRemote = false, servingDir = null) {
+  // the pong score storm). Local restarts ask the server; the server assigns
+  // the next match generation and broadcasts it to both seats.
+  function restartMatch(fromRemote = false, servingDir = null, matchNo = null) {
+    const wasOver = GameState.gameOver;
+    if (fromRemote && wasOver) {
+      // Never wipe a result the player is still reading: remember that the
+      // opponent asked for a rematch and wait for the local choice.
+      GameState.opponentWantsRematch = true;
+      const streakTxt = document.getElementById('winner-streak');
+      if (streakTxt) {
+        streakTxt.textContent = 'Opponent wants a rematch';
+        streakTxt.style.display = 'block';
+      }
+      const btn = document.getElementById('rematch-btn');
+      if (btn) btn.textContent = 'Accept Rematch';
+      return;
+    }
+    if (!fromRemote && GameState.mode === 'online' && GameState.socket && GameState.roomId) {
+      // Online: the server owns the reset (and the new match generation) so
+      // both clients cannot diverge. Apply when the echo arrives.
+      GameState.localRestartPending = true;
+      GameState.socket.emit('slime_restart', { room_id: GameState.roomId });
+      return;
+    }
+    applyRestart(servingDir, matchNo);
+  }
+
+  function applyRestart(servingDir = null, matchNo = null) {
     GameState.p1.score = 0;
     GameState.p2.score = 0;
     GameState.gameOver = false;
     GameState.winner = null;
     GameState.isPaused = false;
+    GameState.opponentWantsRematch = false;
+    GameState.localRestartPending = false;
+    if (Number.isFinite(Number(matchNo))) {
+      GameState.matchNo = Number(matchNo);
+    }
     // After restart, snap positions for the first few sync frames so stale
     // pre-restart data doesn't pull slimes away from their reset baseline.
     GameState.syncSnapFrames = 5;
+    GameState.p1Buffer = [];
+    GameState.p2Buffer = [];
+    GameState.ownHist = [];
     GameState.lastHostSeq = -1; // peer seq may restart (reload-safe)
     GameState.hostAck = 0;
     GameState.lastInputSeq = 0;
@@ -1023,10 +1149,50 @@
     resetServe(s);
     const modal = document.getElementById('game-over-banner');
     if (modal) modal.style.display = 'none';
+    const rematchBtn = document.getElementById('rematch-btn');
+    if (rematchBtn) rematchBtn.textContent = 'Play Rematch';
+  }
 
-    if (!fromRemote && GameState.mode === 'online' && GameState.socket) {
-      GameState.socket.emit('slime_restart', { room_id: GameState.roomId });
+  function leaveMatch() {
+    const modal = document.getElementById('game-over-banner');
+    if (modal) modal.style.display = 'none';
+    GameState.gameOver = false;
+    GameState.opponentWantsRematch = false;
+    GameState.localRestartPending = false;
+    if (GameState.socket && GameState.roomId) {
+      try { GameState.socket.emit('leave_slime_room', { room_id: GameState.roomId }); } catch (e) {}
     }
+    GameState.roomId = null;
+    GameState.isOnlineConnected = false;
+    GameState.isPaused = true;
+    if (typeof window.__updateSlimePauseBtn === 'function') {
+      window.__updateSlimePauseBtn(true);
+    }
+    const lobbySection = document.getElementById('online-opponents-section');
+    if (lobbySection) lobbySection.style.display = '';
+    const statusEl = document.getElementById('online-status');
+    if (statusEl) statusEl.textContent = 'Enter a room code or find a match to play.';
+    const matchBtn = document.getElementById('find-match-btn');
+    if (matchBtn) {
+      matchBtn.textContent = 'Find Match';
+      matchBtn.disabled = false;
+      matchBtn.style.opacity = '1';
+      matchBtn.classList.remove('ew-btn--active');
+    }
+  }
+
+  function endMatchResult(winner) {
+    // Host-only: the host owns the authoritative simulation, so it reports
+    // the result once per server match generation. The server validates the
+    // score, dedupes by match_no and writes the award exactly once.
+    if (GameState.mode !== 'online' || !GameState.isHost || !GameState.socket || !GameState.roomId) return;
+    const hostWon = (winner === GameState.p1);
+    GameState.socket.emit('slime_match_end', {
+      room_id: GameState.roomId,
+      winner: hostWon ? 'host' : 'guest',
+      score: [GameState.p1.score, GameState.p2.score],
+      match_no: GameState.matchNo
+    });
   }
 
   function drawCourt() {
@@ -1171,9 +1337,23 @@
   }
 
   // 18 Hz Network Synchronization Loop (Online Multiplayer)
+  // Driven by rAF, not setInterval: background tabs stop rAF entirely, so the
+  // opponent sees a clean pause instead of throttled 1 s bursts that snap the
+  // simulation on refocus. 55 ms keeps the send rate at ~18 Hz.
+  let lastNetSend = 0;
   function initNetworkSync() {
-    setInterval(() => {
+    function netLoop(ts) {
+      requestAnimationFrame(netLoop);
+      const now = (typeof ts === 'number' && ts > 0) ? ts
+        : ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now());
+      if (now - lastNetSend < 55) return;
+      lastNetSend = now;
       if (GameState.mode !== 'online' || !GameState.socket || !GameState.isOnlineConnected) return;
+
+      if (now - GameState.lastPingAt > 2000) {
+        GameState.lastPingAt = now;
+        GameState.socket.emit('net_ping', { t: now });
+      }
 
       if (GameState.isHost) {
         // Host broadcasts state to Guest (including p2 state to keep sync tight)
@@ -1190,6 +1370,7 @@
           serving: GameState.serving,
           delay: GameState.delay,
           rallyCount: GameState.rallyCount,
+          match_no: GameState.matchNo,
           seq: GameState.slimeSeq,
           tSend: tSend,
           ack: GameState.lastInputSeq
@@ -1216,7 +1397,26 @@
         };
         GameState.socket.emit('slime_player_input', payload);
       }
-    }, 55); // ~18 Hz
+    }
+    requestAnimationFrame(netLoop);
+  }
+
+  // Connection quality chip: green < 90 ms, yellow < 180 ms, red above.
+  function updateNetQualityUI() {
+    const el = document.getElementById('net-quality');
+    if (!el) return;
+    if (GameState.mode !== 'online' || !GameState.isOnlineConnected) {
+      el.style.display = 'none';
+      return;
+    }
+    const rtt = Math.round(GameState.rttMs || 0);
+    const color = rtt <= 0 ? 'var(--text-secondary)' : (rtt < 90 ? '#15803d' : (rtt < 180 ? '#a16207' : '#b91c1c'));
+    el.style.display = 'inline-flex';
+    el.style.alignItems = 'center';
+    el.style.gap = '0.35rem';
+    el.style.color = color;
+    el.style.borderColor = color;
+    el.textContent = rtt > 0 ? `RTT ${rtt} ms` : 'RTT —';
   }
 
   // Online Socket Connection & Lobby Setup
@@ -1244,6 +1444,10 @@
         window._gameRoomId = data.room_id;
         GameState.isHost = data.is_host;
         GameState.isOnlineConnected = true;
+        GameState.matchNo = Number.isFinite(Number(data.match_no)) ? Number(data.match_no) : 0;
+        GameState.resolvedMatchNo = -1;
+        GameState.opponentWantsRematch = false;
+        GameState.localRestartPending = false;
         GameState.lastHostSeq = -1; // fresh room: peer seq restarts
         GameState.hostAck = 0;
         GameState.lastInputSeq = 0;
@@ -1266,6 +1470,10 @@
           GameState.p1.score = 0;
           GameState.p2.score = 0;
           GameState.gameOver = false;
+          GameState.matchNo = Number.isFinite(Number(data.match_no)) ? Number(data.match_no) : 0;
+          GameState.resolvedMatchNo = -1;
+          GameState.opponentWantsRematch = false;
+          GameState.localRestartPending = false;
           GameState.isPaused = false;
           if (typeof window.__updateSlimePauseBtn === 'function') {
             window.__updateSlimePauseBtn(false);
@@ -1278,6 +1486,18 @@
       GameState.socket.on('slime_host_sync', (data) => {
         if (!GameState.isHost) {
           if (!data || data.room_id !== GameState.roomId || !data.ball || !data.p1 || !Array.isArray(data.scores)) return;
+
+          // Server-assigned match generation. A snapshot from a previous
+          // match (in flight across a restart) must not touch live state:
+          // that is what re-triggered endGame and double-paid ranked points.
+          const snapMatch = Number(data.match_no);
+          if (Number.isFinite(snapMatch)) {
+            if (snapMatch < GameState.matchNo) return;
+            if (snapMatch > GameState.matchNo) {
+              GameState.matchNo = snapMatch;
+              GameState.syncSnapFrames = 5;
+            }
+          }
 
           // Drop stale/out-of-order host snapshots by sequence id.
           const hSeq = (typeof data.seq === 'number' && Number.isFinite(data.seq)) ? data.seq : null;
@@ -1324,20 +1544,51 @@
               GameState.ball.vx = Number(data.ball.vx) || 0;
               GameState.ball.vy = Number(data.ball.vy) || 0;
             } else {
-              // Smooth lerp during active play. The guest never predicts
-              // bounces, so the host velocity is always adopted.
+              // Smooth interpolation during active play. The guest never
+              // predicts bounces, so the host velocity is always adopted.
+              // We buffer the last two host snapshots and lerp between
+              // them at ~100 ms so the remote slime moves smoothly even
+              // at 18 Hz send rate (a single-target lerp chases stale
+              // positions and makes the opponent crawl). Ball is still
+              // adopted wholesale because the guest cannot predict bounces.
               const hostVx = Number(data.ball.vx) || 0;
-              GameState.ball.x = GameState.ball.x * 0.25 + (Number(data.ball.x) || 0) * 0.75;
-              GameState.ball.y = GameState.ball.y * 0.25 + (Number(data.ball.y) || 11) * 0.75;
+              const hostBallX = Number(data.ball.x) || 0;
+              const hostBallY = Number(data.ball.y) || 11;
+              const hostP1X = Number(data.p1.x) || (-REF_W / 4);
+              const hostP1Y = Number(data.p1.y) || REF_U;
+
+              const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+              const snap = { x: hostP1X, y: hostP1Y, vx: Number(data.p1.vx) || 0, vy: Number(data.p1.vy) || 0, t: now };
+              const buf = GameState.p1Buffer;
+              buf.push(snap);
+              if (buf.length > 2) buf.shift();
+
+              // Adopt ball wholesale (no interpolation) — the host is the
+              // sole authority on ball trajectory.
+              GameState.ball.x = hostBallX;
+              GameState.ball.y = hostBallY;
               GameState.ball.vx = hostVx;
               GameState.ball.vy = Number(data.ball.vy) || 0;
-              GameState.p1.x = GameState.p1.x * 0.3 + (Number(data.p1.x) || (-REF_W / 4)) * 0.7;
-              GameState.p1.y = GameState.p1.y * 0.3 + (Number(data.p1.y) || REF_U) * 0.7;
+
+              if (buf.length >= 2) {
+                const a = buf[buf.length - 2];
+                const b = buf[buf.length - 1];
+                const span = Math.max(1, b.t - a.t);
+                const frac = Math.min(1, (now - a.t) / span);
+                const alpha = frac;
+                GameState.p1.x = a.x + (b.x - a.x) * alpha;
+                GameState.p1.y = a.y + (b.y - a.y) * alpha;
+                GameState.p1.vx = a.vx + (b.vx - a.vx) * alpha;
+                GameState.p1.vy = a.vy + (b.vy - a.vy) * alpha;
+              } else {
+                GameState.p1.x = hostP1X;
+                GameState.p1.y = hostP1Y;
+                GameState.p1.vx = snap.vx;
+                GameState.p1.vy = snap.vy;
+              }
             }
           }
 
-          GameState.p1.vx = Number(data.p1.vx) || 0;
-          GameState.p1.vy = Number(data.p1.vy) || 0;
           GameState.p1.score = Math.max(0, Math.floor(Number(data.scores[0]) || 0));
           GameState.p2.score = Math.max(0, Math.floor(Number(data.scores[1]) || 0));
           if (data.rallyCount !== undefined) {
@@ -1384,8 +1635,35 @@
             GameState.p2.x = Number(data.p2.x) || (REF_W / 4);
             GameState.p2.y = Number(data.p2.y) || REF_U;
           } else {
-            GameState.p2.x = GameState.p2.x * 0.3 + (Number(data.p2.x) || (REF_W / 4)) * 0.7;
-            GameState.p2.y = GameState.p2.y * 0.3 + (Number(data.p2.y) || REF_U) * 0.7;
+            // Buffer the last two guest snapshots and lerp between them so
+            // the remote slime moves smoothly at the 55 ms input cadence.
+            // The received raw x/y is also clamped to the net boundary so
+            // a stale packet cannot paint the slime across the pole.
+            const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            const snap = {
+              x: Number(data.p2.x) || (REF_W / 4),
+              y: Number(data.p2.y) || REF_U,
+              t: now
+            };
+            const buf = GameState.p2Buffer;
+            buf.push(snap);
+            if (buf.length > 2) buf.shift();
+
+            const halfNet = REF_WALL_W / 2;
+            const halfCourt = REF_W / 2;
+            const clampX = (v) => Math.max(halfNet + GameState.p2.r, Math.min(halfCourt - GameState.p2.r, v));
+
+            if (buf.length >= 2) {
+              const a = buf[buf.length - 2];
+              const b = buf[buf.length - 1];
+              const span = Math.max(1, b.t - a.t);
+              const frac = Math.min(1, (now - a.t) / span);
+              GameState.p2.x = clampX(a.x + (b.x - a.x) * frac);
+              GameState.p2.y = a.y + (b.y - a.y) * frac;
+            } else {
+              GameState.p2.x = clampX(snap.x);
+              GameState.p2.y = snap.y;
+            }
           }
         }
       });
@@ -1395,6 +1673,9 @@
         if (lobbySection) lobbySection.style.display = '';
         GameState.isPaused = true;
         GameState.roomId = null;
+        GameState.isOnlineConnected = false;
+        GameState.opponentWantsRematch = false;
+        updateNetQualityUI();
         if (typeof window.__updateSlimePauseBtn === 'function') {
           window.__updateSlimePauseBtn(true);
         }
@@ -1426,7 +1707,23 @@
 
       GameState.socket.on('slime_restart', (data) => {
         const s = (data && (data.serving === -1 || data.serving === 1)) ? data.serving : null;
-        restartMatch(true, s);
+        const m = (data && Number.isFinite(Number(data.match_no))) ? Number(data.match_no) : null;
+        const mine = GameState.localRestartPending;
+        GameState.localRestartPending = false;
+        if (GameState.gameOver && !mine) {
+          // Opponent asked first; keep our result on screen until we choose.
+          restartMatch(true, s, m);
+          return;
+        }
+        applyRestart(s, m);
+      });
+
+      GameState.socket.on('net_pong', (data) => {
+        const sent = data && Number(data.t);
+        if (!Number.isFinite(sent)) return;
+        const sample = Math.max(0, (performance.now ? performance.now() : Date.now()) - sent);
+        GameState.rttMs = GameState.rttMs ? Math.round(GameState.rttMs * 0.7 + sample * 0.3) : Math.round(sample);
+        updateNetQualityUI();
       });
 
       GameState.socket.on('slime_matchmaking_waiting', (data) => {
@@ -1480,6 +1777,10 @@
         window._gameRoomId = data.room_id;
         GameState.isHost = data.is_host;
         GameState.isOnlineConnected = true;
+        GameState.matchNo = Number.isFinite(Number(data.match_no)) ? Number(data.match_no) : 0;
+        GameState.resolvedMatchNo = -1;
+        GameState.opponentWantsRematch = false;
+        GameState.localRestartPending = false;
         GameState.lastHostSeq = -1; // fresh match: peer seq restarts
         GameState.hostAck = 0;
         GameState.lastInputSeq = 0;
@@ -1727,6 +2028,8 @@
     // Rematch button
     const rematchBtn = document.getElementById('rematch-btn');
     if (rematchBtn) rematchBtn.addEventListener('click', () => restartMatch(false));
+    const leaveBtn = document.getElementById('leave-match-btn');
+    if (leaveBtn) leaveBtn.addEventListener('click', leaveMatch);
 
     // Automatic pause when leaving browser tab
     document.addEventListener('visibilitychange', () => {

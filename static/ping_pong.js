@@ -105,7 +105,17 @@
     lastPaddleSend: 0,    // throttle clock for paddle sync (~20 Hz)
     noContestTimer: null,  // pending voided-match timer after opponent drop
     pongSeq: 0,          // outgoing sequence for paddle+ball sync (Commit 0)
-    lastBallSeq: -1      // last accepted host ball seq (stale-drop, Commit 1+)
+    lastBallSeq: -1,     // last accepted host ball seq (stale-drop, Commit 1+)
+    // Server-assigned match generation; awards are keyed by (room, matchNo).
+    matchNo: 0,
+    resolvedMatchNo: -1,
+    localRestartPending: false,
+    opponentWantsRematch: false,
+    // Connection quality + symmetric input delay for the authoritative seat.
+    rttMs: 0,
+    lastPingAt: 0,
+    ownYHistory: [],
+    simP1Y: 0
   };
 
   const PONG_DEBUG = false;
@@ -391,6 +401,8 @@
     state.p2.score = 0;
     state.p1.y = V_HEIGHT / 2 - PADDLE_H / 2;
     state.p2.y = V_HEIGHT / 2 - PADDLE_H / 2;
+    state.simP1Y = state.p1.y;
+    state.ownYHistory = [];
     state.p1.dy = 0;
     state.p2.dy = 0;
     state.consecutiveVolleys = 0;
@@ -626,6 +638,64 @@
     }
   }
 
+  // --- Netcode helpers -----------------------------------------------------
+  // The host is the authority. To make its path symmetric with the guest's,
+  // the host resolves its own paddle collisions against where its paddle
+  // actually was ~RTT/2 ago (the same age the guest's input has when it
+  // reaches the host). Rendering stays instant; only resolution is delayed.
+  function authoritativeOwnPaddleY(now) {
+    if (!(state.mode === 'online' && state.isHost)) return state.p1.y;
+    const delay = Math.min(120, Math.max(0, (state.rttMs || 0) / 2));
+    if (delay < 12) return state.p1.y;
+    const hist = state.ownYHistory;
+    if (!hist.length) return state.p1.y;
+    const t = now - delay;
+    if (t <= hist[0].t) return hist[0].y;
+    for (let i = hist.length - 1; i > 0; i--) {
+      if (hist[i - 1].t <= t && t <= hist[i].t) {
+        const span = Math.max(1, hist[i].t - hist[i - 1].t);
+        const f = (t - hist[i - 1].t) / span;
+        return hist[i - 1].y + (hist[i].y - hist[i - 1].y) * f;
+      }
+    }
+    return hist[hist.length - 1].y;
+  }
+
+  // Two-sample buffer for the remote paddle: render one packet behind so it
+  // moves continuously instead of chasing a stale target at 20 Hz.
+  const PADDLE_INTERP_MS = 60;
+  function pushPaddleSample(paddle, y, now) {
+    if (!paddle.buf) paddle.buf = [];
+    paddle.buf.push({ y, t: now });
+    while (paddle.buf.length > 2) paddle.buf.shift();
+  }
+  function applyPaddleBuffer(paddle, now) {
+    const buf = paddle.buf;
+    if (!buf || buf.length === 0) return false;
+    if (buf.length === 1) { paddle.y = buf[0].y; return true; }
+    const a = buf[0], b = buf[1];
+    const span = Math.max(1, b.t - a.t);
+    const f = Math.max(0, Math.min(1, (now - PADDLE_INTERP_MS - a.t) / span));
+    paddle.y = a.y + (b.y - a.y) * f;
+    return true;
+  }
+
+  function updateNetQualityUI() {
+    const el = document.getElementById('net-quality');
+    if (!el) return;
+    if (state.mode !== 'online' || !state.roomId) {
+      el.style.display = 'none';
+      return;
+    }
+    const rtt = Math.round(state.rttMs || 0);
+    const color = rtt <= 0 ? 'var(--text-secondary)' : (rtt < 90 ? '#15803d' : (rtt < 180 ? '#a16207' : '#b91c1c'));
+    el.style.display = 'inline-flex';
+    el.style.alignItems = 'center';
+    el.style.color = color;
+    el.style.borderColor = color;
+    el.textContent = rtt > 0 ? `RTT ${rtt} ms` : 'RTT —';
+  }
+
   // Physics & Game Update
   function update(now) {
     if (state.isGameOver) return;
@@ -649,7 +719,7 @@
         sendPaddleSync();
       }
       // LERP remote host paddle (P1)
-      if (typeof state.p1.targetY === 'number') {
+      if (!applyPaddleBuffer(state.p1, now) && typeof state.p1.targetY === 'number') {
         state.p1.y += (state.p1.targetY - state.p1.y) * 0.45;
       }
 
@@ -684,9 +754,19 @@
       sendPaddleSync();
     }
 
+    // Record our own paddle path so the authoritative seat can resolve hits
+    // against the same input age the guest pays over the network.
+    if (state.mode === 'online' && state.isHost) {
+      state.ownYHistory.push({ t: now, y: state.p1.y });
+      while (state.ownYHistory.length && now - state.ownYHistory[0].t > 600) {
+        state.ownYHistory.shift();
+      }
+    }
+    state.simP1Y = authoritativeOwnPaddleY(now);
+
     if (state.mode === 'online' && state.isHost) {
       // Smoothly interpolate remote guest paddle (P2)
-      if (typeof state.p2.targetY === 'number') {
+      if (!applyPaddleBuffer(state.p2, now) && typeof state.p2.targetY === 'number') {
         state.p2.y += (state.p2.targetY - state.p2.y) * 0.45;
       }
     } else if (state.mode === 'ai') {
@@ -724,7 +804,7 @@
       if (prevX - r >= planeX - 2 - MAX_SPEED && nextX - r <= planeX) {
         const t = Math.max(0, Math.min(1, (prevX - r - planeX) / (prevX - nextX || 0.001)));
         const hitY = prevY + t * stepVY;
-        let padY = state.p1.y;
+        let padY = (state.mode === 'online' && state.isHost) ? state.simP1Y : state.p1.y;
         let padH = state.p1.height;
         if (state.mode === 'online' && state.isHost && state.playerIndex === 1) {
           padY = Math.max(0, padY - 14);
@@ -765,7 +845,8 @@
 
       // Fallback discrete AABB collision check
       let paddle = (state.ball.x < V_WIDTH / 2) ? state.p1 : state.p2;
-      let padY = paddle.y;
+      let padY = (paddle === state.p1 && state.mode === 'online' && state.isHost)
+        ? state.simP1Y : paddle.y;
       let padH = paddle.height;
       if (state.mode === 'online' && state.isHost && paddle === state.p2) {
         padY = Math.max(0, padY - 14);
@@ -829,7 +910,7 @@
           vx: r2(state.ball.vx),
           vy: r2(state.ball.vy),
           speed: r2(state.ball.speed),
-          p1Y: r2(state.p1.y),
+          p1Y: r2((state.mode === 'online' && state.isHost) ? state.simP1Y : state.p1.y),
           volleys: state.consecutiveVolleys,
           seq: state.pongSeq,
           tSend: tSend
@@ -868,7 +949,8 @@
         state.socket.emit('pong_score_update', {
           room_id: state.roomId,
           scores: [state.p1.score, state.p2.score],
-          winner: null
+          winner: null,
+          match_no: state.matchNo
         });
       }
     }
@@ -880,6 +962,15 @@
     if (state.isGameOver || state.isResolving) {
       pongDebug('finishMatch ignored (already over/resolving)', winningPlayer);
       return;
+    }
+    // One award per server match generation, even if a stale score echo
+    // arrives after a rematch already cleared isGameOver.
+    if (state.mode === 'online') {
+      if (state.resolvedMatchNo === state.matchNo) {
+        pongDebug('finishMatch ignored (match already awarded)', state.matchNo);
+        return;
+      }
+      state.resolvedMatchNo = state.matchNo;
     }
     state.isResolving = true;
     try {
@@ -986,7 +1077,8 @@
       state.socket.emit('pong_score_update', {
         room_id: state.roomId,
         scores: [state.p1.score, state.p2.score],
-        winner: winningPlayer
+        winner: winningPlayer,
+        match_no: state.matchNo
       });
     }
   }
@@ -1114,10 +1206,30 @@
     ctx.restore();
   }
 
-  // Main Loop
+  // Main Loop — fixed 60 Hz physics so paddle speed, ball speed and bounce
+  // outcomes do not depend on the monitor refresh rate.
+  let pongLastFrameTime = 0;
+  let pongAccumulator = 0;
+  const PONG_FIXED_DT = 1 / 60;
+  const PONG_MAX_ACC = 0.1;
   function gameLoop(now) {
+    if (!pongLastFrameTime) pongLastFrameTime = now;
+    let delta = (now - pongLastFrameTime) / 1000;
+    pongLastFrameTime = now;
+    if (delta > PONG_MAX_ACC) delta = PONG_MAX_ACC;
+    pongAccumulator += delta;
+    if (state.mode === 'online' && state.socket && state.roomId && now - state.lastPingAt > 2000) {
+      state.lastPingAt = now;
+      state.socket.emit('net_ping', { t: now });
+    }
     try {
-      update(now);
+      let steps = 0;
+      while (pongAccumulator >= PONG_FIXED_DT && steps < 6) {
+        update(now);
+        pongAccumulator -= PONG_FIXED_DT;
+        steps++;
+      }
+      if (steps >= 6) pongAccumulator = 0; // never spiral on a slow frame
       render();
     } catch (err) {
       console.error('Pong game loop error:', err);
@@ -1149,6 +1261,10 @@
       window._gameRoomId = data.room_id;
       state.isHost = data.is_host;
       state.playerIndex = data.player;
+      state.matchNo = Number.isFinite(Number(data.match_no)) ? Number(data.match_no) : 0;
+      state.resolvedMatchNo = -1;
+      state.localRestartPending = false;
+      state.opponentWantsRematch = false;
       state.hasGuest = !!(data.guest_name || (!data.is_host && data.host_name));
       state.opponentName = data.is_host ? (data.guest_name || '') : (data.host_name || 'Host');
       state.roomTarget = (typeof data.target === 'number' && data.target > 0) ? data.target : null;
@@ -1174,6 +1290,7 @@
         }
       }
       setOnlineTargetScoreVisibility(data.is_host, state.roomTarget);
+      updateNetQualityUI();
       if (data.rejoined && Array.isArray(data.scores)) {
         // Reclaiming our seat after a drop: adopt the live server scores,
         // never reset to a default — a default must never become a result.
@@ -1205,10 +1322,13 @@
       const y = Number(data.y);
       if (!Number.isFinite(y)) return;
       const clamped = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, y));
+      const nowMs = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       if (state.playerIndex === 0) {
         state.p2.targetY = clamped;
+        pushPaddleSample(state.p2, clamped, nowMs);
       } else {
         state.p1.targetY = clamped;
+        pushPaddleSample(state.p1, clamped, nowMs);
       }
     });
 
@@ -1249,6 +1369,11 @@
 
     state.socket.on('pong_score_update', (data) => {
       if (!data || data.room_id !== state.roomId) return;
+      const msgMatch = Number(data.match_no);
+      if (Number.isFinite(msgMatch)) {
+        if (msgMatch < state.matchNo) return; // stale match echo
+        if (msgMatch > state.matchNo) state.matchNo = msgMatch;
+      }
       if (Array.isArray(data.scores) && data.scores.length >= 2) {
         state.p1.score = Math.max(0, Math.floor(Number(data.scores[0]) || 0));
         state.p2.score = Math.max(0, Math.floor(Number(data.scores[1]) || 0));
@@ -1272,14 +1397,42 @@
 
     state.socket.on('pong_restart', (data) => {
       clearNoContestTimer();
+      const serving = (data && data.serving_player !== undefined) ? data.serving_player : null;
+      const nextMatchNo = (data && Number.isFinite(Number(data.match_no))) ? Number(data.match_no) : null;
+      const mine = state.localRestartPending;
+      state.localRestartPending = false;
+      if (state.isGameOver && !mine) {
+        // Opponent asked for a rematch: keep our result on screen until the
+        // local player chooses Rematch or Leave.
+        state.opponentWantsRematch = true;
+        const streakTxt = document.getElementById('winner-streak');
+        if (streakTxt) {
+          streakTxt.textContent = 'Opponent wants a rematch';
+          streakTxt.style.display = 'block';
+        }
+        const btn = document.getElementById('rematch-btn');
+        if (btn) btn.textContent = 'Accept Rematch';
+        return;
+      }
       setRematchVisible(true);
       state.isPaused = false;
       state.lastBallSeq = -1; // fresh rally series
+      state.opponentWantsRematch = false;
+      if (nextMatchNo !== null) state.matchNo = nextMatchNo;
+      const rematchBtn = document.getElementById('rematch-btn');
+      if (rematchBtn) rematchBtn.textContent = 'Play Again';
       if (typeof window.__updatePongPauseBtn === 'function') {
         window.__updatePongPauseBtn(false);
       }
-      const serving = (data && data.serving_player !== undefined) ? data.serving_player : null;
       resetGame(serving);
+    });
+
+    state.socket.on('net_pong', (data) => {
+      const sent = data && Number(data.t);
+      if (!Number.isFinite(sent)) return;
+      const sample = Math.max(0, (performance.now ? performance.now() : Date.now()) - sent);
+      state.rttMs = state.rttMs ? Math.round(state.rttMs * 0.7 + sample * 0.3) : Math.round(sample);
+      updateNetQualityUI();
     });
 
     state.socket.on('pong_target_updated', (data) => {
@@ -1295,6 +1448,10 @@
       state.isHost = data.is_host;
       state.playerIndex = data.player;
       state.opponentName = data.is_host ? data.guest_name : data.host_name;
+      state.matchNo = Number.isFinite(Number(data.match_no)) ? Number(data.match_no) : 0;
+      state.resolvedMatchNo = -1;
+      state.localRestartPending = false;
+      state.opponentWantsRematch = false;
       state.roomTarget = (data && typeof data.target === 'number' && data.target > 0) ? data.target : null;
       state.rejoinAttempts = 0;
       state.wasDropped = false;
@@ -1381,6 +1538,8 @@
       state.hasGuest = false;
       state.isPaused = true;
       state.roomId = null;
+      state.opponentWantsRematch = false;
+      updateNetQualityUI();
       clearNoContestTimer();
       if (typeof window.__updatePongPauseBtn === 'function') {
         window.__updatePongPauseBtn(true);
@@ -1586,6 +1745,7 @@
     isPaused: () => state.isPaused,
     rematch: () => {
       if (state.mode === 'online' && state.socket && state.roomId) {
+        state.localRestartPending = true;
         state.socket.emit('pong_restart', { room_id: state.roomId });
       }
       state.isPaused = false;
@@ -1593,6 +1753,28 @@
         window.__updatePongPauseBtn(false);
       }
       resetGame();
+    },
+    leaveMatch: () => {
+      const banner = document.getElementById('game-over-banner');
+      if (banner) banner.style.display = 'none';
+      if (state.socket && state.roomId) {
+        try { state.socket.emit('leave_pong_room', { room_id: state.roomId }); } catch (e) {}
+      }
+      state.roomId = null;
+      state.matchNo = 0;
+      state.resolvedMatchNo = -1;
+      state.opponentWantsRematch = false;
+      state.localRestartPending = false;
+      state.isGameOver = false;
+      state.isPaused = true;
+      if (typeof window.__updatePongPauseBtn === 'function') {
+        window.__updatePongPauseBtn(true);
+      }
+      const statusEl = document.getElementById('online-status');
+      if (statusEl) statusEl.textContent = 'Enter a room code or find a match to play.';
+      const lobby = document.getElementById('online-opponents-section');
+      if (lobby) lobby.style.display = '';
+      updateNetQualityUI();
     },
     findOnlineMatch: () => {
       initSocket();

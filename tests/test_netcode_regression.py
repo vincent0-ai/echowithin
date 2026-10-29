@@ -213,3 +213,246 @@ class TestNetcodeRelayProtocol:
         _send_push_async(mock_m, 'u123', 'Title', 'Body', tag='test-tag')
         assert mock_fn.queue.called
         assert not mock_fn.called
+
+
+class _FakeHistory:
+    """Minimal in-memory stand-in for the game_match_history collection."""
+
+    def __init__(self):
+        self.docs = []
+        self.insert_calls = 0
+
+    def find_one(self, query, *args, **kwargs):
+        for doc in self.docs:
+            if all(doc.get(k) == v for k, v in query.items()):
+                return doc
+        return None
+
+    def insert_one(self, doc):
+        key = doc.get('match_key')
+        if key and any(d.get('match_key') == key for d in self.docs):
+            raise Exception('duplicate match_key')
+        self.insert_calls += 1
+        self.docs.append(doc)
+        return MagicMock(inserted_id=len(self.docs))
+
+
+class _FakeStats:
+    def find_one(self, *args, **kwargs):
+        return None
+
+    def update_one(self, *args, **kwargs):
+        return None
+
+
+class _EmptyCollection:
+    def find_one(self, *args, **kwargs):
+        return None
+
+    def insert_one(self, doc):
+        return MagicMock()
+
+
+def _players(uid_a='u1', uid_b='u2'):
+    return [
+        {'user_id': uid_a, 'username': 'A', 'side': 'host'},
+        {'user_id': uid_b, 'username': 'B', 'side': 'guest'},
+    ]
+
+
+def _slime_room(m, room_id, match_no=0):
+    m.active_slime_rooms[room_id] = {
+        'host_sid': 'sid_A', 'guest_sid': 'sid_B',
+        'host_user_id': 'u1', 'guest_user_id': 'u2',
+        'host_name': 'A', 'guest_name': 'B',
+        'match_no': match_no, 'scores': [0, 0],
+    }
+
+
+def _pong_room(m, room_id, match_no=0):
+    m.active_pong_rooms[room_id] = {
+        'host_sid': 'sid_A', 'guest_sid': 'sid_B',
+        'host_user_id': 'u1', 'guest_user_id': 'u2',
+        'host_name': 'A', 'guest_name': 'B',
+        'scores': [5, 2], 'target': 5, 'match_no': match_no,
+    }
+
+
+class TestAwardIdempotency:
+    """A match result may only be written once per (room, match_no)."""
+
+    def test_record_match_result_is_idempotent_by_match_key(self):
+        import main as m
+        hist = _FakeHistory()
+        with patch.object(m, 'game_match_history_conf', hist), \
+                patch.object(m, 'player_stats_conf', _FakeStats()), \
+                patch.object(m, 'bonds_conf', _EmptyCollection()):
+            first = m.record_match_result(
+                'slime_volleyball', 'r1', _players(), 'u1',
+                score={'host': 5, 'guest': 2},
+                match_key='slime_volleyball:r1:0', match_no=0)
+            second = m.record_match_result(
+                'slime_volleyball', 'r1', _players(), 'u1',
+                score={'host': 5, 'guest': 2},
+                match_key='slime_volleyball:r1:0', match_no=0)
+
+            assert hist.insert_calls == 1, 'duplicate award for the same match_key'
+            assert second is first, 'repeat must return the original document'
+
+            third = m.record_match_result(
+                'slime_volleyball', 'r1', _players(), 'u2',
+                score={'host': 2, 'guest': 5},
+                match_key='slime_volleyball:r1:1', match_no=1)
+
+            assert hist.insert_calls == 2, 'a rematch is a new, separate award'
+            assert third is not None and third['match_no'] == 1
+
+    def test_slime_match_end_awards_once_per_generation(self, app):
+        import main as m
+        fn = _handlers()['handle_slime_match_end']
+        room_id = 'slime_award_once'
+        _slime_room(m, room_id, match_no=0)
+        payload = {'room_id': room_id, 'winner': 'host', 'score': [5, 3], 'match_no': 0}
+        try:
+            with app.test_request_context():
+                req = MagicMock()
+                req.sid = 'sid_A'
+                with patch.object(m, 'request', req), \
+                        patch.object(m, 'emit'), \
+                        patch.object(m, 'record_match_result') as rec:
+                    fn(dict(payload))
+                    fn(dict(payload))
+                    fn(dict(payload))
+            assert rec.call_count == 1, 'match-end must be idempotent per match_no'
+            assert rec.call_args.kwargs['match_key'] == f'slime_volleyball:{room_id}:0'
+        finally:
+            m.active_slime_rooms.pop(room_id, None)
+
+    def test_slime_match_end_rejects_stale_generation(self, app):
+        import main as m
+        fn = _handlers()['handle_slime_match_end']
+        room_id = 'slime_stale_gen'
+        _slime_room(m, room_id, match_no=2)
+        try:
+            with app.test_request_context():
+                req = MagicMock()
+                req.sid = 'sid_A'
+                with patch.object(m, 'request', req), \
+                        patch.object(m, 'emit'), \
+                        patch.object(m, 'record_match_result') as rec:
+                    # Late report from match 1 after the room moved to match 2.
+                    fn({'room_id': room_id, 'winner': 'host',
+                        'score': [5, 1], 'match_no': 1})
+            assert rec.call_count == 0, 'stale generation must not award'
+        finally:
+            m.active_slime_rooms.pop(room_id, None)
+
+    def test_slime_match_end_rejects_unreached_score(self, app):
+        import main as m
+        fn = _handlers()['handle_slime_match_end']
+        room_id = 'slime_bad_score'
+        _slime_room(m, room_id, match_no=0)
+        try:
+            with app.test_request_context():
+                req = MagicMock()
+                req.sid = 'sid_A'
+                with patch.object(m, 'request', req), \
+                        patch.object(m, 'emit'), \
+                        patch.object(m, 'record_match_result') as rec:
+                    fn({'room_id': room_id, 'winner': 'host',
+                        'score': [2, 4], 'match_no': 0})
+            assert rec.call_count == 0, 'a winner claim below the win score must be rejected'
+        finally:
+            m.active_slime_rooms.pop(room_id, None)
+
+    def test_slime_restart_assigns_next_generation(self, app):
+        import main as m
+        fn = _handlers()['handle_slime_restart']
+        room_id = 'slime_restart_gen'
+        _slime_room(m, room_id, match_no=0)
+        m.active_slime_rooms[room_id]['scores'] = [5, 4]
+        try:
+            with app.test_request_context():
+                req = MagicMock()
+                req.sid = 'sid_B'
+                with patch.object(m, 'request', req), \
+                        patch.object(m, 'emit') as mock_emit:
+                    fn({'room_id': room_id})
+            info = m.active_slime_rooms[room_id]
+            assert info['match_no'] == 1
+            assert info['scores'] == [0, 0]
+            event, payload = mock_emit.call_args.args[0], mock_emit.call_args.args[1]
+            assert event == 'slime_restart'
+            assert payload['match_no'] == 1
+            assert mock_emit.call_args.kwargs.get('room') == room_id
+        finally:
+            m.active_slime_rooms.pop(room_id, None)
+
+    def test_pong_score_update_awards_once_per_generation(self, app):
+        import main as m
+        fn = _handlers()['handle_pong_score_update']
+        room_id = 'pong_award_once'
+        _pong_room(m, room_id, match_no=0)
+        payload = {'room_id': room_id, 'scores': [5, 2], 'winner': 1, 'match_no': 0}
+        try:
+            with app.test_request_context():
+                req = MagicMock()
+                req.sid = 'sid_A'
+                with patch.object(m, 'request', req), \
+                        patch.object(m, 'emit'), \
+                        patch.object(m, 'record_match_result') as rec:
+                    fn(dict(payload))
+                    fn(dict(payload))
+            assert rec.call_count == 1
+            assert rec.call_args.kwargs['match_key'] == f'ping_pong:{room_id}:0'
+        finally:
+            m.active_pong_rooms.pop(room_id, None)
+
+    def test_pong_score_update_rejects_stale_generation(self, app):
+        import main as m
+        fn = _handlers()['handle_pong_score_update']
+        room_id = 'pong_stale'
+        _pong_room(m, room_id, match_no=1)
+        try:
+            with app.test_request_context():
+                req = MagicMock()
+                req.sid = 'sid_A'
+                with patch.object(m, 'request', req), \
+                        patch.object(m, 'emit'), \
+                        patch.object(m, 'record_match_result') as rec:
+                    fn({'room_id': room_id, 'scores': [5, 2],
+                        'winner': 1, 'match_no': 0})
+            assert rec.call_count == 0
+        finally:
+            m.active_pong_rooms.pop(room_id, None)
+
+    def test_pong_restart_assigns_next_generation(self, app):
+        import main as m
+        fn = _handlers()['handle_pong_restart']
+        room_id = 'pong_restart_gen'
+        _pong_room(m, room_id, match_no=0)
+        try:
+            with app.test_request_context():
+                req = MagicMock()
+                req.sid = 'sid_A'
+                with patch.object(m, 'request', req), \
+                        patch.object(m, 'emit') as mock_emit:
+                    fn({'room_id': room_id})
+            info = m.active_pong_rooms[room_id]
+            assert info['match_no'] == 1
+            assert info['scores'] == [0, 0]
+            assert mock_emit.call_args.args[1]['match_no'] == 1
+        finally:
+            m.active_pong_rooms.pop(room_id, None)
+
+    def test_net_ping_echoes_timestamp_to_caller(self, app):
+        import main as m
+        fn = _handlers()['handle_net_ping']
+        with app.test_request_context():
+            req = MagicMock()
+            req.sid = 'sid_X'
+            with patch.object(m, 'request', req), \
+                    patch.object(m, 'emit') as mock_emit:
+                fn({'t': 1234.5})
+        mock_emit.assert_called_once_with('net_pong', {'t': 1234.5}, room='sid_X')
+

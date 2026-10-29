@@ -321,20 +321,31 @@ class TestSlimeTwoClientSim:
         finally:
             _restore_rooms(m, saved)
 
-    def test_match_end_host_reports_either_winner_unchecked(self):
-        """OBSERVED: host-reported winner/score stored without validation
-        against played points."""
+    def test_match_end_host_reports_validated_result(self):
+        """FIXED (BUG-005): a host-reported result is now validated against
+        the win score and the server match generation before it is recorded.
+        Previously any winner/score claim was stored unchecked."""
         import main as m
         saved = _save_rooms(m, *SLIME_ROOMS)
         try:
             h = _handlers()
             rid = _slime_room(h, m)
+            match_no = m.active_slime_rooms[rid].get('match_no', 0)
             with patch.object(m, 'record_match_result') as mock_rec:
+                # Impossible claim: winner score far above the win score.
                 _as_sid(m, 'sid_host', h['handle_slime_match_end'],
                         {'room_id': rid, 'winner': 'guest',
-                         'score': {'host': 0, 'guest': 99}})
+                         'score': [0, 99], 'match_no': match_no})
+                assert mock_rec.call_count == 0
+
+                # Valid claim: guest reached the win score.
+                _as_sid(m, 'sid_host', h['handle_slime_match_end'],
+                        {'room_id': rid, 'winner': 'guest',
+                         'score': [2, m.SLIME_WIN_SCORE], 'match_no': match_no})
                 assert mock_rec.call_count == 1
                 assert mock_rec.call_args[1]['winner_id'] == 'u_guest'
+                assert mock_rec.call_args[1]['match_key'] == \
+                    f'slime_volleyball:{rid}:{match_no}'
         finally:
             _restore_rooms(m, saved)
 

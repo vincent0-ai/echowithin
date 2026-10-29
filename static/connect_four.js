@@ -128,7 +128,11 @@
     opponentJoined: false,
     opponentName: 'Opponent',
     isSearching: false,
-    isCpuThinking: false
+    isCpuThinking: false,
+    echoPending: null,
+    // Connection quality chip, fed by net_ping RTT.
+    rttMs: 0,
+    lastPingAt: 0
   };
 
   // --- Canvas Setup ---
@@ -324,12 +328,19 @@
         // finishDrop paints only (no turn flip / win eval / sound — the
         // server echo does all three). Silent here avoids double sound.
         const moveSeq = Date.now();
-        state.echoPending = { col, player: state.myPlayer, seq: moveSeq };
+        state.echoPending = { col, player: state.myPlayer, seq: moveSeq, row: getDropRow(col) };
         startDropAnimation(col, getDropRow(col), state.turn);
         state.socket.emit('c4_move', { room_id: state.roomId, col });
         setTimeout(() => {
           if (state.echoPending && state.echoPending.seq === moveSeq) {
+            // No echo: our optimistic cell may be wrong, so ask the server for
+            // the authoritative board instead of leaving a phantom piece.
             state.echoPending = null;
+            state.socket.emit('join_c4_room', {
+              room_id: state.roomId,
+              bond_id: state.bondId,
+              tournament_id: state.tournamentId
+            });
           }
         }, 5000);
       }
@@ -356,14 +367,18 @@
     const col = state.animCol;
     const player = state.turn;
 
-    // Online optimistic paint (Commit 4): cell only. Turn flip, win/draw
-    // evaluation, and sound arrive with the server echo.
+    // Online optimistic paint: our cell plus a local turn flip so the board
+    // feels responsive. Win/draw evaluation, sound and the authoritative turn
+    // still come from the server echo; a rejected move is rolled back when
+    // that echo (or the resync) replaces state.board.
     if (state.mode === 'online' && state.echoPending) {
       state.board[row][col] = player;
       state.animating = false;
       state.animCol = -1;
       state.animRow = -1;
       state.animProgress = 0;
+      state.turn = 1 - state.turn;
+      updateTurnDisplay();
       return;
     }
 
@@ -478,8 +493,34 @@
     ctx.restore();
   }
 
+  // Connection quality chip: green < 90 ms, yellow < 180 ms, red above.
+  function updateNetQualityUI() {
+    const el = document.getElementById('net-quality');
+    if (!el) return;
+    if (state.mode !== 'online' || !state.roomId) {
+      el.style.display = 'none';
+      return;
+    }
+    const rtt = Math.round(state.rttMs || 0);
+    const color = rtt <= 0 ? 'var(--text-secondary)' : (rtt < 90 ? '#15803d' : (rtt < 180 ? '#a16207' : '#b91c1c'));
+    el.style.display = 'inline-flex';
+    el.style.alignItems = 'center';
+    el.style.color = color;
+    el.style.borderColor = color;
+    el.textContent = rtt > 0 ? `RTT ${rtt} ms` : 'RTT —';
+  }
+
   function render(time) {
     if (!ctx) return;
+    // RTT probe (2 s) so the quality chip reflects live connection health.
+    if (state.mode === 'online' && state.socket && state.roomId) {
+      const nowMs = (typeof time === 'number' && time > 0) ? time
+        : ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now());
+      if (nowMs - state.lastPingAt > 2000) {
+        state.lastPingAt = nowMs;
+        state.socket.emit('net_ping', { t: nowMs });
+      }
+    }
     const w = W(), h = H();
     const cell = CELL();
     const bx = BOARD_X(), by = BOARD_Y();
@@ -923,12 +964,14 @@
       }
       updateScoreboard();
       updateTurnDisplay();
+      updateNetQualityUI();
     });
 
     state.socket.on('c4_move_made', data => {
-      state.board = data.board;
-      state.turn = data.next_turn;
-      state.scores = data.scores;
+      data = data || {};
+      if (Array.isArray(data.board)) state.board = data.board;
+      if (data.next_turn !== undefined && data.next_turn !== null) state.turn = data.next_turn;
+      if (Array.isArray(data.scores)) state.scores = data.scores;
       // Cancel any in-flight optimistic animation: the echo is final.
       state.animating = false;
       state.animCol = -1;
@@ -944,6 +987,14 @@
       } else if (data.is_draw) {
         handleGameOver(true, -1);
       }
+    });
+
+    state.socket.on('net_pong', data => {
+      const sent = data && Number(data.t);
+      if (!Number.isFinite(sent)) return;
+      const sample = Math.max(0, (performance.now ? performance.now() : Date.now()) - sent);
+      state.rttMs = state.rttMs ? Math.round(state.rttMs * 0.7 + sample * 0.3) : Math.round(sample);
+      updateNetQualityUI();
     });
 
     state.socket.on('c4_restarted', data => {
@@ -972,6 +1023,7 @@
         state.turn = data.turn;
       }
       updateTurnDisplay();
+      updateNetQualityUI();
     });
 
     state.socket.on('c4_matchmaking_waiting', () => {

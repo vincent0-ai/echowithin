@@ -832,6 +832,9 @@ try:
     game_match_history_conf.create_index([('players.user_id', 1), ('game', 1), ('created_at', -1)])
     game_match_history_conf.create_index([('bond_id', 1), ('game', 1)], sparse=True)
     game_match_history_conf.create_index([('tournament_id', 1)], sparse=True)
+    # Idempotency: one history row per match_key. Sparse keeps legacy rows
+    # (which have no match_key) valid.
+    game_match_history_conf.create_index([('match_key', 1)], unique=True, sparse=True)
     player_stats_conf.create_index([('user_id', 1), ('game', 1)], unique=True)
     player_stats_conf.create_index([('game', 1), ('elo', -1)])
     bond_h2h_records_conf.create_index([('bond_id', 1), ('game', 1)], unique=True)
@@ -1313,7 +1316,8 @@ def _calc_elo(player_elo, opponent_elo, score, total_matches):
 
 
 def record_match_result(game, room_id, players, winner_id, score=None, metadata=None,
-                        bond_id=None, tournament_id=None, duration_secs=None):
+                        bond_id=None, tournament_id=None, duration_secs=None,
+                        match_key=None, match_no=None):
     """Record a completed 1v1 match: history, per-game stats, ELO, and optionally bond H2H.
 
     Args:
@@ -1326,9 +1330,13 @@ def record_match_result(game, room_id, players, winner_id, score=None, metadata=
         bond_id: str or None – if this was a bond challenge
         tournament_id: str or None – if this was a tournament match
         duration_secs: int or None
+        match_key: str or None – stable idempotency key for this exact match
+            (e.g. 'slime_volleyball:<room>:<match_no>'). A repeated award for
+            the same key returns the existing document and changes nothing.
+        match_no: int or None – per-room match counter (rematch generation).
 
     Returns:
-        The inserted match document, or None on error.
+        The inserted (or already existing) match document, or None on error.
     """
     if game not in GAMES_WITH_MATCH_TRACKING:
         return None
@@ -1337,6 +1345,15 @@ def record_match_result(game, room_id, players, winner_id, score=None, metadata=
     # Only track authenticated users
     if not all(p.get('user_id') for p in players):
         return None
+    # Idempotency gate: one award per match key, ever. Reconnect retries,
+    # duplicate host emits and double-submits all resolve to the same doc.
+    if match_key:
+        try:
+            existing = game_match_history_conf.find_one({'match_key': match_key})
+        except Exception:
+            existing = None
+        if existing:
+            return existing
 
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
@@ -1373,6 +1390,8 @@ def record_match_result(game, room_id, players, winner_id, score=None, metadata=
         'game': game,
         'room_id': room_id,
         'players': players,
+        'match_key': match_key,
+        'match_no': match_no,
         'result': 'draw' if not winner_id else 'win',
         'winner_id': winner_id,
         'loser_id': loser_id,
@@ -2796,6 +2815,8 @@ def broadcast_matchmaking_queue(queue, event_name):
 # --- Slime Volleyball 1v1 Real-Time Handlers ---
 active_slime_rooms = {}
 slime_matchmaking_queue = []
+# Must match WIN_SCORE in static/slime_volleyball.js.
+SLIME_WIN_SCORE = 5
 
 @socketio.on('join_slime_room')
 def handle_join_slime_room(data=None, *args, **kwargs):
@@ -2824,6 +2845,8 @@ def handle_join_slime_room(data=None, *args, **kwargs):
             'guest_sid': None,
             'guest_name': None,
             'guest_user_id': None,
+            'match_no': 0,
+            'scores': [0, 0],
             'bond_id': (data or {}).get('bond_id') if isinstance(data, dict) else None,
             'tournament_id': (data or {}).get('tournament_id') if isinstance(data, dict) else None,
         }
@@ -2832,7 +2855,8 @@ def handle_join_slime_room(data=None, *args, **kwargs):
             'room_id': room_id,
             'is_host': True,
             'host_name': user_name,
-            'guest_name': None
+            'guest_name': None,
+            'match_no': 0
         }, room=sid)
         return
     seat = _seat_status(room_info, sid, user_uid)
@@ -2850,7 +2874,8 @@ def handle_join_slime_room(data=None, *args, **kwargs):
             'room_id': room_id,
             'is_host': True,
             'host_name': room_info['host_name'],
-            'guest_name': room_info.get('guest_name')
+            'guest_name': room_info.get('guest_name'),
+            'match_no': room_info.get('match_no', 0)
         }, room=sid)
     elif seat == 'guest':
         # Re-joining guest: refresh state.
@@ -2862,7 +2887,8 @@ def handle_join_slime_room(data=None, *args, **kwargs):
             'room_id': room_id,
             'is_host': False,
             'host_name': room_info['host_name'],
-            'guest_name': room_info['guest_name']
+            'guest_name': room_info['guest_name'],
+            'match_no': room_info.get('match_no', 0)
         }, room=sid)
     else:
         # Second player is Guest
@@ -2871,6 +2897,8 @@ def handle_join_slime_room(data=None, *args, **kwargs):
         room_info['guest_user_id'] = user_uid
         serving = secrets.choice([-1, 1])
         room_info['serving'] = serving
+        room_info['match_no'] = 0
+        room_info['scores'] = [0, 0]
         active_slime_rooms[room_id] = room_info
         # Notify Guest
         emit('slime_room_joined', {
@@ -2878,7 +2906,8 @@ def handle_join_slime_room(data=None, *args, **kwargs):
             'is_host': False,
             'host_name': room_info['host_name'],
             'guest_name': user_name,
-            'serving': serving
+            'serving': serving,
+            'match_no': 0
         }, room=sid)
         # Notify Host that opponent joined
         emit('slime_room_joined', {
@@ -2886,7 +2915,8 @@ def handle_join_slime_room(data=None, *args, **kwargs):
             'is_host': True,
             'host_name': room_info['host_name'],
             'guest_name': user_name,
-            'serving': serving
+            'serving': serving,
+            'match_no': 0
         }, room=room_info['host_sid'])
 
 @socketio.on('leave_slime_room')
@@ -2917,6 +2947,14 @@ def handle_slime_host_sync(data=None, *args, **kwargs):
         return
     if not room_info.get('guest_sid'):
         return
+    # Track the authoritative score/match generation so match-end awards can
+    # be validated server-side instead of trusting a bare claim.
+    scores = data.get('scores')
+    if isinstance(scores, list) and len(scores) >= 2:
+        try:
+            room_info['scores'] = [max(0, int(scores[0])), max(0, int(scores[1]))]
+        except (TypeError, ValueError):
+            pass
     emit('slime_host_sync', data, room=room_id, include_self=False)
 
 @socketio.on('slime_player_input')
@@ -2943,7 +2981,16 @@ def handle_slime_restart(data=None, *args, **kwargs):
         return
     serving = secrets.choice([-1, 1])
     room_info['serving'] = serving
-    emit('slime_restart', {'serving': serving}, room=room_id, include_self=False)
+    # New match generation: scores reset here (authoritative) and every award
+    # is keyed by (room, match_no), so a rematch can never double-pay or
+    # reuse the previous match's id. Broadcast includes the sender so both
+    # clients reset from the same server-assigned generation.
+    room_info['match_no'] = int(room_info.get('match_no', 0) or 0) + 1
+    room_info['scores'] = [0, 0]
+    emit('slime_restart', {
+        'serving': serving,
+        'match_no': room_info['match_no']
+    }, room=room_id)
 
 @socketio.on('slime_match_end')
 def handle_slime_match_end(data=None, *args, **kwargs):
@@ -2962,21 +3009,55 @@ def handle_slime_match_end(data=None, *args, **kwargs):
     winner_side = data.get('winner')  # 'host' or 'guest'
     if winner_side not in ('host', 'guest'):
         return
+
+    # The report must belong to the current (server-assigned) match
+    # generation. A late report from an older match is dropped.
+    match_no = _safe_int(data.get('match_no'), default=None, lo=0)
+    if match_no is None or match_no != int(room_info.get('match_no', 0) or 0):
+        return
+    # Idempotent: one award per match number, regardless of retries.
+    if room_info.get('recorded_match_no') == match_no:
+        return
+
+    # Validate the claimed result against the synced score. A bare winner
+    # claim (e.g. one injected by a client) is not enough.
+    scores = data.get('score')
+    if isinstance(scores, dict):
+        scores = [scores.get('host'), scores.get('guest')]
+    try:
+        final_scores = [max(0, int(scores[0])), max(0, int(scores[1]))]
+    except (TypeError, ValueError, IndexError, KeyError):
+        return
+    winner_index = 0 if winner_side == 'host' else 1
+    loser_index = 1 - winner_index
+    # A match ends the moment one side reaches the win score, so a valid
+    # report is exactly WIN_SCORE for the winner and below it for the loser.
+    if final_scores[winner_index] != SLIME_WIN_SCORE:
+        return
+    if final_scores[loser_index] >= SLIME_WIN_SCORE:
+        return
+
     host_uid = room_info.get('host_user_id')
     guest_uid = room_info.get('guest_user_id')
-    if host_uid and guest_uid:
-        winner_id = host_uid if winner_side == 'host' else guest_uid
-        record_match_result(
-            game='slime_volleyball', room_id=room_id,
-            players=[
-                {'user_id': host_uid, 'username': room_info.get('host_name', 'Host'), 'side': 'host'},
-                {'user_id': guest_uid, 'username': room_info.get('guest_name', 'Guest'), 'side': 'guest'}
-            ],
-            winner_id=winner_id,
-            score=data.get('score'),
-            metadata={'mode': 'online'},
-            bond_id=room_info.get('bond_id')
-        )
+    if not (host_uid and guest_uid):
+        return
+
+    room_info['recorded_match_no'] = match_no
+    room_info['scores'] = final_scores
+    winner_id = host_uid if winner_side == 'host' else guest_uid
+    record_match_result(
+        game='slime_volleyball', room_id=room_id,
+        players=[
+            {'user_id': host_uid, 'username': room_info.get('host_name', 'Host'), 'side': 'host'},
+            {'user_id': guest_uid, 'username': room_info.get('guest_name', 'Guest'), 'side': 'guest'}
+        ],
+        winner_id=winner_id,
+        score={'host': final_scores[0], 'guest': final_scores[1]},
+        metadata={'mode': 'online'},
+        bond_id=room_info.get('bond_id'),
+        match_key=f'slime_volleyball:{room_id}:{match_no}',
+        match_no=match_no
+    )
  
 @socketio.on('find_slime_match')
 def handle_find_slime_match(data=None, *args, **kwargs):
@@ -3005,7 +3086,9 @@ def handle_find_slime_match(data=None, *args, **kwargs):
             'guest_sid': sid,
             'guest_name': user_name,
             'guest_user_id': user_id,
-            'serving': serving
+            'serving': serving,
+            'match_no': 0,
+            'scores': [0, 0]
         }
 
         # Automatically join both sockets into the room
@@ -3021,7 +3104,8 @@ def handle_find_slime_match(data=None, *args, **kwargs):
             'is_host': True,
             'host_name': opponent['user_name'],
             'guest_name': user_name,
-            'serving': serving
+            'serving': serving,
+            'match_no': 0
         }, room=opponent['sid'])
 
         # Notify joining guest
@@ -3030,7 +3114,8 @@ def handle_find_slime_match(data=None, *args, **kwargs):
             'is_host': False,
             'host_name': opponent['user_name'],
             'guest_name': user_name,
-            'serving': serving
+            'serving': serving,
+            'match_no': 0
         }, room=sid)
 
         broadcast_matchmaking_queue(slime_matchmaking_queue, 'slime_queue_updated')
@@ -3058,6 +3143,13 @@ def handle_cancel_slime_matchmaking(data=None, *args, **kwargs):
 # --- Ping Pong 1v1 Real-Time Handlers ---
 active_pong_rooms = {}
 pong_matchmaking_queue = []
+
+@socketio.on('net_ping')
+def handle_net_ping(data=None, *args, **kwargs):
+    """Echo a client timestamp so clients can measure RTT for the quality chip."""
+    t = data.get('t') if isinstance(data, dict) else None
+    emit('net_pong', {'t': t}, room=request.sid)
+
 
 def _prune_unattended_game_rooms():
     """Drop any in-memory game rooms that have been left unattended for > 1 hour."""
@@ -3088,6 +3180,7 @@ def _pong_joined_payload(room_id, room_info, is_host):
         'scores': list(room_info.get('scores', [0, 0])),
         'target': room_info.get('target'),
         'serving_player': room_info.get('serving_player', 0),
+        'match_no': room_info.get('match_no', 0),
         'rejoined': False,
     }
 
@@ -3123,6 +3216,7 @@ def handle_join_pong_room(data=None, *args, **kwargs):
             'scores': [0, 0],
             'target': None,
             'serving_player': 0,
+            'match_no': 0,
             'created_at': datetime.datetime.now(datetime.timezone.utc),
             'bond_id': payload.get('bond_id'),
             'tournament_id': payload.get('tournament_id'),
@@ -3242,14 +3336,21 @@ def handle_pong_score_update(data=None, *args, **kwargs):
     # match self-resolves in a runaway loop. See commit.md.
     emit('pong_score_update', data, room=room_id, include_self=False)
 
-    # Record match when a validated winner is relayed (once per room: rooms
-    # void on leave and restart clears the flag, so re-emits can't farm ELO).
-    if data.get('winner') in (1, 2) and room_info and not room_info.get('result_recorded'):
+    # Record match when a validated winner is relayed. Keyed by the server
+    # match generation: re-emits within the same match, reconnect retries and
+    # duplicate reports all resolve to one idempotent award.
+    match_no = _safe_int(data.get('match_no'), default=None, lo=0)
+    if match_no is None:
+        match_no = _safe_int(room_info.get('match_no'), default=0, lo=0)
+    current_no = _safe_int(room_info.get('match_no'), default=0, lo=0)
+    if data.get('winner') in (1, 2) and room_info and match_no == current_no \
+            and room_info.get('recorded_match_no') != match_no:
         w = data['winner']
         host_uid = room_info.get('host_user_id')
         guest_uid = room_info.get('guest_user_id')
         if host_uid and guest_uid:
             winner_id = host_uid if w == 1 else guest_uid
+            room_info['recorded_match_no'] = match_no
             record_match_result(
                 game='ping_pong', room_id=room_id,
                 players=[
@@ -3259,9 +3360,10 @@ def handle_pong_score_update(data=None, *args, **kwargs):
                 winner_id=winner_id,
                 score={'host': room_info['scores'][0], 'guest': room_info['scores'][1]},
                 metadata={'mode': 'online', 'target': room_info.get('target')},
-                bond_id=room_info.get('bond_id')
+                bond_id=room_info.get('bond_id'),
+                match_key=f'ping_pong:{room_id}:{match_no}',
+                match_no=match_no
             )
-            room_info['result_recorded'] = True
 
 @socketio.on('pong_restart')
 def handle_pong_restart(data=None, *args, **kwargs):
@@ -3276,8 +3378,11 @@ def handle_pong_restart(data=None, *args, **kwargs):
     serving_player = secrets.choice([0, 1])
     room_info['scores'] = [0, 0]
     room_info['serving_player'] = serving_player
-    room_info['result_recorded'] = False
-    emit('pong_restart', {'serving_player': serving_player}, room=room_id)
+    room_info['match_no'] = int(room_info.get('match_no', 0) or 0) + 1
+    emit('pong_restart', {
+        'serving_player': serving_player,
+        'match_no': room_info['match_no']
+    }, room=room_id)
 
 @socketio.on('pong_target_update')
 def handle_pong_target_update(data=None, *args, **kwargs):
@@ -3339,6 +3444,7 @@ def handle_find_pong_match(data=None, *args, **kwargs):
             'scores': [0, 0],
             'target': room_target,
             'serving_player': serving_player,
+            'match_no': 0,
             'disconnected_at': None,
             'disconnected_side': None,
             'just_rejoined': False,
@@ -3358,6 +3464,7 @@ def handle_find_pong_match(data=None, *args, **kwargs):
             'player': 0,
             'target': room_target,
             'serving_player': serving_player,
+            'match_no': 0,
         }, room=opponent['sid'])
 
         emit('pong_match_found', {
@@ -3368,6 +3475,7 @@ def handle_find_pong_match(data=None, *args, **kwargs):
             'player': 1,
             'target': room_target,
             'serving_player': serving_player,
+            'match_no': 0,
         }, room=sid)
 
         broadcast_matchmaking_queue(pong_matchmaking_queue, 'pong_queue_updated')
@@ -3750,6 +3858,7 @@ def handle_join_c4_room(data=None, *args, **kwargs):
             'guest_user_id': None,
             'board': [[-1] * C4_COLS for _ in range(C4_ROWS)],
             'turn': 0,
+            'round_no': 0,
             'scores': [0, 0, 0], # [p0, p1, draws]
             'bond_id': (data or {}).get('bond_id') if isinstance(data, dict) else None,
             'tournament_id': (data or {}).get('tournament_id') if isinstance(data, dict) else None,
@@ -3905,11 +4014,13 @@ def handle_c4_move(data=None, *args, **kwargs):
         'board': board
     }, room=room_id)
 
-    # Record completed round
+    # Record completed round. Keyed by room + round number so a duplicate or
+    # retried move can never write a second award for the same round.
     if winner is not None or is_draw:
         host_uid = room_info.get('host_user_id')
         guest_uid = room_info.get('guest_user_id')
         if host_uid and guest_uid:
+            round_no = _safe_int(room_info.get('round_no'), default=0, lo=0)
             winner_id = None
             if winner == 0:
                 winner_id = host_uid
@@ -3923,8 +4034,10 @@ def handle_c4_move(data=None, *args, **kwargs):
                 ],
                 winner_id=winner_id,
                 score={'host': room_info['scores'][0], 'guest': room_info['scores'][1], 'draws': room_info['scores'][2]},
-                metadata={'mode': 'online'},
-                bond_id=room_info.get('bond_id')
+                metadata={'mode': 'online', 'round': round_no},
+                bond_id=room_info.get('bond_id'),
+                match_key=f'connect_four:{room_id}:{round_no}',
+                match_no=round_no
             )
 
 @socketio.on('c4_restart')
@@ -3939,7 +4052,8 @@ def handle_c4_restart(data=None, *args, **kwargs):
     next_starter = secrets.choice([0, 1])
     room_info['starter'] = next_starter
     room_info['turn'] = next_starter
-    emit('c4_restarted', {'turn': next_starter}, room=room_id)
+    room_info['round_no'] = int(room_info.get('round_no', 0) or 0) + 1
+    emit('c4_restarted', {'turn': next_starter, 'round_no': room_info['round_no']}, room=room_id)
 
 @socketio.on('find_c4_match')
 def handle_find_c4_match(data=None, *args, **kwargs):
@@ -3969,6 +4083,7 @@ def handle_find_c4_match(data=None, *args, **kwargs):
             'board': [[-1] * C4_COLS for _ in range(C4_ROWS)],
             'starter': starter,
             'turn': starter,
+            'round_no': 0,
             'scores': [0, 0, 0]
         }
 
@@ -6007,6 +6122,7 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
             'scores': [0, 0],
             'target': challenge_target,
             'serving_player': serving_player,
+            'match_no': 0,
             'disconnected_at': None,
             'disconnected_side': None,
             'just_rejoined': False,
@@ -6016,8 +6132,8 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
             join_room(room_id, sid=sid)
         except Exception:
             pass
-        emit('pong_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0, 'target': challenge_target, 'serving_player': serving_player}, room=challenger_sid)
-        emit('pong_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1, 'target': challenge_target, 'serving_player': serving_player}, room=sid)
+        emit('pong_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0, 'target': challenge_target, 'serving_player': serving_player, 'match_no': 0}, room=challenger_sid)
+        emit('pong_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1, 'target': challenge_target, 'serving_player': serving_player, 'match_no': 0}, room=sid)
         broadcast_matchmaking_queue(pong_matchmaking_queue, 'pong_queue_updated')
 
     elif game == 'c4':

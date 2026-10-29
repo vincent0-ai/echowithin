@@ -196,10 +196,14 @@ class TestLobbyAlias:
 
 
 class TestSlimeRestartEcho:
-    def test_slime_restart_excludes_sender(self, pong_state, app):
+    def test_slime_restart_broadcasts_generation_to_all(self, pong_state, app):
+        """The sender must receive the restart too: the server assigns the next
+        match generation, and both clients reset from that single value. A
+        client never re-emits a restart it received, so there is no echo loop."""
         m = pong_state
         h = _handlers()['handle_slime_restart']
-        m.active_slime_rooms['s1'] = {'host_sid': 'sid_A', 'guest_sid': None}
+        m.active_slime_rooms['s1'] = {'host_sid': 'sid_A', 'guest_sid': None,
+                                      'match_no': 0, 'scores': [0, 0]}
         try:
             with app.test_request_context():
                 req = MagicMock()
@@ -208,7 +212,9 @@ class TestSlimeRestartEcho:
                         patch.object(m, 'emit') as mock_emit:
                     h({'room_id': 's1'})
             assert mock_emit.call_count == 1
-            assert mock_emit.call_args[1].get('include_self') is False
+            assert mock_emit.call_args[1].get('include_self') is not False
+            assert mock_emit.call_args[0][1]['match_no'] == 1
+            assert m.active_slime_rooms['s1']['match_no'] == 1
         finally:
             m.active_slime_rooms.pop('s1', None)
 

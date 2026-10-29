@@ -236,6 +236,7 @@
       </div>
     </div>
     <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+      <span id="net-quality" class="ew-badge" title="Connection quality" style="display: none; font-size: 0.72rem; padding: 0.15rem 0.55rem;">RTT &mdash;</span>
       <button type="button" id="pause-btn" class="ew-btn ew-btn--sm" style="cursor: pointer; background: #e06a3b; border-color: #c95729; font-weight: 600;">
         Play / Serve
       </button>
@@ -334,7 +335,10 @@
         <h3 id="winner-text" style="margin: 0 0 0.4rem 0; font-size: 1.4rem; color: var(--text-dark-color); font-weight: 700;">Match Complete</h3>
         <div id="winner-points" style="font-size: 0.95rem; font-weight: 700; color: #e06a3b; margin-bottom: 0.4rem;"></div>
         <div id="winner-streak" style="display: none; font-size: 0.92rem; font-weight: 600; color: #2e86ab; margin-bottom: 0.8rem;"></div>
-        <button type="button" id="rematch-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Play Rematch</button>
+        <div style="display: flex; gap: 0.5rem; justify-content: center;">
+          <button type="button" id="rematch-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Play Rematch</button>
+          <button type="button" id="leave-match-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">Leave</button>
+        </div>
       </div>
     </div>
 

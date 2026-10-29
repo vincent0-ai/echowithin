@@ -496,16 +496,18 @@ class TestSlimeVolleyball:
                 assert any(c[0][0] == 'slime_host_sync' and c[0][1] == sync_payload
                            for c in mock_emit.call_args_list)
 
-                # Restart event (member-gated; must exclude the sender: a
-                # remote-triggered restart never re-emits, so an echo would
-                # ping-pong forever)
+                # Restart event (member-gated). The broadcast includes the
+                # sender: both clients must reset from the same server-assigned
+                # match generation, and the client never re-emits a restart it
+                # received (that is what prevents the echo ping-pong).
                 mock_req.sid = 'sid_host_123'
                 m.current_user.id = 'test-host'
                 m.current_user.username = 'Host'
                 restart_handler({'room_id': room_id})
                 assert mock_emit.call_args[0][0] == 'slime_restart'
                 assert 'serving' in mock_emit.call_args[0][1]
-                assert mock_emit.call_args[1] == {'room': room_id, 'include_self': False}
+                assert 'match_no' in mock_emit.call_args[0][1]
+                assert mock_emit.call_args[1] == {'room': room_id}
 
                 # Leave event
                 leave_handler({'room_id': room_id})

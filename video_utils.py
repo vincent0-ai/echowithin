@@ -111,6 +111,26 @@ def compress_video_if_needed(
                 )
                 return compressed, 'video/mp4'
 
+        # Final fallback: downscale to 720p and recompute bitrate for the new
+        # duration-independent ceiling. This mirrors what online compressors do
+        # to reach aggressive size targets.
+        try:
+            os.remove(out_path)
+        except OSError:
+            pass
+        target_total_bits = max_output_bytes * 8 * 0.90
+        fallback_video_bitrate = max(50_000, int(target_total_bits / duration) - audio_bitrate)
+        compressed = _run_ffmpeg(
+            in_path, out_path, fallback_video_bitrate, audio_bitrate, timeout,
+            scale='trunc(iw/2)*2:trunc(ih/2)*2:force_original_aspect_ratio=increase,pad=ceil(iw/2)*2:ceil(ih/2)*2,scale=-2:720',
+        )
+        if compressed is not None and len(compressed) <= max_output_bytes:
+            logger.info(
+                '720p fallback succeeded: %d → %d bytes',
+                len(input_bytes), len(compressed),
+            )
+            return compressed, 'video/mp4'
+
         # Compression did not bring the file under the limit
         logger.warning(
             'Compression could not reduce video below %d bytes; returning original',
@@ -133,6 +153,7 @@ def _run_ffmpeg(
     in_path: str, out_path: str,
     video_bitrate: int, audio_bitrate: int,
     timeout: int,
+    scale: str = 'trunc(iw/2)*2:trunc(ih/2)*2',
 ) -> bytes | None:
     """Run a single FFmpeg encode pass. Returns output bytes or *None*."""
     cmd = [
@@ -145,7 +166,7 @@ def _run_ffmpeg(
         '-c:a', 'aac',
         '-b:a', str(audio_bitrate),
         '-movflags', '+faststart',
-        '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+        '-vf', f'scale={scale}',
         out_path,
     ]
     try:

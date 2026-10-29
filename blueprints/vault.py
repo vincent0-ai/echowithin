@@ -26,7 +26,7 @@ from config import (
 from security import (
     limits, _get_user_fernet, encrypt_media_bytes, build_media_serve_url,
     brute_force_check, brute_force_record_failure, brute_force_clear,
-    _bf_get_client_ip, mask_email
+    _bf_get_client_ip, mask_email, max_plaintext_for_encrypted_limit
 )
 
 bp = Blueprint('vault', __name__, template_folder='templates')
@@ -480,26 +480,29 @@ def media_limit_exceeded(mime, size):
 
 
 def _prepare_for_cloudinary(raw_path, mime):
-    """Return ``(bytes, mime)`` ready for a Cloudinary raw upload.
+    """Return ``(bytes, mime)`` ready for an encrypted Cloudinary raw upload.
 
-    Videos larger than Cloudinary's free-plan raw ceiling are re-encoded with
-    FFmpeg (same path as DM uploads). If compression cannot fit, a clear
-    per-request error is raised instead of a slow Cloudinary rejection.
+    Cloudinary caps the **encrypted** payload at 10MB, and Fernet inflates data
+    ~1.334x, so videos must be compressed against the smaller plaintext budget
+    that still fits after encryption — otherwise every upload just over ~7.5MB
+    is rejected no matter how hard FFmpeg works.
     """
     with open(raw_path, 'rb') as f:
         data = f.read()
 
-    if not mime.startswith('video/') or len(data) <= CLOUDINARY_RAW_UPLOAD_LIMIT:
+    plaintext_budget = max_plaintext_for_encrypted_limit(CLOUDINARY_RAW_UPLOAD_LIMIT)
+
+    if not mime.startswith('video/') or len(data) <= plaintext_budget:
         return data, mime
 
     from video_utils import compress_video_if_needed
     compressed, new_mime = compress_video_if_needed(
-        data, CLOUDINARY_RAW_UPLOAD_LIMIT,
+        data, plaintext_budget,
         timeout=VIDEO_COMPRESSION_TIMEOUT,
         temp_dir=current_app.config.get('TEMP_UPLOAD_FOLDER', 'temp_uploads'),
     )
     del data
-    if len(compressed) > CLOUDINARY_RAW_UPLOAD_LIMIT:
+    if len(compressed) > plaintext_budget:
         raise _VaultUploadTooLarge(
             'Video too long to store in the vault even after compression. '
             'Try a shorter clip.'

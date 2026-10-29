@@ -163,7 +163,8 @@ from security import (
     _encrypt_dek, _decrypt_dek, limits, admin_required, owner_required,
     KeyUnavailableError,
     parse_iso_utc, build_unified_diff_text, build_merge_preview_text,
-    get_active_achievements, is_safe_url, is_same_origin_request
+    get_active_achievements, is_safe_url, is_same_origin_request,
+    encrypted_size_for, max_plaintext_for_encrypted_limit
 )
 from utils import (
     _linkify_target_blank, cleanup_share_media, cleanup_post_media,
@@ -193,6 +194,7 @@ __all__ = [
     'decrypt_form_response', 'encrypt_game_data', 'decrypt_game_data',
     '_get_notes_encryption_key', 'get_notes_fernet', '_get_user_fernet',
     '_get_dm_fernet', 'destroy_cloudinary_media', 'encrypt_media_bytes',
+    'encrypted_size_for', 'max_plaintext_for_encrypted_limit',
     '_decrypt_with_candidate_ids', '_note_decryption_candidates',
     'invalidate_note_decryption_cache', 'generate_user_envelope_keys',
     'generate_conversation_envelope_keys', '_get_user_fernet_v3', '_get_dm_fernet_v3',

@@ -1061,6 +1061,28 @@ def encrypt_media_bytes(data):
     return _get_media_fernet().encrypt(data)
 
 
+# Fernet (AES-128-CBC + HMAC-SHA256) overhead per token:
+#   1 version byte + 8 timestamp + 16 IV + 32 HMAC + PKCS7 padding (1..16)
+# Worst case is exactly 57 bytes over the plaintext length.
+FERNET_OVERHEAD_BYTES = 57
+
+
+def encrypted_size(plain_size):
+    """Return the ciphertext size produced by encrypt_media_bytes for *plain_size*."""
+    return plain_size + FERNET_OVERHEAD_BYTES
+
+
+def max_plain_size_for_cipher(cipher_limit):
+    """Largest plaintext that still fits *cipher_limit* once encrypted.
+
+    Storage providers cap the encrypted (uploaded) size, so callers that
+    compress media before encryption must budget against this value, not the
+    raw cap -- otherwise a perfectly compressed file is rejected after the
+    ~33% Fernet expansion (base64+HMAC) pushes it over the limit.
+    """
+    return max(0, int(cipher_limit) - FERNET_OVERHEAD_BYTES)
+
+
 def decrypt_media_bytes(token_bytes):
     """Decrypts media ciphertext bytes. Returns plaintext bytes. Raises on tamper."""
     if token_bytes is None:
@@ -1068,6 +1090,43 @@ def decrypt_media_bytes(token_bytes):
     if isinstance(token_bytes, bytearray):
         token_bytes = bytes(token_bytes)
     return _get_media_fernet().decrypt(token_bytes)
+
+
+# Fernet token layout (see cryptography.fernet._encrypt_from_parts):
+#   basic_parts = 1 (version) + 8 (timestamp) + 16 (IV) + ciphertext
+#   ciphertext  = PKCS7-padded plaintext, always a whole 16-byte block
+#   token       = urlsafe_b64encode(basic_parts + HMAC-SHA256(32 bytes))
+# so the token is ~1.334x the plaintext — a 10MB video becomes ~13.3MB.
+_FERNET_HEADER_BYTES = 1 + 8 + 16 + 32  # version + timestamp + IV + HMAC
+_FERNET_BLOCK = 16
+
+
+def encrypted_size_for(plaintext_size):
+    """Exact byte length that ``encrypt_media_bytes`` produces for this input."""
+    if not plaintext_size or plaintext_size <= 0:
+        return 0
+    padded = (plaintext_size // _FERNET_BLOCK + 1) * _FERNET_BLOCK
+    basic = _FERNET_HEADER_BYTES - 32 + padded  # HMAC counted after padding
+    return 4 * -(-(basic + 32) // 3)            # base64: 4 chars per 3 bytes
+
+
+def max_plaintext_for_encrypted_limit(encrypted_limit):
+    """Largest plaintext whose *encrypted* form fits within *encrypted_limit*.
+
+    Upload stores such as Cloudinary cap the **ciphertext** size. Compressing a
+    video to the same number of bytes as that cap guarantees rejection, because
+    encryption then inflates it by ~33%. Always size media against this value.
+    """
+    if not encrypted_limit or encrypted_limit <= 0:
+        return 0
+    lo, hi = 0, int(encrypted_limit)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if encrypted_size_for(mid) <= encrypted_limit:
+            lo = mid
+        else:
+            hi = mid - 1
+    return lo
 
 
 def _media_signature(public_id, expires_at):

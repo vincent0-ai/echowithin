@@ -657,17 +657,21 @@ def api_upload_dm_image():
         raw_bytes = file.read()
         mime_type = (file.mimetype or ('video/mp4' if is_video else 'image/jpeg'))[:200]
 
-        # Compress videos that exceed Cloudinary's raw upload limit
+        # Cloudinary caps the ENCRYPTED payload, and Fernet adds ~33% overhead,
+        # so measure against the plaintext budget that still fits after encryption.
+        cloud_limit = current_app.config.get('CLOUDINARY_RAW_UPLOAD_LIMIT', m.CLOUDINARY_RAW_UPLOAD_LIMIT)
+        plaintext_budget = m.max_plaintext_for_encrypted_limit(cloud_limit)
+
+        # Compress videos that exceed the post-encryption budget
         if is_video:
-            cloud_limit = current_app.config.get('CLOUDINARY_RAW_UPLOAD_LIMIT', m.CLOUDINARY_RAW_UPLOAD_LIMIT)
             comp_timeout = current_app.config.get('VIDEO_COMPRESSION_TIMEOUT', m.VIDEO_COMPRESSION_TIMEOUT)
-            if len(raw_bytes) > cloud_limit:
+            if len(raw_bytes) > plaintext_budget:
                 from video_utils import compress_video_if_needed
                 raw_bytes, mime_type = compress_video_if_needed(
-                    raw_bytes, cloud_limit, timeout=comp_timeout,
+                    raw_bytes, plaintext_budget, timeout=comp_timeout,
                     temp_dir=current_app.config.get('TEMP_UPLOAD_FOLDER', 'temp_uploads'),
                 )
-                if len(raw_bytes) > cloud_limit:
+                if len(raw_bytes) > plaintext_budget:
                     return jsonify({'error': 'Video too long to send even after compression. Try a shorter clip.'}), 400
 
         upload_result = m.cloudinary.uploader.upload(

@@ -311,3 +311,16 @@
 - Note: videos longer than ~5-6 min still cannot fit 10MB at watchable quality by design; they now get a fast, clear error.
 - Tests: 647 passed.
 - Model attribution: Claude (agent)
+
+## Resource profiling + optimizations (ec12197)
+- Profiling method: copied the production-like video to temp, ran FFmpeg presets back-to-back, and measured the real encrypt/compress pipeline (tracemalloc + end-to-end timing).
+- CPU findings (real 23MB/36MB 720p sources, fixed bitrate so output size is constant):
+    fast 9.40s / 3.28MB  ->  veryfast 5.48s / 3.28MB  ->  superfast 4.58s / 3.17MB  ->  ultrafast 2.88s / 3.18MB
+  Because the output is bitrate-capped, a slower preset buys zero bytes. Shipped 'veryfast' (1.7x less CPU; ultrafast was 2.2x faster but lost real quality, SSIM 0.9735 -> 0.881).
+- RAM findings (real 36MB file, tracemalloc): in-memory encrypt peaked at 279MB (~7.7x payload); chunked streaming stays at 7.7MB. Fernet's base64+CBC pipeline is the multiplier.
+- video_utils.py: preset -> veryfast; failed encode pass is dropped before the 70% retry and the 720p fallback, so two output buffers are never resident at once.
+- blueprints/vault.py: plaintext reference released right after encryption so plaintext+ciphertext are not both live during upload.
+- NOTE: converting media to a chunked encrypted format would cut peak RAM ~36x, but it changes the stored format and would break every existing vault/DM item. Deliberately NOT done without explicit sign-off + a migration plan.
+- tests/test_video_compression_resources.py: guards the cheap preset, the absent '-threads' flag (it crashed libx264 on the build), faststart, and buffer release.
+- Tests: 654 passed.
+- Model attribution: Claude (agent)

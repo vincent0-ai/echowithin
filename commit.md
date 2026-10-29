@@ -282,3 +282,15 @@
 - Fast-forward merge; reviewed commit 'Fixed latency issues': netcode latency fix + fairness/idempotency (scripts/netcode_budget.py, updated game JS, new netcode regression/contract tests)
 - Tests: 623 passed locally on main before push; pushed to origin/main; branch deleted locally and remotely
 - Model attribution: merge performed by Claude (agent)
+
+## Vault large-video support + upload progress (49aa5fb)
+- Root cause of the 413: Cloudinary free-plan rejects raw uploads >10MB ("File size too large. Got 12478284. Maximum is 10485760.") after FFmpeg failed to fit the video; vault then surfaced it as a generic 500.
+- config.py: MAX_VIDEO_SIZE 100->200MB, VAULT_MAX_FILE_SIZE 50->100MB, added CLOUDINARY_HARD_UPLOAD_LIMIT, VIDEO_COMPRESSION_TIMEOUT 120->300s
+- main.py: app MAX_CONTENT_LENGTH = 205MB (transport ceiling; per-endpoint limits unchanged) + JSON 413 error handler
+- blueprints/vault.py: stream uploads to a temp file (no full read into RAM), per-type size limits (video 100MB / image 5MB / docs 10MB), reuse video_utils.compress_video_if_needed (same FFmpeg path as DMs) before upload, explicit "Video too long..." error when compression can't fit the 10MB Cloudinary ceiling
+- blueprints/chat.py: same explicit error instead of letting Cloudinary reject after the fact
+- templates/vault.html: real per-file upload progress bar (XHR upload.onprogress), sequential queue with per-file status, error surfaced per file
+- In-vault watching already worked via lightbox <video> + /media proxy with HTTP 206 range support — verified, no change needed
+- Privacy impact: unchanged — uploads remain server-side encrypted before Cloudinary; temp files deleted in finally
+- Tests: 623 passed locally; pushed to origin/main
+- Model attribution: Claude (agent)

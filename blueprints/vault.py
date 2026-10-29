@@ -21,7 +21,7 @@ import database
 from config import (
     VAULT_PIN_LENGTH, VAULT_AUTO_LOCK_MINUTES, VAULT_MAX_FILE_SIZE,
     VAULT_KDF_ITERATIONS, TIER_LIMITS, CLOUDINARY_RAW_UPLOAD_LIMIT,
-    VIDEO_COMPRESSION_TIMEOUT, get_env_variable
+    VIDEO_COMPRESSION_TIMEOUT, MAX_VIDEO_SIZE, MAX_IMAGE_SIZE, get_env_variable
 )
 from security import (
     limits, _get_user_fernet, encrypt_media_bytes, build_media_serve_url,
@@ -462,6 +462,51 @@ def vault_page():
 # Media upload / list / delete / serve
 # ---------------------------------------------------------------------------
 
+class _VaultUploadTooLarge(Exception):
+    """Raised when a file cannot be brought under the Cloudinary raw ceiling."""
+
+
+def _limit_for_mime(mime):
+    """Per-type accept limit for vault uploads."""
+    if mime.startswith('video/'):
+        return VAULT_MAX_FILE_SIZE  # 100MB — compressed server-side before upload
+    if mime.startswith('image/'):
+        return MAX_IMAGE_SIZE
+    return 10 * 1024 * 1024  # documents and other files
+
+
+def media_limit_exceeded(mime, size):
+    return size > _limit_for_mime(mime)
+
+
+def _prepare_for_cloudinary(raw_path, mime):
+    """Return ``(bytes, mime)`` ready for a Cloudinary raw upload.
+
+    Videos larger than Cloudinary's free-plan raw ceiling are re-encoded with
+    FFmpeg (same path as DM uploads). If compression cannot fit, a clear
+    per-request error is raised instead of a slow Cloudinary rejection.
+    """
+    with open(raw_path, 'rb') as f:
+        data = f.read()
+
+    if not mime.startswith('video/') or len(data) <= CLOUDINARY_RAW_UPLOAD_LIMIT:
+        return data, mime
+
+    from video_utils import compress_video_if_needed
+    compressed, new_mime = compress_video_if_needed(
+        data, CLOUDINARY_RAW_UPLOAD_LIMIT,
+        timeout=VIDEO_COMPRESSION_TIMEOUT,
+        temp_dir=current_app.config.get('TEMP_UPLOAD_FOLDER', 'temp_uploads'),
+    )
+    del data
+    if len(compressed) > CLOUDINARY_RAW_UPLOAD_LIMIT:
+        raise _VaultUploadTooLarge(
+            'Video too long to store in the vault even after compression. '
+            'Try a shorter clip.'
+        )
+    return compressed, new_mime
+
+
 @bp.route('/api/vault/upload', methods=['POST'])
 @login_required
 @limits(calls=20, period=60)
@@ -483,13 +528,6 @@ def vault_upload():
     if not file or file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
 
-    # Size check
-    file.seek(0, os.SEEK_END)
-    size = file.tell()
-    file.seek(0)
-    if size > VAULT_MAX_FILE_SIZE:
-        return jsonify({'error': f'File exceeds {VAULT_MAX_FILE_SIZE // (1024 * 1024)}MB limit'}), 400
-
     # Determine media type
     mime = (file.mimetype or 'application/octet-stream').split(';')[0].strip().lower()
     if mime.startswith('image/'):
@@ -499,33 +537,47 @@ def vault_upload():
     else:
         media_type = 'document'
 
-    raw_bytes = file.read()
+    # Size check — per-type limit (large videos allowed; images/docs are small)
+    file.seek(0, os.SEEK_END)
+    size = file.tell()
+    file.seek(0)
+    if media_limit_exceeded(mime, size):
+        limit_mb = _limit_for_mime(mime) // (1024 * 1024)
+        return jsonify({'error': f'File exceeds the {limit_mb}MB limit for this type'}), 400
 
-    # Compress videos exceeding Cloudinary raw limit
-    if media_type == 'video':
-        cloud_limit = CLOUDINARY_RAW_UPLOAD_LIMIT
-        if len(raw_bytes) > cloud_limit:
-            try:
-                from video_utils import compress_video_if_needed
-                raw_bytes, mime = compress_video_if_needed(
-                    raw_bytes, cloud_limit,
-                    timeout=VIDEO_COMPRESSION_TIMEOUT,
-                    temp_dir=current_app.config.get('TEMP_UPLOAD_FOLDER', 'temp_uploads'),
-                )
-            except Exception as e:
-                current_app.logger.warning(f'Vault video compression failed: {e}')
-
+    raw_path = None
     try:
-        encrypted_bytes = encrypt_media_bytes(raw_bytes)
+        # Persist upload to disk so we never hold the whole file in RAM.
+        temp_dir = current_app.config.get('TEMP_UPLOAD_FOLDER', 'temp_uploads')
+        os.makedirs(temp_dir, exist_ok=True)
+        raw_path = os.path.join(temp_dir, f'vault_{secrets.token_hex(8)}.bin')
+        with open(raw_path, 'wb') as out:
+            while True:
+                chunk = file.stream.read(1024 * 1024)
+                if not chunk:
+                    break
+                out.write(chunk)
+
+        upload_bytes, mime = _prepare_for_cloudinary(raw_path, mime)
+        encrypted_bytes = encrypt_media_bytes(upload_bytes)
+        del upload_bytes
         upload_result = cloudinary.uploader.upload(
             encrypted_bytes,
             folder='vault_items',
             resource_type='raw',
             type='authenticated'
         )
+    except _VaultUploadTooLarge as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         current_app.logger.error(f'Vault upload failed: {e}')
         return jsonify({'error': 'Upload failed'}), 500
+    finally:
+        if raw_path:
+            try:
+                os.remove(raw_path)
+            except OSError:
+                pass
 
     public_id = upload_result.get('public_id', '')
 

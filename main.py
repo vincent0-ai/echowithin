@@ -250,6 +250,11 @@ app.json_provider_class = MongoJSONProvider
 app.json = MongoJSONProvider(app)
 csrf = CSRFProtect(app)
 
+# Allow large uploads (e.g. 100MB vault videos) through Werkzeug's request-size
+# guard. Per-endpoint limits still apply inside each upload handler, so this is
+# a transport ceiling, not an authorization change.
+app.config['MAX_CONTENT_LENGTH'] = 205 * 1024 * 1024  # slightly above MAX_VIDEO_SIZE
+
 # Register all blueprints
 app.register_blueprint(pages_bp)
 app.register_blueprint(auth_bp)
@@ -7442,6 +7447,13 @@ def handle_invalid_objectid(e):
     if is_api:
         return jsonify({'error': 'Invalid resource identifier format'}), 400
     return render_template("404.html"), 404
+
+@app.errorhandler(413)
+def handle_request_too_large(e):
+    """Return a JSON error when an upload exceeds MAX_CONTENT_LENGTH."""
+    if request.path.startswith('/api/') or request.is_json:
+        return jsonify({'error': 'File too large'}), 413
+    return render_template("404.html"), 413
 
 @app.errorhandler(OverflowError)
 def handle_overflow_error(e):

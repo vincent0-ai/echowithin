@@ -40,10 +40,16 @@ ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogg', 'mov', 'm4v', 'avi', 'mkv'}
 ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'aac', 'webm'}
 ALLOWED_DOCUMENT_EXTENSIONS = {'pdf', 'doc', 'docx', 'txt', 'rtf'}
-MAX_VIDEO_SIZE = 100 * 1024 * 1024  # 100 MB accept limit for user-uploaded videos
+MAX_VIDEO_SIZE = 200 * 1024 * 1024  # 200 MB accept limit for user-uploaded videos
 MAX_IMAGE_SIZE = 5 * 1024 * 1024    # 5 MB limit per uploaded image
-CLOUDINARY_RAW_UPLOAD_LIMIT = 10 * 1024 * 1024  # 10 MB Cloudinary free-tier raw upload ceiling
-VIDEO_COMPRESSION_TIMEOUT = 120     # seconds before FFmpeg compression is killed
+# Largest raw payload we will ever push to Cloudinary in one request
+# (Cloudinary hard-caps a single upload at 100MB even on paid plans).
+CLOUDINARY_HARD_UPLOAD_LIMIT = 100 * 1024 * 1024
+# Cloudinary free plan rejects raw uploads over 10MB per file; videos larger
+# than this are re-encoded with FFmpeg to fit before upload, and files that
+# cannot be compressed under this ceiling are rejected with a clear message.
+CLOUDINARY_RAW_UPLOAD_LIMIT = 10 * 1024 * 1024
+VIDEO_COMPRESSION_TIMEOUT = 300     # seconds before FFmpeg compression is killed
 
 # --- Temporary Uploads for Background Processing ---
 TEMP_UPLOAD_FOLDER = 'temp_uploads'
@@ -87,7 +93,7 @@ LEGACY_KEY_FALLBACK = os.environ.get('LEGACY_KEY_FALLBACK', 'true').strip().lowe
 # --- Private Vault ---
 VAULT_PIN_LENGTH = 4
 VAULT_AUTO_LOCK_MINUTES = 5
-VAULT_MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB per vault item
+VAULT_MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB per vault item
 VAULT_KDF_ITERATIONS = 480000  # PIN hashing iterations
 
 TIER_LIMITS = {

@@ -271,6 +271,22 @@
             text-align: center;
         }
 
+        .vault-upload-bar {
+            width: 100%;
+            height: 6px;
+            margin-top: 0.5rem;
+            border-radius: 999px;
+            background: var(--surface-bg, #f3ece7);
+            overflow: hidden;
+        }
+
+        .vault-upload-bar-fill {
+            width: 0%;
+            height: 100%;
+            background: var(--primary-color, #3e2217);
+            transition: width .2s ease;
+        }
+
         /* Lightbox */
         .vault-lightbox {
             display: none;
@@ -591,7 +607,7 @@
             </div>
             <input type="file" id="vault-file-input" accept="image/*,video/*,.pdf,.doc,.docx,.txt" style="display:none"
                 multiple>
-            <div class="vault-upload-progress" id="vault-upload-progress">Encrypting &amp; uploading...</div>
+            <div class="vault-upload-progress" id="vault-upload-progress">Encrypting &amp; uploading...<div class="vault-upload-bar"><div class="vault-upload-bar-fill" id="vault-upload-bar-fill"></div></div></div>
 
             <!-- Filter chips -->
             <div class="vault-filters" id="vault-filters">
@@ -1058,47 +1074,82 @@
 
     function uploadFiles(files) {
         var progress = document.getElementById('vault-upload-progress');
-        var remaining = files.length;
+        var barFill = document.getElementById('vault-upload-bar-fill');
         progress.style.display = 'block';
-        progress.textContent = 'Encrypting & uploading ' + remaining + ' file(s)...';
+        barFill.style.width = '0%';
 
-        files.forEach(function (file) {
-            var thumbnailPromise;
-            if (file.type && file.type.startsWith('image/')) {
-                thumbnailPromise = generateThumbnail(file);
-            } else if (file.type && file.type.startsWith('video/')) {
-                thumbnailPromise = generateVideoThumbnail(file);
-            } else {
-                thumbnailPromise = Promise.resolve('');
-            }
+        // Upload sequentially so the progress bar reflects one file at a time.
+        var queue = files.slice();
+        var completed = 0;
+        var failed = 0;
 
-            thumbnailPromise.then(function (thumbData) {
-                var fd = new FormData();
-                fd.append('file', file);
-                if (thumbData) fd.append('thumbnail', thumbData);
-
-                return fetch('/api/vault/upload', {
-                    method: 'POST',
-                    headers: { 'X-CSRFToken': csrfToken },
-                    body: fd
-                });
-            }).then(function (r) { return r.json(); }).then(function (d) {
-                remaining--;
-                if (d.error) {
-                    progress.textContent = d.error;
+        function next() {
+            if (!queue.length) {
+                if (failed) {
+                    progress.textContent = failed + ' upload(s) failed';
                     setTimeout(function () { progress.style.display = 'none'; }, 3000);
-                } else if (remaining <= 0) {
-                    progress.style.display = 'none';
-                    document.getElementById('vault-upload-area').classList.remove('active');
-                    loadItems();
                 } else {
-                    progress.textContent = 'Uploading ' + remaining + ' remaining...';
+                    progress.style.display = 'none';
                 }
-            }).catch(function () {
-                remaining--;
-                progress.textContent = 'Upload failed';
-                setTimeout(function () { progress.style.display = 'none'; }, 3000);
+                barFill.style.width = '0%';
+                document.getElementById('vault-upload-area').classList.remove('active');
+                loadItems();
+                return;
+            }
+            uploadOne(queue.shift(), files.length, completed, function (ok) {
+                completed++;
+                if (!ok) failed++;
+                next();
             });
+        }
+        next();
+    }
+
+    function uploadOne(file, total, index, onDone) {
+        var progress = document.getElementById('vault-upload-progress');
+        var barFill = document.getElementById('vault-upload-bar-fill');
+        progress.textContent = 'Uploading ' + file.name + ' (' + (index + 1) + '/' + total + ')...';
+        barFill.style.width = '0%';
+
+        var thumbnailPromise;
+        if (file.type && file.type.startsWith('image/')) {
+            thumbnailPromise = generateThumbnail(file);
+        } else if (file.type && file.type.startsWith('video/')) {
+            thumbnailPromise = generateVideoThumbnail(file);
+        } else {
+            thumbnailPromise = Promise.resolve('');
+        }
+
+        thumbnailPromise.then(function (thumbData) {
+            var fd = new FormData();
+            fd.append('file', file);
+            if (thumbData) fd.append('thumbnail', thumbData);
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/vault/upload');
+            xhr.setRequestHeader('X-CSRFToken', csrfToken);
+            xhr.upload.addEventListener('progress', function (e) {
+                if (e.lengthComputable) {
+                    barFill.style.width = Math.round((e.loaded / e.total) * 100) + '%';
+                }
+            });
+            xhr.addEventListener('load', function () {
+                var d = {};
+                try { d = JSON.parse(xhr.responseText); } catch (err) { d = { error: 'Upload failed' }; }
+                barFill.style.width = '100%';
+                if (d.error) {
+                    progress.textContent = file.name + ': ' + d.error;
+                    setTimeout(function () {
+                        progress.textContent = 'Uploading...';
+                    }, 3000);
+                }
+                onDone(!d.error);
+            });
+            xhr.addEventListener('error', function () {
+                progress.textContent = file.name + ': Upload failed';
+                onDone(false);
+            });
+            xhr.send(fd);
         });
     }
 

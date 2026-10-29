@@ -667,6 +667,8 @@ def api_upload_dm_image():
                     raw_bytes, cloud_limit, timeout=comp_timeout,
                     temp_dir=current_app.config.get('TEMP_UPLOAD_FOLDER', 'temp_uploads'),
                 )
+                if len(raw_bytes) > cloud_limit:
+                    return jsonify({'error': 'Video too long to send even after compression. Try a shorter clip.'}), 400
 
         upload_result = m.cloudinary.uploader.upload(
             m.encrypt_media_bytes(raw_bytes),
@@ -730,6 +732,8 @@ def api_upload_dm_video():
                 raw_bytes, cloud_limit, timeout=comp_timeout,
                 temp_dir=current_app.config.get('TEMP_UPLOAD_FOLDER', 'temp_uploads'),
             )
+            if len(raw_bytes) > cloud_limit:
+                return jsonify({'error': 'Video too long to send even after compression. Try a shorter clip.'}), 400
 
         upload_result = m.cloudinary.uploader.upload(
             m.encrypt_media_bytes(raw_bytes),

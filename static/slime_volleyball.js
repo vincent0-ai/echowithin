@@ -1054,6 +1054,10 @@
     // dedupe it (see handle_slime_match_end).
     endMatchResult(winner);
 
+    // Update matchNo from server's response (handled in slime_restart callback)
+    // but we already incremented on restart. The server validates the matchNo
+    // against its room_info.match_no.
+
     const modal = document.getElementById('game-over-banner');
     if (modal) {
       modal.style.display = 'block';

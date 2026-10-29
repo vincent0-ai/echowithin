@@ -1354,6 +1354,12 @@ def record_match_result(game, room_id, players, winner_id, score=None, metadata=
         return None
     # Idempotency gate: one award per match key, ever. Reconnect retries,
     # duplicate host emits and double-submits all resolve to the same doc.
+    # If match_key is not passed, auto-generate a stable fallback key from
+    # game + room_id + match_no to prevent duplicate key errors on the
+    # match_key unique index (and to keep rematches in the same room
+    # distinct — match_no is the per-room generation counter).
+    if not match_key and room_id:
+        match_key = f"{game}:{room_id}:{match_no or 'default'}"
     if match_key:
         try:
             existing = game_match_history_conf.find_one({'match_key': match_key})
@@ -3553,6 +3559,8 @@ def handle_join_ttt_room(data=None, *args, **kwargs):
             'starter': 'x',
             'turn': 'x',
             'scores': {'x': 0, 'o': 0, 'ties': 0},
+            'match_no': 0,
+            'recorded_match_no': -1,
             'bond_id': (data or {}).get('bond_id') if isinstance(data, dict) else None,
             'tournament_id': (data or {}).get('tournament_id') if isinstance(data, dict) else None,
         }
@@ -3714,17 +3722,22 @@ def handle_ttt_move(data=None, *args, **kwargs):
                 winner_id = host_uid
             elif winner == 'o':
                 winner_id = guest_uid
-            record_match_result(
-                game='tic_tac_toe', room_id=room_id,
-                players=[
-                    {'user_id': host_uid, 'username': room_info.get('host_name', 'X'), 'side': 'x'},
-                    {'user_id': guest_uid, 'username': room_info.get('guest_name', 'O'), 'side': 'o'}
-                ],
-                winner_id=winner_id,
-                score=room_info['scores'],
-                metadata={'mode': 'online'},
-                bond_id=room_info.get('bond_id')
-            )
+            match_no = _safe_int(room_info.get('match_no'), default=0, lo=0)
+            if room_info.get('recorded_match_no') != match_no:
+                room_info['recorded_match_no'] = match_no
+                record_match_result(
+                    game='tic_tac_toe', room_id=room_id,
+                    players=[
+                        {'user_id': host_uid, 'username': room_info.get('host_name', 'X'), 'side': 'x'},
+                        {'user_id': guest_uid, 'username': room_info.get('guest_name', 'O'), 'side': 'o'}
+                    ],
+                    winner_id=winner_id,
+                    score=room_info['scores'],
+                    metadata={'mode': 'online'},
+                    bond_id=room_info.get('bond_id'),
+                    match_key=f'tic_tac_toe:{room_id}:{match_no}',
+                    match_no=match_no
+                )
 
 @socketio.on('ttt_restart')
 def handle_ttt_restart(data=None, *args, **kwargs):
@@ -3738,7 +3751,8 @@ def handle_ttt_restart(data=None, *args, **kwargs):
     next_starter = secrets.choice(['x', 'o'])
     room_info['starter'] = next_starter
     room_info['turn'] = next_starter
-    emit('ttt_restarted', {'turn': next_starter}, room=room_id)
+    room_info['match_no'] = int(room_info.get('match_no', 0) or 0) + 1
+    emit('ttt_restarted', {'turn': next_starter, 'match_no': room_info['match_no']}, room=room_id)
 
 @socketio.on('find_ttt_match')
 def handle_find_ttt_match(data=None, *args, **kwargs):
@@ -3866,6 +3880,7 @@ def handle_join_c4_room(data=None, *args, **kwargs):
             'board': [[-1] * C4_COLS for _ in range(C4_ROWS)],
             'turn': 0,
             'round_no': 0,
+            'recorded_match_no': -1,
             'scores': [0, 0, 0], # [p0, p1, draws]
             'bond_id': (data or {}).get('bond_id') if isinstance(data, dict) else None,
             'tournament_id': (data or {}).get('tournament_id') if isinstance(data, dict) else None,
@@ -4033,19 +4048,21 @@ def handle_c4_move(data=None, *args, **kwargs):
                 winner_id = host_uid
             elif winner == 1:
                 winner_id = guest_uid
-            record_match_result(
-                game='connect_four', room_id=room_id,
-                players=[
-                    {'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
-                    {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}
-                ],
-                winner_id=winner_id,
-                score={'host': room_info['scores'][0], 'guest': room_info['scores'][1], 'draws': room_info['scores'][2]},
-                metadata={'mode': 'online', 'round': round_no},
-                bond_id=room_info.get('bond_id'),
-                match_key=f'connect_four:{room_id}:{round_no}',
-                match_no=round_no
-            )
+            if room_info.get('recorded_match_no') != round_no:
+                room_info['recorded_match_no'] = round_no
+                record_match_result(
+                    game='connect_four', room_id=room_id,
+                    players=[
+                        {'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
+                        {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}
+                    ],
+                    winner_id=winner_id,
+                    score={'host': room_info['scores'][0], 'guest': room_info['scores'][1], 'draws': room_info['scores'][2]},
+                    metadata={'mode': 'online', 'round': round_no},
+                    bond_id=room_info.get('bond_id'),
+                    match_key=f'connect_four:{room_id}:{round_no}',
+                    match_no=round_no
+                )
 
 @socketio.on('c4_restart')
 def handle_c4_restart(data=None, *args, **kwargs):
@@ -4179,6 +4196,8 @@ def _gomoku_new_room(sid, user_name, user_uid, bond_id=None):
         'turn': 0,
         'moves': 0,
         'scores': [0, 0, 0],
+        'match_no': 0,
+        'recorded_match_no': -1,
         'bond_id': bond_id,
         'tournament_id': None,
         'created_at': datetime.datetime.now(datetime.timezone.utc),
@@ -4299,13 +4318,19 @@ def handle_gomoku_move(data=None, *args, **kwargs):
         guest_uid = room_info.get('guest_user_id')
         if host_uid and guest_uid:
             winner_id = host_uid if winner == 0 else (guest_uid if winner == 1 else None)
-            record_match_result(
-                game='gomoku', room_id=room_id,
-                players=[{'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
-                         {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}],
-                winner_id=winner_id,
-                score={'host': room_info['scores'][0], 'guest': room_info['scores'][1], 'draws': room_info['scores'][2]},
-                metadata={'mode': 'online'}, bond_id=room_info.get('bond_id'))
+            match_no = _safe_int(room_info.get('match_no'), default=0, lo=0)
+            if room_info.get('recorded_match_no') != match_no:
+                room_info['recorded_match_no'] = match_no
+                record_match_result(
+                    game='gomoku', room_id=room_id,
+                    players=[{'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
+                             {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}],
+                    winner_id=winner_id,
+                    score={'host': room_info['scores'][0], 'guest': room_info['scores'][1], 'draws': room_info['scores'][2]},
+                    metadata={'mode': 'online'}, bond_id=room_info.get('bond_id'),
+                    match_key=f'gomoku:{room_id}:{match_no}',
+                    match_no=match_no
+                )
 
 @socketio.on('gomoku_restart')
 def handle_gomoku_restart(data=None, *args, **kwargs):
@@ -4317,7 +4342,8 @@ def handle_gomoku_restart(data=None, *args, **kwargs):
     room_info['board'] = [-1] * GOMOKU_CELLS
     room_info['moves'] = 0
     room_info['turn'] = secrets.choice([0, 1])
-    emit('gomoku_restarted', {'turn': room_info['turn']}, room=data.get('room_id'))
+    room_info['match_no'] = int(room_info.get('match_no', 0) or 0) + 1
+    emit('gomoku_restarted', {'turn': room_info['turn'], 'match_no': room_info['match_no']}, room=data.get('room_id'))
 
 @socketio.on('find_gomoku_match')
 def handle_find_gomoku_match(data=None, *args, **kwargs):
@@ -4487,12 +4513,18 @@ def handle_whack_finish(data=None, *args, **kwargs):
             winner_id = host_uid if scores[0] > scores[1] else guest_uid
         emit('whack_result', {'scores': scores, 'winner': 0 if scores[0] > scores[1] else (1 if scores[1] > scores[0] else None)}, room=room_id)
         if host_uid and guest_uid:
-            record_match_result(
-                game='whack_a_mole', room_id=room_id,
-                players=[{'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
-                         {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}],
-                winner_id=winner_id, score={'host': scores[0], 'guest': scores[1]},
-                metadata={'mode': 'online'}, bond_id=room_info.get('bond_id'))
+            match_no = _safe_int(room_info.get('match_no'), default=0, lo=0)
+            if room_info.get('recorded_match_no') != match_no:
+                room_info['recorded_match_no'] = match_no
+                record_match_result(
+                    game='whack_a_mole', room_id=room_id,
+                    players=[{'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
+                             {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}],
+                    winner_id=winner_id, score={'host': scores[0], 'guest': scores[1]},
+                    metadata={'mode': 'online'}, bond_id=room_info.get('bond_id'),
+                    match_key=f'whack_a_mole:{room_id}:{match_no}',
+                    match_no=match_no
+                )
     else:
         emit('whack_state', {'scores': room_info['scores']}, room=room_id, include_self=False)
 
@@ -4512,6 +4544,8 @@ def handle_find_whack_match(data=None, *args, **kwargs):
             'host_sid': opponent['sid'], 'host_name': opponent['user_name'], 'host_user_id': opponent.get('user_id'),
             'guest_sid': sid, 'guest_name': user_name, 'guest_user_id': user_id,
             'seed': seed, 'scores': [0, 0], 'finished': [False, False],
+            'match_no': 0,
+            'recorded_match_no': -1,
             'created_at': datetime.datetime.now(datetime.timezone.utc),
         }
         try:
@@ -4802,6 +4836,8 @@ def _air_new_room(sid, user_name, user_uid, bond_id=None):
         'guest_sid': None, 'guest_name': None, 'guest_user_id': None,
         'scores': [0, 0], 'target': AIR_TARGET, 'bond_id': bond_id,
         'tournament_id': None,
+        'match_no': 0,
+        'recorded_match_no': -1,
         'created_at': datetime.datetime.now(datetime.timezone.utc),
     }
 
@@ -4925,12 +4961,18 @@ def handle_air_score(data=None, *args, **kwargs):
         winner_id = None
         if host_uid and guest_uid:
             winner_id = host_uid if scores[0] > scores[1] else guest_uid
-            record_match_result(
-                game='air_hockey', room_id=room_id,
-                players=[{'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
-                         {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}],
-                winner_id=winner_id, score={'host': scores[0], 'guest': scores[1]},
-                metadata={'mode': 'online'}, bond_id=room_info.get('bond_id'))
+            match_no = _safe_int(room_info.get('match_no'), default=0, lo=0)
+            if room_info.get('recorded_match_no') != match_no:
+                room_info['recorded_match_no'] = match_no
+                record_match_result(
+                    game='air_hockey', room_id=room_id,
+                    players=[{'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
+                             {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}],
+                    winner_id=winner_id, score={'host': scores[0], 'guest': scores[1]},
+                    metadata={'mode': 'online'}, bond_id=room_info.get('bond_id'),
+                    match_key=f'air_hockey:{room_id}:{match_no}',
+                    match_no=match_no
+                )
         emit('air_result', {'scores': scores, 'winner': 0 if scores[0] > scores[1] else 1}, room=room_id)
 
 @socketio.on('air_restart')
@@ -4941,7 +4983,8 @@ def handle_air_restart(data=None, *args, **kwargs):
     if not _duel_member(room_info, request.sid):
         return
     room_info['scores'] = [0, 0]
-    emit('air_restarted', {'target': room_info.get('target', AIR_TARGET)}, room=data.get('room_id'))
+    room_info['match_no'] = int(room_info.get('match_no', 0) or 0) + 1
+    emit('air_restarted', {'target': room_info.get('target', AIR_TARGET), 'match_no': room_info['match_no']}, room=data.get('room_id'))
 
 @socketio.on('find_air_match')
 def handle_find_air_match(data=None, *args, **kwargs):
@@ -5028,6 +5071,8 @@ def handle_join_dnb_room(data=None, *args, **kwargs):
             'boxes': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS - 1)],
             'turn': 0,
             'scores': [0, 0], # [p0, p1]
+            'match_no': 0,
+            'recorded_match_no': -1,
             'bond_id': (data or {}).get('bond_id') if isinstance(data, dict) else None,
             'tournament_id': (data or {}).get('tournament_id') if isinstance(data, dict) else None,
         }
@@ -5234,17 +5279,22 @@ def handle_dnb_line(data=None, *args, **kwargs):
             elif winner == 1:
                 winner_id = guest_uid
             # winner == -1 means draw
-            record_match_result(
-                game='dots_and_boxes', room_id=room_id,
-                players=[
-                    {'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
-                    {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}
-                ],
-                winner_id=winner_id,
-                score={'host': room_info['scores'][0], 'guest': room_info['scores'][1]},
-                metadata={'mode': 'online'},
-                bond_id=room_info.get('bond_id')
-            )
+            match_no = _safe_int(room_info.get('match_no'), default=0, lo=0)
+            if room_info.get('recorded_match_no') != match_no:
+                room_info['recorded_match_no'] = match_no
+                record_match_result(
+                    game='dots_and_boxes', room_id=room_id,
+                    players=[
+                        {'user_id': host_uid, 'username': room_info.get('host_name', 'P1'), 'side': 'host'},
+                        {'user_id': guest_uid, 'username': room_info.get('guest_name', 'P2'), 'side': 'guest'}
+                    ],
+                    winner_id=winner_id,
+                    score={'host': room_info['scores'][0], 'guest': room_info['scores'][1]},
+                    metadata={'mode': 'online'},
+                    bond_id=room_info.get('bond_id'),
+                    match_key=f'dots_and_boxes:{room_id}:{match_no}',
+                    match_no=match_no
+                )
 
 @socketio.on('dnb_restart')
 def handle_dnb_restart(data=None, *args, **kwargs):
@@ -5261,7 +5311,8 @@ def handle_dnb_restart(data=None, *args, **kwargs):
     room_info['starter'] = next_starter
     room_info['turn'] = next_starter
     room_info['scores'] = [0, 0]
-    emit('dnb_restarted', {'turn': next_starter}, room=room_id)
+    room_info['match_no'] = int(room_info.get('match_no', 0) or 0) + 1
+    emit('dnb_restarted', {'turn': next_starter, 'match_no': room_info['match_no']}, room=room_id)
 
 @socketio.on('find_dnb_match')
 def handle_find_dnb_match(data=None, *args, **kwargs):

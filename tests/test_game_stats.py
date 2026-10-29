@@ -82,6 +82,7 @@ def test_record_match_result():
 
     mock_history = MagicMock()
     mock_history.insert_one.side_effect = mock_insert_one
+    mock_history.find_one.side_effect = lambda q: None  # No existing match_key
 
     mock_stats_col = MagicMock()
     mock_stats_col.find_one.side_effect = mock_find_one

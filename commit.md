@@ -277,3 +277,8 @@
 
 ## Privacy impact
 - New push notifications carry member content only in titles as usernames + circle name; body text is content-free; muted_by respected on every path
+
+## Merge fix/netcode-fairness-idempotency to main (d50c20c)
+- Fast-forward merge; reviewed commit 'Fixed latency issues': netcode latency fix + fairness/idempotency (scripts/netcode_budget.py, updated game JS, new netcode regression/contract tests)
+- Tests: 623 passed locally on main before push; pushed to origin/main; branch deleted locally and remotely
+- Model attribution: merge performed by Claude (agent)

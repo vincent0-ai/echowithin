@@ -1,7 +1,7 @@
 {
-  "versionCode": 49,
-  "versionName": "1.14.0",
+  "versionCode": 50,
+  "versionName": "1.15.0",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.14.0 Markdown Suite & Sync Hardening:\n• Full CommonMark & GFM rendering engine with asynchronous parse caching\n• Tap-to-edit with accurate caret placement directly at tapped position\n• Live markdown styling in editor with syntax dimming\n• Tag filter chips in Search and interactive version-history diffs\n• Offline-first SQLite sync hardening with WorkManager and gzip compression",
+  "changelog": "v1.15.0 Netcode Fairness & Idempotency Fixes:\n• Idempotent ranked awards — no more double points from a single win\n• Server-side ELO/history for Slime Volleyball (was missing entirely)\n• Smooth remote slime rendering via 2-snapshot interpolation buffer\n• Net-boundary clamp prevents slime-over-pole visual glitches\n• Result banner stays until YOU dismiss it — opponent can't wipe it\n• Replaced setInterval sync with rAF-cadence emission (fixes tab-throttle snap-back)\n• Fixed-timestep accumulator consistency across all games\n• RTT quality indicator (green/yellow/red) in game headers\n• Match generation counters prevent award replays on rematch",
   "sha256": "155F9F0883D4D4FDD9FF2C5BE64502676FE033C7D777B6CE207EBC7C6265FC8B"
 }

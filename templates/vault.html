@@ -607,7 +607,7 @@
             </div>
             <input type="file" id="vault-file-input" accept="image/*,video/*,.pdf,.doc,.docx,.txt" style="display:none"
                 multiple>
-            <div class="vault-upload-progress" id="vault-upload-progress">Encrypting &amp; uploading...<div class="vault-upload-bar"><div class="vault-upload-bar-fill" id="vault-upload-bar-fill"></div></div></div>
+            <div class="vault-upload-progress" id="vault-upload-progress"><span id="vault-upload-label">Encrypting &amp; uploading...</span><div class="vault-upload-bar"><div class="vault-upload-bar-fill" id="vault-upload-bar-fill"></div></div></div>
 
             <!-- Filter chips -->
             <div class="vault-filters" id="vault-filters">
@@ -1072,6 +1072,12 @@
         });
     }
 
+    // Status text lives in its own node so updating it never wipes the
+    // progress-bar markup that the next upload depends on.
+    function getUploadLabel() {
+        return document.getElementById('vault-upload-label');
+    }
+
     function uploadFiles(files) {
         var progress = document.getElementById('vault-upload-progress');
         var barFill = document.getElementById('vault-upload-bar-fill');
@@ -1086,7 +1092,7 @@
         function next() {
             if (!queue.length) {
                 if (failed) {
-                    progress.textContent = failed + ' upload(s) failed';
+                    getUploadLabel().textContent = failed + ' upload(s) failed';
                     setTimeout(function () { progress.style.display = 'none'; }, 3000);
                 } else {
                     progress.style.display = 'none';
@@ -1106,9 +1112,8 @@
     }
 
     function uploadOne(file, total, index, onDone) {
-        var progress = document.getElementById('vault-upload-progress');
         var barFill = document.getElementById('vault-upload-bar-fill');
-        progress.textContent = 'Uploading ' + file.name + ' (' + (index + 1) + '/' + total + ')...';
+        getUploadLabel().textContent = 'Uploading ' + file.name + ' (' + (index + 1) + '/' + total + ')...';
         barFill.style.width = '0%';
 
         var thumbnailPromise;
@@ -1138,15 +1143,15 @@
                 try { d = JSON.parse(xhr.responseText); } catch (err) { d = { error: 'Upload failed' }; }
                 barFill.style.width = '100%';
                 if (d.error) {
-                    progress.textContent = file.name + ': ' + d.error;
+                    getUploadLabel().textContent = file.name + ': ' + d.error;
                     setTimeout(function () {
-                        progress.textContent = 'Uploading...';
+                        getUploadLabel().textContent = 'Encrypting & uploading...';
                     }, 3000);
                 }
                 onDone(!d.error);
             });
             xhr.addEventListener('error', function () {
-                progress.textContent = file.name + ': Upload failed';
+                getUploadLabel().textContent = file.name + ': Upload failed';
                 onDone(false);
             });
             xhr.send(fd);

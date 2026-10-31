@@ -393,17 +393,6 @@
                 <a href="{{ url_for('auth.start_guest_tour') }}" class="public-btn public-btn-secondary" rel="nofollow">Take the tour</a>
             </div>
         </div>
-
-        <aside class="public-audience" aria-labelledby="public-audience-title">
-            <h2 id="public-audience-title">Your space, by audience</h2>
-            <dl>
-                <div><dt>Notes</dt><dd>Only you</dd></div>
-                <div><dt>Vault</dt><dd>PIN protected</dd></div>
-                <div><dt>Bonds</dt><dd>One other person</dd></div>
-                <div><dt>Circles</dt><dd>People you choose</dd></div>
-                <div><dt>Blog</dt><dd>Anyone</dd></div>
-            </dl>
-        </aside>
     </section>
 
     <section class="public-section" aria-labelledby="public-paths-title">
@@ -417,7 +406,6 @@
                 <div>
                     <h3>Notes that stay yours.</h3>
                     <p>Encrypted notes and a PIN-protected Vault.</p>
-                    <a class="public-link" href="{{ url_for('auth.register', next=url_for('notes.personal_space')) }}" rel="nofollow">Start a note</a>
                 </div>
             </article>
             <article class="public-path-row">
@@ -448,14 +436,6 @@
                     <p>Public posts, when you want an audience.</p>
                 </div>
             </article>
-        </div>
-    </section>
-
-    <section class="public-closing" aria-labelledby="public-closing-title">
-        <h2 id="public-closing-title">Start with one note.</h2>
-        <div class="public-actions">
-            <a href="{{ url_for('auth.register', next=url_for('pages.home')) }}" class="public-btn public-btn-on-brand" rel="nofollow">Create your account</a>
-            <a href="{{ url_for('auth.start_guest_tour') }}" class="public-btn public-btn-ghost-brand" rel="nofollow">Take the tour</a>
         </div>
     </section>
 </main>

@@ -15,8 +15,8 @@ bp = Blueprint('pages', __name__, template_folder='templates')
 @bp.route('/')
 @bp.route('/dashboard')
 def dashboard():
-    page_title = "EchoWithin - Secure Notes, Collaboration & Community"
-    page_description = "EchoWithin is a modern platform for secure private notes, collaborative idea sharing, and surprise themed notes with photos and music. Join our community to organize your thoughts and let your voice echo within."
+    page_title = "EchoWithin - Private Notes, Bonds & Trusted Circles"
+    page_description = "A quieter place for private notes, one-to-one Bonds, trusted Circles, and conversations worth keeping."
     meta_image = url_for('static', filename='logo-512.png', _external=True)
     if current_user.is_authenticated:
         return redirect(url_for('pages.home'))

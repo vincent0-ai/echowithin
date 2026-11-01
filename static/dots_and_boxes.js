@@ -147,7 +147,14 @@
 
   function resizeCanvas() {
     if (!canvas) return;
-    const parentWidth = canvas.parentElement ? canvas.parentElement.clientWidth : 520;
+    // The wrapper reads 0 while its panel is hidden (restored page / early load);
+    // fall back to the stage card so the grid is never laid out at 0px.
+    let parentWidth = canvas.parentElement ? canvas.parentElement.clientWidth : 0;
+    if (!parentWidth) {
+      const stage = canvas.closest('.dnb-stage-card') || canvas.closest('.ew-card') || canvas.closest('.content-wrapper');
+      parentWidth = stage ? stage.clientWidth : 0;
+    }
+    if (!parentWidth) parentWidth = 516;
     const size = Math.min(parentWidth - 16, 500);
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.floor(size * dpr);

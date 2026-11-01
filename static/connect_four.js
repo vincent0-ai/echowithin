@@ -146,10 +146,20 @@
     window.addEventListener('resize', resizeCanvas);
   }
 
+  // Cache-first static assets (PWA) can restore an older, re-seeded page whose
+  // `display:none` panels are still visible at DOMContentLoaded, so the wrapper
+  // measures 0 at that moment. Fall back to the stage card and never size to 0.
+  const TARGET_SIZE = 560;
+
   function resizeCanvas() {
     if (!canvas) return;
-    const parentWidth = canvas.parentElement ? canvas.parentElement.clientWidth : 560;
-    const size = Math.min(parentWidth - 16, 560);
+    let parentWidth = canvas.parentElement ? canvas.parentElement.clientWidth : 0;
+    if (!parentWidth) {
+      const stage = canvas.closest('.c4-stage-card') || canvas.closest('.content-wrapper');
+      parentWidth = stage ? stage.clientWidth : 0;
+    }
+    if (!parentWidth) parentWidth = TARGET_SIZE + 16;
+    const size = Math.min(parentWidth - 16, TARGET_SIZE);
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.floor(size * dpr);
     canvas.height = Math.floor((size * (6 / 7) + 50) * dpr);
@@ -919,12 +929,28 @@
     }
   }
 
+  // True when a websocket transport (not XHR polling) is usable. The PWA
+  // resurrects a socket.io build that throws on `new XMLHttpRequest()`, so a
+  // socket has to be created behind a try/catch or it kills the whole engine.
+  function canUseWebSockets() {
+    return typeof WebSocket !== 'undefined';
+  }
+
   // --- Online Socket.IO Handlers ---
   function initOnlineSocket() {
     if (state.socket) return;
+    if (typeof io !== 'undefined' && !canUseWebSockets()) {
+      setMatchStatus('Live play is unavailable in this browser. Reload the page to play online.', 'normal');
+      return;
+    }
     if (typeof io === 'undefined') return;
 
-    state.socket = io({ transports: ['websocket', 'polling'] });
+    try {
+      state.socket = io({ transports: ['websocket'], upgrade: false });
+    } catch (_) {
+      setMatchStatus('Live play is unavailable. Reload the page to play online.', 'normal');
+      return;
+    }
     window._gameSocket = state.socket;
 
     state.socket.on('connect', () => {
@@ -1237,6 +1263,9 @@
     resetGame();
     flushPendingSync();
     requestAnimationFrame(render);
+    // An inline control bar can mount after this script runs, changing the width
+    // we sized against — re-measure once the whole document is done.
+    window.addEventListener('load', () => requestAnimationFrame(resizeCanvas));
 
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('room')) {

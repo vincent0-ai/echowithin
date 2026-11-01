@@ -67,9 +67,18 @@
   var socket = window.__airSocket || null;
   try { if (!socket && typeof io !== 'undefined') socket = io({ transports: ['websocket', 'polling'] }); } catch (e) { socket = null; }
 
+  // Cache-first assets can restore a page whose hidden panels are still shown at
+  // script time, so the wrapper can measure 0 — never let that become the size.
   function sizeCanvas() {
     var wrap = canvas.parentElement;
-    var w = Math.min(wrap.clientWidth || 340, 420);
+    var avail = (wrap && wrap.clientWidth) || 0;
+    if (!avail) {
+      var card = canvas.closest('.ew-card') || canvas.closest('.content-wrapper');
+      var sib = wrap ? wrap.previousElementSibling : null;
+      avail = (sib && sib.getBoundingClientRect().width) || (card && card.clientWidth) || 0;
+    }
+    if (!avail) avail = 420;
+    var w = Math.min(avail, 420);
     var h = w * H / W;
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = w * dpr; canvas.height = h * dpr;

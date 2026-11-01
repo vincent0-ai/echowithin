@@ -15,9 +15,17 @@
   var css = getComputedStyle(document.documentElement);
   var C_BLACK = '#3e2217', C_WHITE = '#ffffff', C_LINE = '#c9b795', C_BG = '#f6efe4', C_WIN = '#2c5f8a';
 
+  // A wrapper measured while its panel is still hidden reads 0; fall back to the
+  // surrounding card instead of letting the board collapse.
   function sizeCanvas() {
     var wrap = canvas.parentElement;
-    var w = Math.min(wrap.clientWidth || 520, 520);
+    var avail = (wrap && wrap.clientWidth) || 0;
+    if (!avail) {
+      var card = canvas.closest('.ew-card') || canvas.closest('.content-wrapper');
+      avail = card ? card.clientWidth : 0;
+    }
+    if (!avail) avail = 520;
+    var w = Math.min(avail, 520);
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = w * dpr; canvas.height = w * dpr;
     canvas.style.width = w + 'px'; canvas.style.height = w + 'px';

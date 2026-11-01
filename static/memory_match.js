@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentPlayer = 1;
     let timerInterval = null;
     let timeElapsed = 0;
+    // Running totals across folded rounds in this session (shown on the board).
+    let sessionWins = { 1: 0, 2: 0, ties: 0 };
     let socket = null;
     let roomId = null;
     let joinedRoom = false;
@@ -241,6 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.scoreP2.style.display = 'none';
             ui.turnIndicator.style.display = 'none';
             ui.timer.style.display = 'block';
+            // Reset, not a tally: the next round starts from zero pairs.
             ui.scoreP1.textContent = 'Pairs: 0';
             startTimer();
         } else {
@@ -322,8 +325,34 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateScoreUI() {
-        ui.scoreP1.textContent = `P1: ${player1Score}`;
+        // Board score is always this round's pairs; the modal carries the
+        // session tally so a round never reads as the whole game.
+        ui.scoreP1.textContent = mode === 'solo' ? `Pairs: ${player1Score}` : `P1: ${player1Score}`;
         ui.scoreP2.textContent = `P2: ${player2Score}`;
+    }
+
+    // Arcade leaderboard submission, matching the other games' convention.
+    function submitRoundScore(category, score, metadata = {}) {
+        if (!score || score <= 0) return;
+        let token = null;
+        try {
+            token = localStorage.getItem('ew_arcade_guest_token');
+            if (!token) {
+                token = 'gst_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+                localStorage.setItem('ew_arcade_guest_token', token);
+            }
+        } catch (_) { return; }
+        fetch('/api/games/leaderboard/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                game: 'memory_match',
+                category,
+                score,
+                metadata,
+                guest_token: token
+            })
+        }).catch(() => {});
     }
 
     function updateTurnUI() {
@@ -347,23 +376,41 @@ document.addEventListener('DOMContentLoaded', () => {
     function showGameOver() {
         if (timerInterval) clearInterval(timerInterval);
         ui.modal.style.display = 'flex';
+        // Every round is a match on its own, exactly like the other games: the
+        // pairs on the board decide this round's winner and that result is
+        // submitted to the global leaderboard. `sessionWins` only keeps the
+        // running tally for playing on in the same session.
+        const roundWinner = player1Score === player2Score ? 0 : (player1Score > player2Score ? 1 : 2);
+
         if (mode === 'solo') {
             const key = `memoryBestTime_${size}`;
             const previous = Number(localStorage.getItem(key) || Infinity);
             const isNewBest = timeElapsed < previous;
             if (isNewBest) localStorage.setItem(key, String(timeElapsed));
-            ui.winnerText.textContent = 'You Win';
+            // Same leaderboard call as before; no-op on a zero or missing time.
+            submitRoundScore('time', timeElapsed);
+            sessionWins[1]++;
+            ui.scoreP1.textContent = 'Pairs: 0';
+            ui.winnerText.textContent = 'Round Complete';
             ui.statsText.innerHTML = `Time: ${timeElapsed}s<br>Best Time: ${isNewBest ? timeElapsed : previous}s`;
+            if (ui.replayBtn) ui.replayBtn.textContent = 'Next Round';
             return;
         }
-        if (player1Score === player2Score) ui.winnerText.textContent = 'Tie Game';
-        else {
-            const winner = player1Score > player2Score ? 1 : 2;
+
+        if (roundWinner === 0) {
+            sessionWins.ties++;
+            ui.winnerText.textContent = 'Round Draw';
+        } else {
+            sessionWins[roundWinner]++;
             ui.winnerText.textContent = mode === 'online'
-                ? (winner === myPlayerNum ? 'You Win' : 'Partner Wins')
-                : `Player ${winner} Wins`;
+                ? (roundWinner === myPlayerNum ? 'You Win the Round' : 'Partner Wins the Round')
+                : `Player ${roundWinner} Wins the Round`;
         }
-        ui.statsText.textContent = `Score: ${player1Score} - ${player2Score}`;
+        ui.statsText.textContent = `Pairs this round: ${player1Score} - ${player2Score}`;
+
+        // Local pass-and-play never touches leaderboards. Online duels are ranked
+        // server-side (see memory_card_result), so the client does not resubmit.
+        if (ui.replayBtn) ui.replayBtn.textContent = 'Next Round';
         if (mode === 'online' && myPlayerNum === 1) {
             // Host can change board size before the next deal.
             ui.sizeSelect.disabled = false;
@@ -391,7 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setStatus('Waiting for host…');
             return;
         }
-        ui.startBtn.textContent = 'Start Game';
+        ui.startBtn.textContent = sessionWins[1] || sessionWins[2] || sessionWins.ties ? 'Next Round' : 'Start Game';
         ui.startBtn.disabled = false;
         ui.sizeSelect.disabled = false;
         ui.setupPanel.style.display = 'block';

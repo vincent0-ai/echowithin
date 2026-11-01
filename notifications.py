@@ -375,6 +375,104 @@ def send_new_post_notifications(post_id_str):
         _get_app().logger.error(f"Error in send_new_post_notifications job for {post_id_str}: {e}", exc_info=True)
 
 
+def _digest_utc(value):
+    """Coerce a stored datetime to timezone-aware UTC (None when absent)."""
+    if isinstance(value, datetime.datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=datetime.timezone.utc)
+        return value.astimezone(datetime.timezone.utc)
+    return None
+
+
+def _digest_link(endpoint, fallback_path, base_url):
+    try:
+        return url_for(endpoint, _external=True)
+    except RuntimeError:
+        return f"{base_url}{fallback_path}"
+
+
+def _build_weekly_personal_summary(user_id, week_ago, base_url):
+    """Build the 'Your week' rows for one recipient's weekly digest.
+
+    Only reports activity the recipient has not caught up with (unseen bond
+    sections, circle messages from the past week, unread DMs) so idle spaces
+    never turn into noise.
+    """
+    try:
+        uid = ObjectId(str(user_id))
+    except Exception:
+        return []
+
+    items = []
+
+    try:
+        bonds = list(database.bonds_conf.find(
+            {'status': 'active', '$or': [{'user_a_id': uid}, {'user_b_id': uid}]},
+            {'section_activity': 1, 'last_viewed': 1}
+        ).limit(50))
+    except Exception:
+        bonds = []
+
+    if bonds:
+        uid_key = str(uid)
+        unseen = 0
+        for bond in bonds:
+            last_viewed = (bond.get('last_viewed') or {}).get(uid_key) or {}
+            for section, activity in (bond.get('section_activity') or {}).items():
+                activity_dt = _digest_utc(activity)
+                viewed_dt = _digest_utc(last_viewed.get(section))
+                if activity_dt and (not viewed_dt or activity_dt > viewed_dt):
+                    unseen += 1
+                    break
+        if unseen:
+            items.append({
+                'label': 'Bonds',
+                'detail': f"{len(bonds)} active, {unseen} with new activity",
+                'url': _digest_link('bonds.bonds_page', '/bonds', base_url),
+                'cta': 'Open'
+            })
+
+    try:
+        circles = list(database.circles_conf.find({'members': uid}, {'_id': 1}).limit(50))
+    except Exception:
+        circles = []
+
+    if circles:
+        try:
+            new_messages = database.circle_messages_conf.count_documents({
+                'circle_id': {'$in': [c['_id'] for c in circles]},
+                'author_id': {'$ne': uid},
+                'created_at': {'$gte': week_ago}
+            })
+        except Exception:
+            new_messages = 0
+        if new_messages:
+            items.append({
+                'label': 'Circles',
+                'detail': f"{new_messages} new message{'s' if new_messages != 1 else ''}",
+                'url': _digest_link('circles.circles_page', '/circles', base_url),
+                'cta': 'Open'
+            })
+
+    try:
+        unread_dms = database.direct_messages_conf.count_documents({
+            'recipient_id': uid,
+            'is_read': False
+        })
+    except Exception:
+        unread_dms = 0
+
+    if unread_dms:
+        items.append({
+            'label': 'Messages',
+            'detail': f"{unread_dms} unread",
+            'url': _digest_link('chat.messages_page', '/messages', base_url),
+            'cta': 'Open'
+        })
+
+    return items
+
+
 @rq.job
 def send_weekly_newsletter():
     """Sends a weekly digest of all posts from the past week to newsletter subscribers."""
@@ -428,14 +526,17 @@ def send_weekly_newsletter():
             week_end = now.strftime('%B %d, %Y')
 
             recipient_emails = set()
+            users_by_email = {}
 
             for sub in database.newsletter_conf.find({}, {'email': 1}):
                 if sub.get('email'):
                     recipient_emails.add(normalize_email(sub['email']))
 
             for user in database.users_conf.find({'is_confirmed': True, 'notification_preference': 'weekly'}, {'email': 1}):
-                if user.get('email'):
-                    recipient_emails.add(normalize_email(user['email']))
+                user_email = normalize_email(user.get('email') or '')
+                if user_email:
+                    recipient_emails.add(user_email)
+                    users_by_email.setdefault(user_email, user)
 
             recipient_emails.discard('')
 
@@ -472,10 +573,21 @@ def send_weekly_newsletter():
                         sender=f"EchoWithin <{sender_email}>",
                         recipients=[recipient_email]
                     )
+                    personal_items = []
+                    account_doc = users_by_email.get(recipient_email)
+                    if account_doc and account_doc.get('_id'):
+                        try:
+                            personal_items = _build_weekly_personal_summary(
+                                account_doc['_id'], week_ago, base_url
+                            )
+                        except Exception as e:
+                            _get_app().logger.error(f"Weekly digest personalisation failed: {e}")
+
                     msg.html = render_template(
                         'weekly_newsletter.html',
                         posts=posts_list,
                         total_post_count=total_post_count,
+                        personal_items=personal_items,
                         week_start=week_start,
                         week_end=week_end,
                         unsub_url=unsub_url
@@ -485,6 +597,10 @@ def send_weekly_newsletter():
                         text_body += f"Top {len(posts_list)} of {total_post_count} posts this week:\n\n"
                     for p in posts_list[:5]:
                         text_body += f"- {p.get('title')} ({p.get('url')})\n"
+                    if personal_items:
+                        text_body += "\nYour week:\n"
+                        for item in personal_items:
+                            text_body += f"- {item['label']}: {item['detail']} ({item['url']})\n"
                     text_body += f"\nUnsubscribe: {unsub_url}"
                     msg.body = text_body
 

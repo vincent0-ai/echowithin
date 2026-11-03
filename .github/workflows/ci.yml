@@ -34,7 +34,10 @@ jobs:
       - name: Install deps
         run: |
           pip install -r requirements.txt
-          pip install pytest flake8
+          # pytest 9.2 breaks the mock-based fixtures in tests/conftest.py
+          # (collections lose attributes like find_one), ~91 tests fail. Pin
+          # until conftest is ported off autospec child mocks.
+          pip install pytest==9.1.1 flake8
       - name: Flake8 (errors only)
         run: flake8 --select=E9,F63,F82 --exclude=.venv .
       - name: Pytest Unit & Integration Tests

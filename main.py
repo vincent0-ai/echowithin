@@ -621,6 +621,10 @@ app.config["SECRET_KEY"] = get_env_variable('SECRET')
 try:
     import key_management as _key_management
     _key_management.log_startup_status(app.logger)
+    # Initialise Vault health state so the fallback logic in _encrypt_dek
+    # knows whether Vault is reachable from the very first request.
+    if _key_management.transit_enabled():
+        _key_management.check_vault_health()
 except Exception as _km_err:
     app.logger.error("Key custody startup check errored: %s", _km_err)
 

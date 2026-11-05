@@ -21,6 +21,7 @@ from ratelimit import RateLimitException
 from config import BYPASS_RATE_LIMIT, _NOTES_KDF_ITERATIONS, _NOTES_V1_SALT, LEGACY_KEY_FALLBACK
 from key_management import (
     get_master_key_material, transit_enabled, transit_encrypt, transit_decrypt,
+    is_vault_healthy, mark_vault_down, mark_vault_up, check_vault_health,
 )
 import database
 from cachetools import TTLCache
@@ -1244,11 +1245,17 @@ def _get_legacy_kek():
     return _KEK_CACHE['legacy']
 
 
+# Prefix tag for DEKs wrapped locally while Vault Transit was unavailable.
+# These are re-wrapped under Transit once Vault recovers (see migrate_pending_vault_deks).
+PENDING_VAULT_PREFIX = 'pending-vault:'
+
+
 def _unwrap_dek(encrypted_dek: str):
     """Unwrap a wrapped data key.
 
-    Returns (raw_bytes, needs_migration). Handles three token forms:
-      - 'vault:vN:...'  → Vault Transit ciphertext (current mode)
+    Returns (raw_bytes, needs_migration). Handles four token forms:
+      - 'vault:vN:...'       -- Vault Transit ciphertext (current mode)
+      - 'pending-vault:...'  -- KEK-wrapped during a Vault outage (needs re-wrap)
       - Fernet token under the primary KEK
       - Fernet token under the legacy SECRET-derived KEK (pre-master/Transit)
 
@@ -1259,6 +1266,12 @@ def _unwrap_dek(encrypted_dek: str):
     if token_str.startswith('vault:'):
         return transit_decrypt(token_str), False
 
+    # DEK wrapped with local KEK during Vault outage -- strip the prefix and
+    # mark as needing migration so the caller re-wraps when Transit is back.
+    if token_str.startswith(PENDING_VAULT_PREFIX):
+        token = token_str[len(PENDING_VAULT_PREFIX):].encode('utf-8')
+        return _get_kek().decrypt(token), True
+
     needs_migration = transit_enabled()
     token = token_str.encode('utf-8')
     try:
@@ -1268,7 +1281,6 @@ def _unwrap_dek(encrypted_dek: str):
         if legacy is None:
             raise
         return legacy.decrypt(token), True
-
 
 def generate_user_envelope_keys() -> dict:
     """Generate a random DEK + salt for a new user.
@@ -1296,9 +1308,23 @@ def _decrypt_dek(encrypted_dek: str) -> bytes:
 
 
 def _encrypt_dek(dek_raw: bytes) -> str:
-    """Wrap a data key with the current root mechanism (Vault Transit or KEK)."""
+    """Wrap a data key with the current root mechanism (Vault Transit or KEK).
+
+    When Vault Transit is configured but unreachable, falls back to the local
+    KEK and prefixes the token with 'pending-vault:' so a background job can
+    re-wrap it under Transit once Vault recovers.
+    """
     if transit_enabled():
-        return transit_encrypt(dek_raw)
+        if is_vault_healthy():
+            try:
+                ct = transit_encrypt(dek_raw)
+                return ct
+            except Exception:
+                mark_vault_down()
+                # Fall through to KEK fallback below
+        # Vault is down -- wrap with KEK and tag for later migration
+        _get_app().logger.warning('Vault Transit unavailable -- wrapping DEK with local KEK (pending migration).')
+        return PENDING_VAULT_PREFIX + _get_kek().encrypt(dek_raw).decode('utf-8')
     return _get_kek().encrypt(dek_raw).decode('utf-8')
 
 
@@ -1950,3 +1976,122 @@ def create_app_token(user_id, token=None):
         doc['token'] = raw
     _db.app_tokens_conf.insert_one(doc)
     return raw
+
+
+
+# ---------------------------------------------------------------------------
+# Vault Transit recovery: migrate pending-vault DEKs
+# ---------------------------------------------------------------------------
+
+def migrate_pending_vault_deks():
+    """Re-wrap all 'pending-vault:' DEKs under Vault Transit.
+
+    Called by the scheduler once Vault health is restored. Scans all collections
+    that store wrapped DEKs and re-encrypts them via Transit, removing the
+    pending-vault: prefix.
+
+    Returns a dict of counts: {'users': n, 'conversations': n, 'bonds': n, ...}
+    """
+    if not transit_enabled():
+        return {}
+
+    app = _get_app()
+    counts = {}
+
+    # --- Users ---
+    _migrate_collection(
+        database.users_conf,
+        'encryption_key_enc',
+        'users',
+        counts,
+        app,
+    )
+
+    # --- DM conversations ---
+    _migrate_collection(
+        database.dm_permissions_conf,
+        'conversation_key_enc',
+        'conversations',
+        counts,
+        app,
+    )
+
+    # --- Bonds ---
+    _migrate_collection(
+        getattr(database, 'bonds_conf', None),
+        'bond_key_enc',
+        'bonds',
+        counts,
+        app,
+    )
+
+    # --- Forms ---
+    _migrate_collection(
+        getattr(database, 'forms_conf', None),
+        'form_key_enc',
+        'forms',
+        counts,
+        app,
+    )
+
+    # --- Game lobbies ---
+    _migrate_collection(
+        getattr(database, 'game_lobbies_conf', None),
+        'game_key_enc',
+        'games',
+        counts,
+        app,
+    )
+
+    # --- Media key (auth collection) ---
+    if getattr(database, 'auth_conf', None) is not None:
+        try:
+            doc = database.auth_conf.find_one({'type': 'media_encryption_key'})
+            enc = doc.get('encryption_key_enc', '') if doc else ''
+            if isinstance(enc, str) and enc.startswith(PENDING_VAULT_PREFIX):
+                fernet_token = enc[len(PENDING_VAULT_PREFIX):].encode('utf-8')
+                dek_raw = _get_kek().decrypt(fernet_token)
+                new_ct = transit_encrypt(dek_raw)
+                database.auth_conf.update_one(
+                    {'type': 'media_encryption_key'},
+                    {'$set': {'encryption_key_enc': new_ct}},
+                )
+                counts['media_key'] = 1
+                app.logger.info('Migrated media encryption key from pending-vault to Transit.')
+        except Exception as e:
+            app.logger.error(f'Failed to migrate media encryption key: {e}')
+
+    return counts
+
+
+def _migrate_collection(collection, field, label, counts, app):
+    """Re-wrap pending-vault DEKs in a single collection."""
+    if collection is None:
+        return
+    migrated = 0
+    try:
+        prefix_regex = f'^{PENDING_VAULT_PREFIX}'
+        cursor = collection.find(
+            {field: {'$regex': prefix_regex}},
+            {field: 1},
+        )
+        for doc in cursor:
+            enc = doc.get(field, '')
+            if not isinstance(enc, str) or not enc.startswith(PENDING_VAULT_PREFIX):
+                continue
+            try:
+                fernet_token = enc[len(PENDING_VAULT_PREFIX):].encode('utf-8')
+                dek_raw = _get_kek().decrypt(fernet_token)
+                new_ct = transit_encrypt(dek_raw)
+                collection.update_one(
+                    {'_id': doc['_id']},
+                    {'$set': {field: new_ct}},
+                )
+                migrated += 1
+            except Exception as e:
+                app.logger.error(f'Failed to migrate {label} doc {doc["_id"]}: {e}')
+    except Exception as e:
+        app.logger.error(f'Failed to scan {label} for pending-vault DEKs: {e}')
+    if migrated:
+        counts[label] = migrated
+        app.logger.info(f'Migrated {migrated} {label} DEK(s) from pending-vault to Transit.')

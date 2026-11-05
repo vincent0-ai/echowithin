@@ -20,12 +20,21 @@ downgrading.
 import base64
 import logging
 import os
+import threading
+import time as _time
 
 import requests
 
 logger = logging.getLogger(__name__)
 
 _VAULT_HTTP_TIMEOUT = 10  # seconds
+
+# --- Vault health state (thread-safe) ---
+
+_vault_health_lock = threading.Lock()
+_vault_healthy: bool = True          # assume healthy until proven otherwise
+_vault_down_since: float | None = None   # monotonic time of first failure
+_vault_notified: bool = False        # True once the admin ntfy alert has fired
 
 
 # --- Vault transport helpers ---
@@ -266,3 +275,70 @@ def renew_self_token():
         logger.error('Vault token renewal failed: %s', e)
         return None
 
+
+
+# --- Vault health tracking ---
+
+def is_vault_healthy() -> bool:
+    """Return the cached Vault health status (thread-safe)."""
+    with _vault_health_lock:
+        return _vault_healthy
+
+
+def vault_down_since_ts() -> float | None:
+    """Return the monotonic timestamp of the first detected failure, or None."""
+    with _vault_health_lock:
+        return _vault_down_since
+
+
+def mark_vault_down():
+    """Record that Vault is unreachable. Idempotent (only logs once)."""
+    global _vault_healthy, _vault_down_since, _vault_notified
+    with _vault_health_lock:
+        if _vault_healthy:
+            _vault_healthy = False
+            _vault_down_since = _time.monotonic()
+            _vault_notified = False
+            logger.error(
+                'Vault Transit marked DOWN — DEK encryption will use local KEK '
+                'fallback until Vault recovers.'
+            )
+
+
+def mark_vault_up():
+    """Record that Vault is reachable again. Returns True if this is a recovery
+    (was previously down), False if it was already healthy."""
+    global _vault_healthy, _vault_down_since, _vault_notified
+    with _vault_health_lock:
+        was_down = not _vault_healthy
+        _vault_healthy = True
+        _vault_down_since = None
+        _vault_notified = False
+        if was_down:
+            logger.info('Vault Transit marked UP — recovery detected.')
+        return was_down
+
+
+def should_notify_admin() -> bool:
+    """Return True exactly once per outage so the caller can fire an ntfy alert."""
+    global _vault_notified
+    with _vault_health_lock:
+        if not _vault_healthy and not _vault_notified:
+            _vault_notified = True
+            return True
+        return False
+
+
+def check_vault_health() -> bool:
+    """Probe Vault Transit with a round-trip and update cached health state.
+
+    Returns True when healthy, False when down.
+    """
+    if not transit_enabled():
+        return True
+    healthy = verify_transit()
+    if healthy:
+        mark_vault_up()
+    else:
+        mark_vault_down()
+    return healthy

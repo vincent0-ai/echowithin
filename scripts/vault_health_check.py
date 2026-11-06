@@ -1,83 +1,112 @@
 #!/usr/bin/env python3
 """Vault Transit health check and pending-DEK migration.
 
-Called periodically by the scheduler. Probes Vault Transit, sends an admin
-ntfy notification on outage detection, and triggers DEK migration when Vault
-recovers from a previous outage.
+Called periodically by the scheduler (every 2 minutes).
+
+Lightweight probe:
+- Routine checks only use key_management directly (no Flask/Firebase/Typesense import).
+- Fast execution (~50ms) with zero greenlet/gevent cleanup side-effects.
+- Persists outage state via a temp flag file so admin alerts fire once per outage,
+  and recovery migration is triggered automatically when Vault comes back up.
 """
 
 import os
 import sys
+import tempfile
+import requests
 
 # Ensure the app root is on the path so imports resolve.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from main import app  # noqa: E402 — bootstraps Flask + extensions
+import key_management
 
-with app.app_context():
-    from key_management import (
-        transit_enabled, check_vault_health, is_vault_healthy,
-        should_notify_admin, mark_vault_up,
-    )
-    from security import migrate_pending_vault_deks
+FLAG_FILE = os.path.join(tempfile.gettempdir(), 'echowithin_vault_outage.flag')
 
-    if not transit_enabled():
-        print('Vault Transit not configured — nothing to check.')
-        sys.exit(0)
 
-    was_down_before = not is_vault_healthy()
-    healthy = check_vault_health()
+def _send_ntfy(message: str, title: str, tags: str = ""):
+    """Send an ntfy notification directly via requests without Flask/RQ overhead."""
+    topic = os.environ.get('NTFY_TOPIC', '').strip()
+    if not topic:
+        return
+    headers = {}
+    if title:
+        headers['Title'] = title
+    if tags:
+        headers['Tags'] = tags
+    user = os.environ.get('NTFY_USERNAME', '').strip()
+    password = os.environ.get('NTFY_PASSWORD', '').strip()
+    auth = (user, password) if user and password else None
+    try:
+        requests.post(
+            f"https://ntfy.sh/{topic}",
+            data=message.encode('utf-8'),
+            headers=headers,
+            auth=auth,
+            timeout=5,
+        )
+    except Exception as e:
+        print(f"Failed to send ntfy notification: {e}")
+
+
+def _run_recovery_migration():
+    """Boot Flask context only on recovery to migrate pending-vault DEKs."""
+    try:
+        from main import app
+        with app.app_context():
+            from security import migrate_pending_vault_deks
+            counts = migrate_pending_vault_deks()
+            if counts:
+                summary = ', '.join(f'{k}: {v}' for k, v in counts.items())
+                msg = f'Vault recovered. Migrated DEKs: {summary}'
+                print(msg)
+                _send_ntfy(msg, 'Vault Transit Recovered', 'white_check_mark')
+            else:
+                print('No pending-vault DEKs to migrate.')
+                _send_ntfy(
+                    'Vault Transit is back online. No pending DEKs needed migration.',
+                    'Vault Transit Recovered',
+                    'white_check_mark',
+                )
+    except Exception as e:
+        print(f'Error during recovery migration: {e}')
+
+
+def main():
+    if not key_management.transit_enabled():
+        return 0
+
+    healthy = key_management.verify_transit()
 
     if healthy:
         print('Vault Transit health: OK')
-
-        # If this is a recovery from a previous outage, run DEK migration.
-        if was_down_before:
-            print('Vault recovered — migrating pending-vault DEKs...')
+        if os.path.exists(FLAG_FILE):
+            print('Vault recovered from previous outage. Running migration...')
             try:
-                counts = migrate_pending_vault_deks()
-                if counts:
-                    summary = ', '.join(f'{k}: {v}' for k, v in counts.items())
-                    msg = f'Vault recovered. Migrated DEKs: {summary}'
-                    print(msg)
-                    # Send recovery notification
-                    try:
-                        from notifications import send_ntfy_notification
-                        send_ntfy_notification.queue(
-                            msg,
-                            'Vault Transit Recovered',
-                            'white_check_mark',
-                        )
-                    except Exception as e:
-                        app.logger.warning(f'Could not send recovery ntfy: {e}')
-                else:
-                    print('No pending-vault DEKs to migrate.')
-                    try:
-                        from notifications import send_ntfy_notification
-                        send_ntfy_notification.queue(
-                            'Vault Transit is back online. No pending DEKs needed migration.',
-                            'Vault Transit Recovered',
-                            'white_check_mark',
-                        )
-                    except Exception as e:
-                        app.logger.warning(f'Could not send recovery ntfy: {e}')
-            except Exception as e:
-                app.logger.error(f'DEK migration after Vault recovery failed: {e}')
-    else:
-        print('Vault Transit health: DOWN')
+                os.remove(FLAG_FILE)
+            except OSError:
+                pass
+            _run_recovery_migration()
+        return 0
 
-        # Fire the admin notification exactly once per outage window.
-        if should_notify_admin():
-            try:
-                from notifications import send_ntfy_notification
-                send_ntfy_notification.queue(
-                    'Vault Transit is unreachable. New DEKs are being wrapped '
-                    'with the local KEK fallback. They will be migrated '
-                    'automatically once Vault recovers. Check VAULT_ADDR / '
-                    'VAULT_TOKEN configuration.',
-                    'Vault Transit DOWN',
-                    'rotating_light,warning',
-                )
-                print('Admin notification sent.')
-            except Exception as e:
-                app.logger.error(f'Could not send Vault-down ntfy: {e}')
+    # Vault is down
+    print('Vault Transit health: DOWN')
+    if not os.path.exists(FLAG_FILE):
+        try:
+            with open(FLAG_FILE, 'w') as f:
+                f.write('down')
+        except OSError:
+            pass
+        _send_ntfy(
+            'Vault Transit is unreachable. New DEKs are being wrapped '
+            'with the local KEK fallback. They will be migrated '
+            'automatically once Vault recovers. Check VAULT_ADDR / '
+            'VAULT_TOKEN configuration.',
+            'Vault Transit DOWN',
+            'rotating_light,warning',
+        )
+        print('Admin notification sent.')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

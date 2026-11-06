@@ -445,6 +445,42 @@ class TestAwardIdempotency:
         finally:
             m.active_pong_rooms.pop(room_id, None)
 
+    def test_memory_match_awards_each_completed_round(self, app):
+        """Every finished board is its own H2H result, not one per room."""
+        import main as m
+        handlers = _handlers()
+        start_fn = handlers['handle_memory_start_game']
+        flip_fn = handlers['handle_memory_flip_card']
+        room_id = 'memory_round_awards'
+        content = {'size': 2, 'cards': ['a', 'a'], 'labels': {}}
+        m.active_memory_rooms[room_id] = {
+            'host_sid': 'sid_A', 'guest_sid': 'sid_B',
+            'host_user_id': 'u1', 'guest_user_id': 'u2',
+            'host_name': 'A', 'guest_name': 'B',
+            'content': dict(content), 'scores': {'1': 0, '2': 0},
+            'turn': 1, 'round_no': 0, 'flipped': [], 'matched': set(),
+        }
+        req = MagicMock()
+        req.sid = 'sid_A'
+        try:
+            with app.test_request_context():
+                with patch.object(m, 'request', req), \
+                        patch.object(m, 'emit'), \
+                        patch.object(m, 'build_session_content',
+                                     return_value=dict(content)), \
+                        patch.object(m, 'record_match_result') as rec:
+                    for _ in range(2):
+                        start_fn({'room_id': room_id, 'size': 2})
+                        flip_fn({'room_id': room_id, 'index': 0})
+                        flip_fn({'room_id': room_id, 'index': 1})
+            assert rec.call_count == 2, 'each completed round must record a result'
+            keys = [c.kwargs['match_key'] for c in rec.call_args_list]
+            assert keys == [f'memory_match:{room_id}:1',
+                            f'memory_match:{room_id}:2']
+            assert [c.kwargs['match_no'] for c in rec.call_args_list] == [1, 2]
+        finally:
+            m.active_memory_rooms.pop(room_id, None)
+
     def test_net_ping_echoes_timestamp_to_caller(self, app):
         import main as m
         fn = _handlers()['handle_net_ping']

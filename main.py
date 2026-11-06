@@ -2666,6 +2666,7 @@ def handle_memory_join_room(data=None, *args, **kwargs):
             'content': build_session_content('memory_match', pair_key=pair_key, size=16),
             'scores': {'1': 0, '2': 0},
             'turn': 1,
+            'round_no': 0,
             'flipped': [],
             'matched': set(),
             'bond_id': bond_id,
@@ -2724,9 +2725,9 @@ def handle_memory_start_game(data=None, *args, **kwargs):
     room_info['content'] = build_session_content('memory_match', pair_key=pair_key, size=size)
     room_info['scores'] = {'1': 0, '2': 0}
     room_info['turn'] = 1
+    room_info['round_no'] = _safe_int(room_info.get('round_no'), default=0, lo=0) + 1
     room_info['flipped'] = []
     room_info['matched'] = set()
-    room_info['result_recorded'] = False
     emit('memory_start_game', {
         'size': room_info['content']['size'],
         'cards': room_info['content']['cards'],
@@ -2787,15 +2788,18 @@ def handle_memory_flip_card(data=None, *args, **kwargs):
     if not is_match:
         emit('memory_turn_change', {'turn': room_info['turn']}, room=room_id)
 
-    # Record the finished duel once (competitive Memory Match has a winner:
-    # most pairs matched). Restart resets the flag via memory_start_game.
+    # Record the finished board once. Keyed by room + round number, the same
+    # way Connect Four keys its rounds: every completed board is its own match
+    # (one H2H point / ELO result) instead of collapsing into the first one.
+    round_no = _safe_int(room_info.get('round_no'), default=0, lo=0)
     if complete and room_info.get('host_user_id') and room_info.get('guest_user_id') \
-            and not room_info.get('result_recorded'):
+            and room_info.get('recorded_match_no') != round_no:
         scores = room_info.get('scores', {})
         s1, s2 = scores.get('1', 0), scores.get('2', 0)
         winner_id = None
         if s1 != s2:
             winner_id = room_info['host_user_id'] if s1 > s2 else room_info['guest_user_id']
+        room_info['recorded_match_no'] = round_no
         record_match_result(
             game='memory_match', room_id=room_id,
             players=[
@@ -2804,10 +2808,11 @@ def handle_memory_flip_card(data=None, *args, **kwargs):
             ],
             winner_id=winner_id,
             score={'p1': s1, 'p2': s2},
-            metadata={'mode': 'online'},
-            bond_id=room_info.get('bond_id')
+            metadata={'mode': 'online', 'round': round_no},
+            bond_id=room_info.get('bond_id'),
+            match_key=f'memory_match:{room_id}:{round_no}',
+            match_no=round_no
         )
-        room_info['result_recorded'] = True
 
 # --- Multiplayer Matchmaking Helper ---
 def broadcast_matchmaking_queue(queue, event_name):

@@ -32,6 +32,7 @@
       </div>
     </div>
     <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <span id="net-quality" class="ew-badge" title="Connection quality" style="display: none; font-size: 0.72rem; padding: 0.15rem 0.55rem;">RTT &mdash;</span>
       <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">Back to Games</a>
     </div>
   </div>
@@ -134,7 +135,8 @@
 </div>
 
 <script src="{{ url_for('static', filename='socket.io.min.js') }}?v=4.7.2" nonce="{{ csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='gomoku.js') }}?v=1.4" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='net_quality.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='gomoku.js') }}?v=1.5" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   (function () {
     const LB_UNITS = { win_streak: 'streak', total_wins: 'wins', ranked_score: 'pts' };

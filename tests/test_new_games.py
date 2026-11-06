@@ -272,3 +272,51 @@ class TestDuelRoomCreationGate:
         assert found == room_id
         assert waiter_is_partner is True
         m.active_sudoku_rooms.pop(room_id, None)
+
+
+class TestNewGameDisconnectCleanup:
+    """A dropped socket must tell the other player.
+
+    Gomoku, Whack-'Em-All, Sudoku Together and Air Hockey used to be absent from
+    the disconnect handler, so a closed tab left the opponent staring at a frozen
+    board until the 1-hour prune.
+    """
+
+    CASES = (
+        ('active_gomoku_rooms', 'gomoku_player_left'),
+        ('active_whack_rooms', 'whack_player_left'),
+        ('active_sudoku_rooms', 'sudoku_partner_left'),
+        ('active_air_rooms', 'air_player_left'),
+    )
+
+    def _disconnect(self, sid):
+        handlers = {getattr(c.args[0], '__name__', ''): c.args[0]
+                    for c in m.socketio.on.mock_calls if len(c.args) > 0 and callable(c.args[0])}
+        req = MagicMock()
+        req.sid = sid
+        with patch.object(m, 'request', req), \
+                patch.object(m, 'current_user', _guest()), \
+                patch.object(m, 'emit') as mock_emit:
+            handlers['handle_dm_disconnect']()
+        return mock_emit
+
+    def test_guest_disconnect_notifies_host_and_keeps_room(self):
+        for attr, event in self.CASES:
+            store = getattr(m, attr)
+            room_id = 'disc_notify_' + attr
+            store[room_id] = {'host_sid': 'host_sid', 'guest_sid': 'guest_sid'}
+            mock_emit = self._disconnect('guest_sid')
+            try:
+                assert store[room_id]['host_sid'] == 'host_sid', attr
+                names = [c[0][0] for c in mock_emit.call_args_list]
+                assert event in names, attr
+            finally:
+                store.pop(room_id, None)
+
+    def test_last_player_disconnect_drops_the_room(self):
+        for attr, _event in self.CASES:
+            store = getattr(m, attr)
+            room_id = 'disc_drop_' + attr
+            store[room_id] = {'host_sid': 'host_sid', 'guest_sid': None}
+            self._disconnect('host_sid')
+            assert room_id not in store, attr

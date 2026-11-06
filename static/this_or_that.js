@@ -98,6 +98,11 @@ let gamePairs = [];
 let p1Choices = [];
 let p2Choices = [];
 let myChoices = [];
+
+// Connection quality chip (RTT over the shared net_ping probe).
+if (window.EWNetQuality) EWNetQuality.attach(() => socket, {
+    isActive: () => mode === 'online' && !!room
+});
 let score = 0;
 let timer = null;
 let timeLeft = 15;

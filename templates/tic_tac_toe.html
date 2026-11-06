@@ -221,6 +221,7 @@
       </div>
     </div>
     <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <span id="net-quality" class="ew-badge" title="Connection quality" style="display: none; font-size: 0.72rem; padding: 0.15rem 0.55rem;">RTT &mdash;</span>
       <button type="button" id="mute-toggle-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">
         Mute Sound
       </button>
@@ -403,7 +404,8 @@
 </div>
 
 <script src="{{ url_for('static', filename='socket.io.min.js') }}?v=4.7.2" nonce="{{ csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='tic_tac_toe.js') }}?v=1.2" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='net_quality.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='tic_tac_toe.js') }}?v=1.3" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   (function () {
     let currentCat = 'win_streak';

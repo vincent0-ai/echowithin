@@ -152,6 +152,7 @@
 
 <div id="tot-container">
     <h1>This or That</h1>
+    <span id="net-quality" class="ew-badge" title="Connection quality" style="display: none; font-size: 0.72rem; padding: 0.15rem 0.55rem; margin-bottom: 12px;">RTT &mdash;</span>
     
     <div id="setup-screen">
         <h2>Select Game Mode</h2>
@@ -191,5 +192,6 @@
 </div>
 
 <script src="{{ url_for('static', filename='socket.io.min.js') }}?v=4.7.2" nonce="{{ csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='this_or_that.js') }}?v=1.1" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='net_quality.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='this_or_that.js') }}?v=1.2" nonce="{{ csp_nonce }}"></script>
 {% endblock %}

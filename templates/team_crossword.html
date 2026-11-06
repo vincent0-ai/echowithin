@@ -179,6 +179,7 @@
       </div>
     </div>
     <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+      <span id="net-quality" class="ew-badge" title="Connection quality" style="display: none; font-size: 0.72rem; padding: 0.15rem 0.55rem;">RTT &mdash;</span>
       <button type="button" id="xword-check-btn" class="ew-btn ew-btn--sm" style="cursor: pointer; background: #e06a3b; border-color: #c95729; font-weight: 600;">
         Check Puzzle
       </button>
@@ -341,5 +342,6 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='team_crossword.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='net_quality.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='team_crossword.js') }}?v=1.1" nonce="{{ csp_nonce }}"></script>
 {% endblock %}

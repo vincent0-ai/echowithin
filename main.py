@@ -6620,6 +6620,30 @@ def handle_dm_disconnect(*args, **kwargs):
             emit('crossword_partner_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
             active_crossword_rooms.pop(room_id, None)
 
+    # Cleanup Gomoku / Whack / Sudoku / Air Hockey rooms on disconnect. These used
+    # to be left behind until the 1-hour prune: the other player waited with no
+    # explanation. Keep the seat sid (join handlers reclaim it by user id or
+    # token, and other handlers emit to host_sid) and tell the opponent now;
+    # drop the room only when nobody else is seated in it.
+    _disconnect_cleanup_games = (
+        (active_gomoku_rooms, 'gomoku_player_left'),
+        (active_whack_rooms, 'whack_player_left'),
+        (active_sudoku_rooms, 'sudoku_partner_left'),
+        (active_air_rooms, 'air_player_left'),
+    )
+    for store, left_event in _disconnect_cleanup_games:
+        for room_id, rinfo in list(store.items()):
+            if rinfo.get('host_sid') == request.sid:
+                partner_seat = rinfo.get('guest_sid')
+            elif rinfo.get('guest_sid') == request.sid:
+                partner_seat = rinfo.get('host_sid')
+            else:
+                continue
+            if not partner_seat:
+                store.pop(room_id, None)
+            else:
+                emit(left_event, {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
+
 
 @socketio.on('send_dm')
 @authenticated_only

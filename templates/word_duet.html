@@ -70,7 +70,10 @@
       <h2 style="margin:0; font-size:1.4rem; color:var(--text-dark-color);">Word Bond: Duet</h2>
       <p class="chain-rule">Rule: add a new word that starts with the last letter of the previous word. No repeats.</p>
     </div>
-    <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Back to Games</a>
+    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+      <span id="net-quality" class="ew-badge" title="Connection quality" style="display: none; font-size: 0.72rem; padding: 0.15rem 0.55rem;">RTT &mdash;</span>
+      <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Back to Games</a>
+    </div>
   </div>
 
   <div class="chain-panel">
@@ -107,5 +110,6 @@
 </div>
 
 <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='socket.io.min.js') }}?v=4.7.2"></script>
-<script nonce="{{ csp_nonce }}" src="/static/word_duet.js?v=1.1"></script>
+<script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='net_quality.js') }}?v=1.0"></script>
+<script nonce="{{ csp_nonce }}" src="/static/word_duet.js?v=1.2"></script>
 {% endblock %}

@@ -83,6 +83,7 @@
 
 <div class="game-container">
     <h1>Emoji Decoder</h1>
+    <span id="net-quality" class="ew-badge" title="Connection quality" style="display: none; font-size: 0.72rem; padding: 0.15rem 0.55rem; margin-bottom: 12px;">RTT &mdash;</span>
     
     <div id="stats-bar" class="game-stats" style="display:none;">
         <span id="stat-round">Round: 1/10</span>
@@ -157,5 +158,6 @@
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script nonce="{{ csp_nonce }}" src="/static/emoji_decoder.js?v=1.1"></script>
+<script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='net_quality.js') }}?v=1.0"></script>
+<script nonce="{{ csp_nonce }}" src="/static/emoji_decoder.js?v=1.2"></script>
 {% endblock %}

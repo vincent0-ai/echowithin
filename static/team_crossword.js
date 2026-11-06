@@ -250,6 +250,11 @@
     myPlayerIdx: 0 // 0 = Coral, 1 = Teal
   };
 
+  // Connection quality chip (RTT over the shared net_ping probe).
+  if (window.EWNetQuality) EWNetQuality.attach(() => state.socket, {
+    isActive: () => state.mode === 'online' && !!state.roomId
+  });
+
   // --- Helper: Clue numbering for 5x5 grid ---
   function computeNumbers(puzzle) {
     const nums = Array(25).fill(0);

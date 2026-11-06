@@ -30,6 +30,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let myPlayerNum = 1;
     let lockBoard = false;
 
+    // Connection quality chip (RTT over the shared net_ping probe).
+    if (window.EWNetQuality) EWNetQuality.attach(() => socket, {
+        isActive: () => mode === 'online' && !!roomId && joinedRoom
+    });
+
     const ui = {
         setupPanel: document.getElementById('setup-panel'),
         gameInfo: document.getElementById('game-info'),

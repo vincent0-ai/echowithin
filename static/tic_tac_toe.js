@@ -134,6 +134,11 @@
     isSearching: false
   };
 
+  // Connection quality chip (RTT over the shared net_ping probe).
+  if (window.EWNetQuality) EWNetQuality.attach(() => state.socket, {
+    isActive: () => state.mode === 'online' && !!state.roomId
+  });
+
   // --- DOM Elements ---
   const els = {};
 

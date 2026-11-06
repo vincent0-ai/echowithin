@@ -94,16 +94,42 @@ class TestAwardWiring:
             'a lost move echo must resync the authoritative board'
 
 
+REALTIME_GAMES = (
+    'tic_tac_toe', 'gomoku', 'dots_and_boxes', 'connect_four', 'memory_match',
+    'whack_a_mole', 'air_hockey', 'ping_pong', 'slime_volleyball',
+    'emoji_decoder', 'this_or_that', 'sudoku', 'word_duet', 'team_crossword',
+)
+
+# These three still carry their own inline probe (same thresholds and colours).
+INLINE_PROBE_GAMES = ('connect_four', 'ping_pong', 'slime_volleyball')
+
+
 class TestConnectionQualityIndicator:
+    def test_shared_probe_exists(self):
+        js = _read('static/net_quality.js')
+        assert "emit('net_ping'" in js
+        assert 'net_pong' in js
+        # Green / amber / red must stay distinguishable for gaming latency.
+        for color in ("'#15803d'", "'#a16207'", "'#b91c1c'"):
+            assert color in js
+        assert 'ms < 90' in js and 'ms < 180' in js
+
     def test_each_realtime_game_reports_rtt(self):
-        for rel in ('static/ping_pong.js', 'static/slime_volleyball.js',
-                    'static/connect_four.js'):
-            js = _read(rel)
-            assert "emit('net_ping'" in js, f'{rel} must probe RTT'
-            assert 'net-quality' in js, f'{rel} must drive the quality chip'
+        for game in REALTIME_GAMES:
+            js = _read(f'static/{game}.js')
+            assert ('EWNetQuality.attach' in js) or ("emit('net_ping'" in js), \
+                f'{game} must probe RTT'
+            assert 'net-quality' in js or 'EWNetQuality' in js, \
+                f'{game} must drive the quality chip'
 
     def test_templates_render_the_chip(self):
-        for rel in ('templates/ping_pong.html', 'templates/slime_volleyball.html',
-                    'templates/connect_four.html'):
-            html = _read(rel)
-            assert 'id="net-quality"' in html, f'{rel} is missing the RTT chip'
+        for game in REALTIME_GAMES:
+            html = _read(f'templates/{game}.html')
+            assert 'id="net-quality"' in html, f'{game} template is missing the RTT chip'
+
+    def test_templates_load_the_shared_module(self):
+        for game in REALTIME_GAMES:
+            if game in INLINE_PROBE_GAMES:
+                continue
+            html = _read(f'templates/{game}.html')
+            assert 'net_quality.js' in html, f'{game} template must load net_quality.js'

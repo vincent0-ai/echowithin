@@ -1,5 +1,5 @@
 const urlParams = new URLSearchParams(window.location.search);
-const room = urlParams.get('room');
+let room = urlParams.get('room');
 const bondId = urlParams.get('bond_id');
 
 let socket = null;
@@ -99,6 +99,11 @@ let currentWord = "";
 let currentClue = [];
 let attemptsLeft = 3;
 let isPlayer1 = true; // In local/online, player 1 starts as giver
+
+// Connection quality chip (RTT over the shared net_ping probe).
+if (window.EWNetQuality) EWNetQuality.attach(() => socket, {
+    isActive: () => mode === 'online' && !!room
+});
 
 // UI Elements
 const screens = {

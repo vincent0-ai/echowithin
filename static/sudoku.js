@@ -14,6 +14,11 @@
   var socket = null;
   try { if (typeof io !== 'undefined') socket = io({ transports: ['websocket', 'polling'] }); } catch (e) { socket = null; }
 
+  // Connection quality chip (RTT over the shared net_ping probe).
+  if (window.EWNetQuality) EWNetQuality.attach(function () { return socket; }, {
+    isActive: function () { return state.mode === 'coop' && !!state.roomId; }
+  });
+
   var cells = [];
   for (var i = 0; i < 81; i++) {
     (function (idx) {

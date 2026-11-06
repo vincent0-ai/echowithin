@@ -27,7 +27,10 @@
         30 seconds. Tap fast, score fast.
       </div>
     </div>
-    <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">Back to Games</a>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <span id="net-quality" class="ew-badge" title="Connection quality" style="display: none; font-size: 0.72rem; padding: 0.15rem 0.55rem;">RTT &mdash;</span>
+      <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">Back to Games</a>
+    </div>
   </div>
 
   <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center;">
@@ -95,7 +98,8 @@
 </div>
 
 <script src="{{ url_for('static', filename='socket.io.min.js') }}?v=4.7.2" nonce="{{ csp_nonce }}"></script>
-<script src="{{ url_for('static', filename='whack_a_mole.js') }}?v=1.3" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='net_quality.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='whack_a_mole.js') }}?v=1.4" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   (function () {
     var LB_TIMEOUT_MS = 12000;

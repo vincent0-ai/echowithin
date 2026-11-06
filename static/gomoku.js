@@ -12,6 +12,11 @@
   var socket = window.__gomokuSocket || null;
   try { if (!socket && typeof io !== 'undefined') socket = io({ transports: ['websocket', 'polling'] }); } catch (e) { socket = null; }
 
+  // Connection quality chip (RTT over the shared net_ping probe).
+  if (window.EWNetQuality) EWNetQuality.attach(function () { return socket; }, {
+    isActive: function () { return state.mode === 'online' && !!state.roomId; }
+  });
+
   var css = getComputedStyle(document.documentElement);
   var C_BLACK = '#3e2217', C_WHITE = '#ffffff', C_LINE = '#c9b795', C_BG = '#f6efe4', C_WIN = '#2c5f8a';
 

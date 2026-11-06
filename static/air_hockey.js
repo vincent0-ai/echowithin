@@ -67,6 +67,11 @@
   var socket = window.__airSocket || null;
   try { if (!socket && typeof io !== 'undefined') socket = io({ transports: ['websocket', 'polling'] }); } catch (e) { socket = null; }
 
+  // Connection quality chip (RTT over the shared net_ping probe).
+  if (window.EWNetQuality) EWNetQuality.attach(function () { return socket; }, {
+    isActive: function () { return state.mode === 'online' && !!state.roomId; }
+  });
+
   // Cache-first assets can restore a page whose hidden panels are still shown at
   // script time, so the wrapper can measure 0 — never let that become the size.
   function sizeCanvas() {

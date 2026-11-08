@@ -58,6 +58,14 @@ class TestCSPHeaders:
         csp = response.headers.get('Content-Security-Policy', '')
         assert 'cdn.socket.io' in csp or 'cdn.jsdelivr.net' in csp
 
+    def test_csp_allows_cloudflare_beacon(self, https_client):
+        """CSP should allow the Cloudflare Web Analytics beacon on every page."""
+        response = https_client.get('/about')
+        csp = response.headers.get('Content-Security-Policy', '')
+        directives = {d.split()[0]: d for d in csp.split(';') if d.strip()}
+        assert 'https://static.cloudflareinsights.com' in directives.get('script-src', '')
+        assert 'https://cloudflareinsights.com' in directives.get('connect-src', '')
+
 
 class TestSecurityHeaders:
     """Tests for other security headers."""

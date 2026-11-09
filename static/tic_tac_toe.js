@@ -746,7 +746,7 @@
     if (state.socket) return;
     if (typeof io === 'undefined') return;
 
-    state.socket = io({ transports: ['websocket', 'polling'] });
+    state.socket = window.socket || io({ transports: ['polling', 'websocket'] });
     window._gameSocket = state.socket;
 
     state.socket.on('connect', () => {
@@ -769,8 +769,16 @@
 
       if (state.opponentJoined) {
         setMatchStatus(`Match Found! Playing vs ${state.opponentName} (You are ${state.mySymbol.toUpperCase()})`, 'found');
-        const initialTurn = (data && data.turn) ? data.turn : 'x';
-        resetGame(initialTurn);
+        if (data && data.rejoined && Array.isArray(data.board)) {
+          state.board = data.board;
+          if (data.turn) state.turn = data.turn;
+          if (data.scores) state.scores = data.scores;
+          renderBoard();
+        } else if (!state.gameStarted) {
+          state.gameStarted = true;
+          const initialTurn = (data && data.turn) ? data.turn : 'x';
+          resetGame(initialTurn);
+        }
       } else {
         setMatchStatus(`Waiting for opponent in room ${state.roomId}...`, 'normal');
       }

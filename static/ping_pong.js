@@ -1242,7 +1242,7 @@
     if (state.socket) return;
     if (typeof io === 'undefined') return;
 
-    state.socket = io({ transports: ['websocket', 'polling'] });
+    state.socket = window.socket || io({ transports: ['polling', 'websocket'] });
     state.socket.on('connect', () => {
       if (state.roomId) {
         state.socket.emit('join_pong_room', {

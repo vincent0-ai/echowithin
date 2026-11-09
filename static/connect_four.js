@@ -946,7 +946,7 @@
     if (typeof io === 'undefined') return;
 
     try {
-      state.socket = io({ transports: ['websocket'], upgrade: false });
+      state.socket = window.socket || io({ transports: ['polling', 'websocket'] });
     } catch (_) {
       setMatchStatus('Live play is unavailable. Reload the page to play online.', 'normal');
       return;
@@ -976,8 +976,11 @@
         setMatchStatus(`Match Found! Playing vs ${state.opponentName} (You are ${state.myPlayer === 0 ? 'Amber' : 'Gold'})`, 'found');
         if (data && data.board) {
           state.board = data.board;
-        } else {
-          resetGame();
+        } else if (!data || !data.rejoined) {
+          if (!state.gameStarted) {
+            state.gameStarted = true;
+            resetGame();
+          }
         }
         if (data && data.scores) {
           state.scores = data.scores;

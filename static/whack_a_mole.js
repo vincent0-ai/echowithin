@@ -9,7 +9,8 @@
   };
   var grid = document.getElementById('whack-grid');
   var socket = null;
-  try { if (typeof io !== 'undefined') socket = io({ transports: ['websocket', 'polling'] }); } catch (e) { socket = null; }
+  var socket = window.socket || null;
+  try { if (!socket && typeof io !== 'undefined') socket = io({ transports: ['polling', 'websocket'] }); } catch (e) { socket = null; }
 
   // Connection quality chip (RTT over the shared net_ping probe).
   if (window.EWNetQuality) EWNetQuality.attach(function () { return socket; }, {

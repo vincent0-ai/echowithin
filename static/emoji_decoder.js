@@ -4,7 +4,7 @@ const bondId = urlParams.get('bond_id');
 
 let socket = null;
 if (typeof io !== 'undefined') {
-    socket = io({ transports: ['websocket', 'polling'] });
+    socket = window.socket || io({ transports: ['polling', 'websocket'] });
 }
 
 // Word Bank (150+ words with AI emoji mappings for Solo mode)

@@ -9,8 +9,8 @@
   };
   var canvas = document.getElementById('gomoku-canvas');
   var ctx = canvas.getContext('2d');
-  var socket = window.__gomokuSocket || null;
-  try { if (!socket && typeof io !== 'undefined') socket = io({ transports: ['websocket', 'polling'] }); } catch (e) { socket = null; }
+  var socket = window.socket || window.__gomokuSocket || null;
+  try { if (!socket && typeof io !== 'undefined') socket = io({ transports: ['polling', 'websocket'] }); } catch (e) { socket = null; }
 
   // Connection quality chip (RTT over the shared net_ping probe).
   if (window.EWNetQuality) EWNetQuality.attach(function () { return socket; }, {
@@ -361,7 +361,14 @@
     socket.on('gomoku_room_joined', function (d) {
       state.player = d.player; state.isHost = d.is_host;
       if (d.turn !== undefined) state.turn = d.turn;
-      resetBoardSilent();
+      if (d.rejoined && Array.isArray(d.board)) {
+        state.board = d.board;
+        if (Array.isArray(d.scores)) state.scores = d.scores;
+        draw();
+      } else if (!state.gameStarted) {
+        state.gameStarted = true;
+        resetBoardSilent();
+      }
       setStatus(d.guest_name ? 'Opponent joined. ' + (state.turn === state.player ? 'Your turn.' : 'Waiting.') : 'Share the room code with a friend.');
       var lobby = document.getElementById('online-opponents-section');
       if (lobby) lobby.style.display = d.guest_name ? 'none' : '';

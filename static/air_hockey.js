@@ -64,8 +64,8 @@
   function resetDeadTrack(x, y) { state.deadX = x; state.deadY = y; state.deadT = 0; }
   var canvas = document.getElementById('air-canvas');
   var ctx = canvas.getContext('2d');
-  var socket = window.__airSocket || null;
-  try { if (!socket && typeof io !== 'undefined') socket = io({ transports: ['websocket', 'polling'] }); } catch (e) { socket = null; }
+  var socket = window.socket || window.__airSocket || null;
+  try { if (!socket && typeof io !== 'undefined') socket = io({ transports: ['polling', 'websocket'] }); } catch (e) { socket = null; }
 
   // Connection quality chip (RTT over the shared net_ping probe).
   if (window.EWNetQuality) EWNetQuality.attach(function () { return socket; }, {
@@ -685,7 +685,13 @@
     socket.on('air_room_joined', function (d) {
       state.player = d.player; state.isHost = d.is_host;
       state.opponentPresent = d.is_host ? !!d.guest_name : true;
-      resetMatch();
+      if (d.rejoined && Array.isArray(d.scores)) {
+        state.scores = d.scores;
+        updateScores();
+      } else if (!state.gameStarted) {
+        state.gameStarted = true;
+        resetMatch();
+      }
       setStatus(d.guest_name ? 'Opponent joined. Rally!' : 'Share the room code.');
       var lobby = document.getElementById('online-opponents-section');
       if (lobby) lobby.style.display = d.guest_name ? 'none' : '';

@@ -2541,6 +2541,7 @@ def handle_tot_join_room(data=None, *args, **kwargs):
     if not room_info and not _room_creation_allowed(room_info):
         _guest_room_error('tot_error')
         return
+    rejoined = False
     if not room_info:
         content = build_session_content('this_or_that', pair_key=pair_key)
         room_info = {
@@ -2561,12 +2562,14 @@ def handle_tot_join_room(data=None, *args, **kwargs):
             if room_info.get('host_sid') != request.sid:
                 room_info['host_sid'] = request.sid
             player_num = 1
+            rejoined = True
         elif seat == 'guest':
             if room_info.get('guest_sid') != request.sid:
                 room_info['guest_sid'] = request.sid
             room_info['guest_user_id'] = user_uid
             active_tot_rooms[room_id] = room_info
             player_num = 2
+            rejoined = True
         elif seat == 'full':
             emit('tot_error', {'message': 'Room is already full.'}, room=request.sid)
             return
@@ -2582,7 +2585,8 @@ def handle_tot_join_room(data=None, *args, **kwargs):
         'player_num': player_num,
         'pairs': room_info['content'].get('pairs', []),
         'seed': room_info['content'].get('seed'),
-        'partner_connected': bool(room_info.get('host_sid') and room_info.get('guest_sid'))
+        'partner_connected': bool(room_info.get('host_sid') and room_info.get('guest_sid')),
+        'rejoined': rejoined
     }, room=request.sid)
     emit('tot_partner_update', {
         'partner_connected': bool(room_info.get('host_sid') and room_info.get('guest_sid'))
@@ -2626,8 +2630,12 @@ def handle_tot_choice(data=None, *args, **kwargs):
     emit('tot_choice_update', payload, room=room_id)
 
 
-def _memory_payload(room_id, room_info, player_num):
+def _memory_payload(room_id, room_info, player_num, rejoined=False):
     content = room_info.get('content') or {}
+    round_no = room_info.get('round_no', 0)
+    matched = list(room_info.get('matched', set()))
+    scores = room_info.get('scores', {'1': 0, '2': 0})
+    started = bool(round_no > 0 or matched or (scores.get('1', 0) > 0) or (scores.get('2', 0) > 0))
     return {
         'room_id': room_id,
         'player_num': player_num,
@@ -2635,10 +2643,13 @@ def _memory_payload(room_id, room_info, player_num):
         'size': content.get('size', 16),
         'cards': content.get('cards', []),
         'labels': content.get('labels', {}),
-        'scores': room_info.get('scores', {'1': 0, '2': 0}),
+        'scores': scores,
         'turn': room_info.get('turn', 1),
-        'matched': list(room_info.get('matched', set())),
+        'matched': matched,
         'partner_connected': bool(room_info.get('host_sid') and room_info.get('guest_sid')),
+        'round_no': round_no,
+        'started': started,
+        'rejoined': rejoined,
     }
 
 
@@ -2658,6 +2669,7 @@ def handle_memory_join_room(data=None, *args, **kwargs):
     if not room_info and not _room_creation_allowed(room_info):
         _guest_room_error('memory_error')
         return
+    rejoined = False
     if not room_info:
         room_info = {
             'host_sid': request.sid,
@@ -2683,6 +2695,7 @@ def handle_memory_join_room(data=None, *args, **kwargs):
             if room_info.get('host_sid') != request.sid:
                 room_info['host_sid'] = request.sid
             player_num = 1
+            rejoined = True
         elif seat == 'guest':
             if room_info.get('guest_sid') != request.sid:
                 room_info['guest_sid'] = request.sid
@@ -2690,6 +2703,7 @@ def handle_memory_join_room(data=None, *args, **kwargs):
             room_info['guest_name'] = _socket_user_name()
             active_memory_rooms[room_id] = room_info
             player_num = 2
+            rejoined = True
         elif seat == 'full':
             emit('memory_error', {'message': 'Room is already full.'}, room=request.sid)
             return
@@ -2701,7 +2715,7 @@ def handle_memory_join_room(data=None, *args, **kwargs):
             player_num = 2
 
     join_room(room_id)
-    emit('memory_room_joined', _memory_payload(room_id, room_info, player_num), room=request.sid)
+    emit('memory_room_joined', _memory_payload(room_id, room_info, player_num, rejoined=rejoined), room=request.sid)
     emit('memory_partner_update', {
         'partner_connected': bool(room_info.get('host_sid') and room_info.get('guest_sid'))
     }, room=room_id)
@@ -2900,7 +2914,9 @@ def handle_join_slime_room(data=None, *args, **kwargs):
             'is_host': True,
             'host_name': room_info['host_name'],
             'guest_name': room_info.get('guest_name'),
-            'match_no': room_info.get('match_no', 0)
+            'match_no': room_info.get('match_no', 0),
+            'scores': list(room_info.get('scores', [0, 0])),
+            'rejoined': True
         }, room=sid)
     elif seat == 'guest':
         # Re-joining guest: refresh state.
@@ -2913,7 +2929,9 @@ def handle_join_slime_room(data=None, *args, **kwargs):
             'is_host': False,
             'host_name': room_info['host_name'],
             'guest_name': room_info['guest_name'],
-            'match_no': room_info.get('match_no', 0)
+            'match_no': room_info.get('match_no', 0),
+            'scores': list(room_info.get('scores', [0, 0])),
+            'rejoined': True
         }, room=sid)
     else:
         # Second player is Guest
@@ -3194,7 +3212,7 @@ def _prune_unattended_game_rooms():
                     store.pop(rid, None)
 
 
-def _pong_joined_payload(room_id, room_info, is_host):
+def _pong_joined_payload(room_id, room_info, is_host, rejoined=False):
     """Shared pong_room_joined payload; always carries live scores + target."""
     return {
         'room_id': room_id,
@@ -3206,7 +3224,7 @@ def _pong_joined_payload(room_id, room_info, is_host):
         'target': room_info.get('target'),
         'serving_player': room_info.get('serving_player', 0),
         'match_no': room_info.get('match_no', 0),
-        'rejoined': False,
+        'rejoined': rejoined,
     }
 
 
@@ -3259,13 +3277,13 @@ def handle_join_pong_room(data=None, *args, **kwargs):
         room_info['host_name'] = user_name
         if user_uid:
             room_info['host_user_id'] = user_uid
-        emit('pong_room_joined', _pong_joined_payload(room_id, room_info, True), room=sid)
+        emit('pong_room_joined', _pong_joined_payload(room_id, room_info, True, rejoined=True), room=sid)
     elif seat == 'guest':
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
         if user_uid:
             room_info['guest_user_id'] = user_uid
-        emit('pong_room_joined', _pong_joined_payload(room_id, room_info, False), room=sid)
+        emit('pong_room_joined', _pong_joined_payload(room_id, room_info, False, rejoined=True), room=sid)
     else:
         serving_player = secrets.choice([0, 1])
         room_info['guest_sid'] = sid
@@ -3600,7 +3618,10 @@ def handle_join_ttt_room(data=None, *args, **kwargs):
             'host_name': room_info['host_name'],
             'guest_name': room_info.get('guest_name'),
             'symbol': 'x',
-            'turn': room_info.get('turn', 'x')
+            'turn': room_info.get('turn', 'x'),
+            'board': list(room_info.get('board', [''] * 9)),
+            'scores': dict(room_info.get('scores', {'x': 0, 'o': 0, 'ties': 0})),
+            'rejoined': True
         }, room=sid)
     elif seat == 'guest':
         if room_info.get('guest_sid') != sid:
@@ -3611,7 +3632,10 @@ def handle_join_ttt_room(data=None, *args, **kwargs):
             'host_name': room_info['host_name'],
             'guest_name': room_info.get('guest_name'),
             'symbol': 'o',
-            'turn': room_info.get('turn', 'x')
+            'turn': room_info.get('turn', 'x'),
+            'board': list(room_info.get('board', [''] * 9)),
+            'scores': dict(room_info.get('scores', {'x': 0, 'o': 0, 'ties': 0})),
+            'rejoined': True
         }, room=sid)
     elif seat == 'full':
         emit('ttt_room_error', {'message': 'Room is already full.'}, room=sid)
@@ -3917,7 +3941,8 @@ def handle_join_c4_room(data=None, *args, **kwargs):
             'player': 0,
             'turn': room_info.get('turn', 0),
             'board': room_info.get('board'),
-            'scores': room_info.get('scores', [0, 0, 0])
+            'scores': room_info.get('scores', [0, 0, 0]),
+            'rejoined': True
         }, room=sid)
     elif seat == 'guest':
         if room_info.get('guest_sid') != sid:
@@ -3931,7 +3956,8 @@ def handle_join_c4_room(data=None, *args, **kwargs):
             'player': 1,
             'turn': room_info.get('turn', 0),
             'board': room_info.get('board'),
-            'scores': room_info.get('scores', [0, 0, 0])
+            'scores': room_info.get('scores', [0, 0, 0]),
+            'rejoined': True
         }, room=sid)
     else:
         starter = secrets.choice([0, 1])
@@ -4246,12 +4272,16 @@ def handle_join_gomoku_room(data=None, *args, **kwargs):
         if room_info.get('host_sid') != sid:
             room_info['host_sid'] = sid
         emit('gomoku_room_joined', {'room_id': room_id, 'is_host': True, 'host_name': room_info['host_name'],
-                                    'guest_name': room_info.get('guest_name'), 'player': 0}, room=sid)
+                                    'guest_name': room_info.get('guest_name'), 'player': 0,
+                                    'turn': room_info.get('turn', 0), 'board': list(room_info.get('board', [None]*225)),
+                                    'scores': list(room_info.get('scores', [0, 0])), 'rejoined': True}, room=sid)
     elif seat == 'guest':
         if room_info.get('guest_sid') != sid:
             room_info['guest_sid'] = sid
         emit('gomoku_room_joined', {'room_id': room_id, 'is_host': False, 'host_name': room_info['host_name'],
-                                    'guest_name': room_info['guest_name'], 'player': 1}, room=sid)
+                                    'guest_name': room_info['guest_name'], 'player': 1,
+                                    'turn': room_info.get('turn', 0), 'board': list(room_info.get('board', [None]*225)),
+                                    'scores': list(room_info.get('scores', [0, 0])), 'rejoined': True}, room=sid)
     else:
         starter = secrets.choice([0, 1])
         room_info.update({'guest_sid': sid, 'guest_name': user_name, 'guest_user_id': user_uid,
@@ -4888,14 +4918,16 @@ def handle_join_air_room(data=None, *args, **kwargs):
         if user_uid:
             room_info['host_user_id'] = user_uid
         emit('air_room_joined', {'room_id': room_id, 'is_host': True, 'player': 0, 'target': room_info.get('target', AIR_TARGET),
-                                 'host_name': room_info['host_name'], 'guest_name': room_info.get('guest_name')}, room=sid)
+                                 'host_name': room_info['host_name'], 'guest_name': room_info.get('guest_name'),
+                                 'scores': list(room_info.get('scores', [0, 0])), 'rejoined': True}, room=sid)
     elif seat == 'guest':
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
         if user_uid:
             room_info['guest_user_id'] = user_uid
         emit('air_room_joined', {'room_id': room_id, 'is_host': False, 'player': 1, 'target': room_info.get('target', AIR_TARGET),
-                                 'host_name': room_info['host_name'], 'guest_name': room_info['guest_name']}, room=sid)
+                                 'host_name': room_info['host_name'], 'guest_name': room_info['guest_name'],
+                                 'scores': list(room_info.get('scores', [0, 0])), 'rejoined': True}, room=sid)
     else:
         room_info.update({'guest_sid': sid, 'guest_name': user_name, 'guest_user_id': user_uid})
         emit('air_room_joined', {'room_id': room_id, 'is_host': False, 'player': 1, 'target': room_info.get('target', AIR_TARGET),
@@ -5112,7 +5144,13 @@ def handle_join_dnb_room(data=None, *args, **kwargs):
             'is_host': True,
             'host_name': room_info['host_name'],
             'guest_name': room_info.get('guest_name'),
-            'player': 0
+            'player': 0,
+            'turn': room_info.get('turn', 0),
+            'h_edges': room_info.get('h_edges'),
+            'v_edges': room_info.get('v_edges'),
+            'boxes': room_info.get('boxes'),
+            'scores': list(room_info.get('scores', [0, 0])),
+            'rejoined': True
         }, room=sid)
     elif seat == 'guest':
         room_info['guest_sid'] = sid
@@ -5124,7 +5162,13 @@ def handle_join_dnb_room(data=None, *args, **kwargs):
             'is_host': False,
             'host_name': room_info['host_name'],
             'guest_name': room_info['guest_name'],
-            'player': 1
+            'player': 1,
+            'turn': room_info.get('turn', 0),
+            'h_edges': room_info.get('h_edges'),
+            'v_edges': room_info.get('v_edges'),
+            'boxes': room_info.get('boxes'),
+            'scores': list(room_info.get('scores', [0, 0])),
+            'rejoined': True
         }, room=sid)
     else:
         starter = secrets.choice([0, 1])

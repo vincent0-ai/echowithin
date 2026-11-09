@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function disconnectSocket() {
-        if (socket) socket.disconnect();
+        if (socket && socket !== window.socket) socket.disconnect();
         socket = null;
         joinedRoom = false;
         roomId = null;
@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         roomId = urlRoom || `memory_${Math.random().toString(36).slice(2, 8)}`;
-        socket = io({ transports: ['websocket', 'polling'] });
+        socket = (window.socket && window.socket.connected) ? window.socket : io({ transports: ['polling', 'websocket'] });
         setStatus('Connecting to room...');
 
         socket.on('connect', () => {
@@ -111,27 +111,31 @@ document.addEventListener('DOMContentLoaded', () => {
             myPlayerNum = data.player_num || 1;
             mode = 'online';
             joinedRoom = true;
-            if (myPlayerNum === 1) {
-                // Host: deal with the size chosen in the (still visible) setup panel.
-                // Emitting here (not on the Start press) guarantees we are already
-                // in the room — the old immediate emit raced the join and could hit
-                // 'Session not found'.
+            ui.sizeSelect.disabled = true;
+            ui.startBtn.disabled = true;
+
+            const isGameActive = !!(data.rejoined || data.started || (data.round_no && data.round_no > 0) || (data.matched && data.matched.length > 0) || (cards && cards.length > 0));
+
+            if (myPlayerNum === 1 && !isGameActive) {
+                // Host initial deal only
                 size = parseInt(ui.sizeSelect.value, 10) || 16;
                 setStatus('Dealing your ' + (size >= 36 ? '6×6' : '4×4') + ' board...');
                 socket.emit('memory_start_game', { room: roomId, size });
                 return;
             }
-            ui.sizeSelect.disabled = true;
-            ui.startBtn.textContent = 'Waiting for Host…';
-            ui.startBtn.disabled = true;
-            setupBoard(data.cards || [], { online: true, labels: data.labels || labels });
+
+            const deck = data.cards || [];
+            const needsBoardRender = cards.length === 0 || cards.length !== deck.length;
+            if (needsBoardRender && deck.length > 0) {
+                setupBoard(deck, { online: true, labels: data.labels || labels });
+            }
             currentPlayer = data.turn || 1;
             player1Score = Number((data.scores || {})['1'] || 0);
             player2Score = Number((data.scores || {})['2'] || 0);
-            markMatched(data.matched || []);
+            if (data.matched) markMatched(data.matched);
             updateScoreUI();
             updateTurnUI();
-            setStatus(data.partner_connected ? 'Partner connected.' : 'Waiting for host to deal...');
+            setStatus(data.partner_connected ? 'Partner connected.' : 'Waiting for partner...');
         });
 
         socket.on('memory_partner_update', (data) => {

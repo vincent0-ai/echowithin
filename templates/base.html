@@ -77,8 +77,8 @@
     <meta name="twitter:image" content="{{ meta_image|default(url_for('static', filename='logo-512.png', _external=True)) }}" />
     {% endblock %}
 
+    <script src="{{ url_for('static', filename='socket.io.min.js') }}?v=4.7.2"></script>
     {% if current_user.is_authenticated %}
-    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script nonce="{{ csp_nonce }}">
         (function() {
             window.__socketReadyCallbacks = window.__socketReadyCallbacks || [];
@@ -104,10 +104,10 @@
                 try {
                     window.socket = io({
                         reconnection: true,
-                        reconnectionDelay: 500,
-                        reconnectionDelayMax: 4000,
-                        timeout: 10000,
-                        transports: ['websocket', 'polling']
+                        reconnectionDelay: 1000,
+                        reconnectionDelayMax: 5000,
+                        timeout: 20000,
+                        transports: ['polling', 'websocket']
                     });
                     window.socket.on('connect', () => {
                         console.log('Connected to real-time server');

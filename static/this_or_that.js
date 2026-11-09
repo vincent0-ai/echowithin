@@ -179,8 +179,8 @@ function initOnline() {
         setOnlineStatus('Live play is unavailable. Please reconnect and retry.', true);
         return;
     }
-    if (socket) socket.disconnect();
-    socket = io({ transports: ['websocket', 'polling'] });
+    if (socket && socket !== window.socket) socket.disconnect();
+    socket = (window.socket && window.socket.connected) ? window.socket : io({ transports: ['polling', 'websocket'] });
 
     socket.on('connect', () => {
         socket.emit('tot_join_room', { room, bond_id: bondId || undefined });
@@ -188,9 +188,13 @@ function initOnline() {
 
     socket.on('tot_room_joined', (data) => {
         myPlayerNum = data.player_num || 1;
-        gamePairs = Array.isArray(data.pairs) && data.pairs.length ? data.pairs : pickFreshPairs(totalRounds);
+        if (!gamePairs || gamePairs.length === 0) {
+            gamePairs = Array.isArray(data.pairs) && data.pairs.length ? data.pairs : pickFreshPairs(totalRounds);
+        }
         setOnlineStatus(data.partner_connected ? 'Partner connected.' : 'Waiting for partner...');
-        startGame('online', true);
+        if (!data.rejoined && (p1Choices.length === 0 && p2Choices.length === 0 && currentRound === 0)) {
+            startGame('online', true);
+        }
     });
 
     socket.on('tot_partner_update', (data) => {

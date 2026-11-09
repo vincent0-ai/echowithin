@@ -649,7 +649,7 @@
     if (state.socket) return;
     if (typeof io !== 'function') return;
 
-    state.socket = io({ transports: ['websocket', 'polling'] });
+    state.socket = window.socket || io({ transports: ['polling', 'websocket'] });
 
     state.socket.on('connect', () => {
       const statusEl = document.getElementById('xword-online-status');
@@ -668,7 +668,7 @@
         statusEl.style.color = '#15803d';
       }
 
-      if (data.puzzle_idx !== undefined) {
+      if (data.puzzle_idx !== undefined && state.puzzleIdx !== data.puzzle_idx) {
         loadPuzzle(data.puzzle_idx);
       }
       if (Array.isArray(data.grid)) {

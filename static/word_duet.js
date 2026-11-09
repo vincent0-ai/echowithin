@@ -62,7 +62,7 @@
 
   function connectSocket() {
     if (state.socket || typeof io !== 'function') return;
-    state.socket = io({ transports: ['websocket', 'polling'] });
+    state.socket = window.socket || io({ transports: ['polling', 'websocket'] });
 
     state.socket.on('connect', () => {
       setOnlineStatus('Connected. Join or create a room.');

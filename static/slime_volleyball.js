@@ -1430,7 +1430,7 @@
       return;
     }
     if (!GameState.socket) {
-      GameState.socket = io({ transports: ['websocket', 'polling'] });
+      GameState.socket = window.socket || io({ transports: ['polling', 'websocket'] });
       window._gameSocket = GameState.socket;
 
       GameState.socket.on('connect', () => {
@@ -1470,7 +1470,11 @@
         // When opponent enters the game room, reset scores so both players start fresh
         const lobbySection = document.getElementById('online-opponents-section');
         if (lobbySection) lobbySection.style.display = data.guest_name ? 'none' : '';
-        if (data.guest_name) {
+        if (data.rejoined && Array.isArray(data.scores)) {
+          GameState.p1.score = Number(data.scores[0]) || 0;
+          GameState.p2.score = Number(data.scores[1]) || 0;
+        } else if (data.guest_name && !GameState.isOnlineMatchStarted) {
+          GameState.isOnlineMatchStarted = true;
           GameState.p1.score = 0;
           GameState.p2.score = 0;
           GameState.gameOver = false;

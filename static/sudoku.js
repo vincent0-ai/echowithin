@@ -12,7 +12,13 @@
   var gridEl = document.getElementById('sudoku-grid');
   var padEl = document.getElementById('sudoku-pad');
   var socket = null;
-  try { if (typeof io !== 'undefined') socket = io({ transports: ['websocket', 'polling'] }); } catch (e) { socket = null; }
+  try {
+    if (window.socket && window.socket.connected) {
+      socket = window.socket;
+    } else if (typeof io !== 'undefined') {
+      socket = window.socket || io({ transports: ['polling', 'websocket'] });
+    }
+  } catch (e) { socket = null; }
 
   // Connection quality chip (RTT over the shared net_ping probe).
   if (window.EWNetQuality) EWNetQuality.attach(function () { return socket; }, {
@@ -433,7 +439,10 @@
     });
     socket.on('sudoku_room_joined', function (d) {
       state.isHost = d.is_host !== false;
-      if (Array.isArray(d.grid) && d.grid.length === 81) state.roomGrid = d.grid;
+      if (Array.isArray(d.grid) && d.grid.length === 81) {
+        state.roomGrid = d.grid;
+        if (state.puzzle) mergeRoomGrid();
+      }
       if (d.has_puzzle) state.hasShared = true;
       if (d.partner_name) {
         document.getElementById('sudoku-partner-name').textContent = d.partner_name;

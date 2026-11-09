@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, secrets, hashlib, re
-from security import limits, encrypt_form_response, decrypt_form_response
+from security import limits, get_client_ip, encrypt_form_response, decrypt_form_response
 
 bp = Blueprint('forms', __name__)
 
@@ -508,7 +508,7 @@ def submit_form(share_id):
     if not form.get('allow_anonymous', True) and not current_user.is_authenticated:
         return jsonify({'error': 'Authentication required. This form does not allow anonymous submissions.'}), 401
     # Per-IP per-form 5/600 like proposal
-    ip = (request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or request.remote_addr or '')
+    ip = get_client_ip()
     rate_key = f'form_submit_rate_{share_id}:{ip}'
     if m.redis_cache:
         try:

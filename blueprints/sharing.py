@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, hashlib, secrets, os, json
-from security import limits, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip
+from security import limits, get_client_ip, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip
 
 bp = Blueprint('sharing', __name__, template_folder='templates')
 
@@ -1266,7 +1266,7 @@ def api_edit_shared_note(share_id):
             editor_id = ObjectId(current_user.id)
 
         # Server-side per-token/IP proposal rate limit to prevent anonymous spam.
-        proposal_bucket = request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or request.remote_addr or 'unknown'
+        proposal_bucket = get_client_ip()
         if not current_user.is_authenticated:
             proposal_key = f"proposal_rate_{share_id}:{proposal_bucket}"
             if m.redis_cache:

@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user, login_user, logout_user
 from bson.objectid import ObjectId
 import datetime, hashlib, secrets, hmac
-from security import limits, warm_user_fernet, generate_user_envelope_keys, hash_app_token, create_app_token, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip, _bf_hash_for_log
+from security import limits, get_client_ip, warm_user_fernet, generate_user_envelope_keys, hash_app_token, create_app_token, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip, _bf_hash_for_log
 
 def csrf_exempt(view):
     """Mark view as exempt from CSRF protection."""

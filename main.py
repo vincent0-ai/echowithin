@@ -89,7 +89,7 @@ from slugify import slugify
 from bson.objectid import ObjectId
 from bson.errors import InvalidId
 from ratelimit import RateLimitException
-from security import (safe_object_id,
+from security import (safe_object_id, RealIPWSGIMiddleware, get_client_ip,
     encrypt_dm, decrypt_dm, generate_signed_cloudinary_url, re_sign_cloudinary_url,
     decrypt_media_bytes, build_media_serve_url, media_serve_token_valid, is_media_proxy_url)
 from utils import (linkify_filter, markdown_filter,
@@ -530,9 +530,11 @@ except Exception:
 socketio = SocketIO(cors_allowed_origins=_ALLOWED_ORIGINS, async_mode='gevent',
                     ping_interval=25, ping_timeout=120)
 
-# Use ProxyFix to handle headers from reverse proxies (like Render)
+# Use ProxyFix to handle headers from reverse proxies (like Traefik / Render)
 # This is important for url_for to generate correct https links.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+# Ensure REMOTE_ADDR is accurately set to the client's real IP behind Cloudflare & Traefik
+app.wsgi_app = RealIPWSGIMiddleware(app.wsgi_app)
 
 if not app.debug:
     log_file_path = 'echowithin.log'
@@ -2502,12 +2504,12 @@ def _safe_int(value, default=None, lo=None, hi=None):
     return number
 
 
-def _seat_status(room_info, sid, user_uid):
+def _seat_status(room_info, sid, user_uid, client_token=None):
     """Resolve a 2-player join to 'host' | 'guest' | 'full' | 'new_guest'.
 
-    Reconnect is the previously seated sid, or the same authenticated user
-    on a fresh transport (caller refreshes the stored sid). Any other sid
-    while the guest seat is taken is a third party -> 'full'.
+    Reconnect is the previously seated sid, matching client token, or the same
+    authenticated user on a fresh transport (caller refreshes the stored sid).
+    Any other sid while the guest seat is taken is a third party -> 'full'.
     """
     if not room_info:
         return 'new_guest'
@@ -2515,6 +2517,11 @@ def _seat_status(room_info, sid, user_uid):
         return 'host'
     if room_info.get('guest_sid') == sid:
         return 'guest'
+    if client_token:
+        if client_token == room_info.get('host_token'):
+            return 'host'
+        if client_token == room_info.get('guest_token'):
+            return 'guest'
     if user_uid and user_uid == room_info.get('host_user_id'):
         return 'host'
     if user_uid and user_uid == room_info.get('guest_user_id'):
@@ -2536,37 +2543,49 @@ def handle_tot_join_room(data=None, *args, **kwargs):
     bond_id = str(data.get('bond_id') or '')
     pair_key = bond_id or room_id
     user_uid = str(current_user.id) if current_user.is_authenticated else None
+    client_token = str(data.get('client_token') or '')[:96] or None
 
     room_info = active_tot_rooms.get(room_id)
     if not room_info and not _room_creation_allowed(room_info):
         _guest_room_error('tot_error')
         return
     rejoined = False
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
     if not room_info:
         content = build_session_content('this_or_that', pair_key=pair_key)
         room_info = {
             'host_sid': request.sid,
             'host_user_id': user_uid,
+            'host_token': client_token,
             'guest_sid': None,
             'guest_user_id': None,
+            'guest_token': None,
             'bond_id': bond_id,
             'content': content,
             'choices': {},
-            'created_at': datetime.datetime.now(datetime.timezone.utc)
+            'created_at': now_utc,
+            'touched_at': now_utc
         }
         active_tot_rooms[room_id] = room_info
         player_num = 1
     else:
-        seat = _seat_status(room_info, request.sid, user_uid)
+        room_info['touched_at'] = now_utc
+        seat = _seat_status(room_info, request.sid, user_uid, client_token=client_token)
         if seat == 'host':
             if room_info.get('host_sid') != request.sid:
                 room_info['host_sid'] = request.sid
+            if client_token and not room_info.get('host_token'):
+                room_info['host_token'] = client_token
+            room_info.pop('host_disconnected_at', None)
             player_num = 1
             rejoined = True
         elif seat == 'guest':
             if room_info.get('guest_sid') != request.sid:
                 room_info['guest_sid'] = request.sid
+            if client_token and not room_info.get('guest_token'):
+                room_info['guest_token'] = client_token
             room_info['guest_user_id'] = user_uid
+            room_info.pop('guest_disconnected_at', None)
             active_tot_rooms[room_id] = room_info
             player_num = 2
             rejoined = True
@@ -2575,7 +2594,10 @@ def handle_tot_join_room(data=None, *args, **kwargs):
             return
         else:
             room_info['guest_sid'] = request.sid
+            if client_token:
+                room_info['guest_token'] = client_token
             room_info['guest_user_id'] = user_uid
+            room_info.pop('guest_disconnected_at', None)
             active_tot_rooms[room_id] = room_info
             player_num = 2
 
@@ -2602,6 +2624,7 @@ def handle_tot_choice(data=None, *args, **kwargs):
     if not room_id or not room_info:
         emit('tot_error', {'message': 'Session not found. Start a fresh challenge.'}, room=request.sid)
         return
+    room_info['touched_at'] = datetime.datetime.now(datetime.timezone.utc)
     try:
         round_idx = max(0, min(9, int(data.get('round', 0))))
     except (TypeError, ValueError):
@@ -2664,18 +2687,22 @@ def handle_memory_join_room(data=None, *args, **kwargs):
     bond_id = str(data.get('bond_id') or '')
     pair_key = bond_id or room_id
     user_uid = str(current_user.id) if current_user.is_authenticated else None
+    client_token = str(data.get('client_token') or '')[:96] or None
 
     room_info = active_memory_rooms.get(room_id)
     if not room_info and not _room_creation_allowed(room_info):
         _guest_room_error('memory_error')
         return
     rejoined = False
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
     if not room_info:
         room_info = {
             'host_sid': request.sid,
             'host_user_id': user_uid,
+            'host_token': client_token,
             'guest_sid': None,
             'guest_user_id': None,
+            'guest_token': None,
             'host_name': _socket_user_name(),
             'guest_name': None,
             'content': build_session_content('memory_match', pair_key=pair_key, size=16),
@@ -2685,22 +2712,30 @@ def handle_memory_join_room(data=None, *args, **kwargs):
             'flipped': [],
             'matched': set(),
             'bond_id': bond_id,
-            'created_at': datetime.datetime.now(datetime.timezone.utc)
+            'created_at': now_utc,
+            'touched_at': now_utc
         }
         active_memory_rooms[room_id] = room_info
         player_num = 1
     else:
-        seat = _seat_status(room_info, request.sid, user_uid)
+        room_info['touched_at'] = now_utc
+        seat = _seat_status(room_info, request.sid, user_uid, client_token=client_token)
         if seat == 'host':
             if room_info.get('host_sid') != request.sid:
                 room_info['host_sid'] = request.sid
+            if client_token and not room_info.get('host_token'):
+                room_info['host_token'] = client_token
+            room_info.pop('host_disconnected_at', None)
             player_num = 1
             rejoined = True
         elif seat == 'guest':
             if room_info.get('guest_sid') != request.sid:
                 room_info['guest_sid'] = request.sid
+            if client_token and not room_info.get('guest_token'):
+                room_info['guest_token'] = client_token
             room_info['guest_user_id'] = user_uid
             room_info['guest_name'] = _socket_user_name()
+            room_info.pop('guest_disconnected_at', None)
             active_memory_rooms[room_id] = room_info
             player_num = 2
             rejoined = True
@@ -2709,8 +2744,11 @@ def handle_memory_join_room(data=None, *args, **kwargs):
             return
         else:
             room_info['guest_sid'] = request.sid
+            if client_token:
+                room_info['guest_token'] = client_token
             room_info['guest_user_id'] = user_uid
             room_info['guest_name'] = _socket_user_name()
+            room_info.pop('guest_disconnected_at', None)
             active_memory_rooms[room_id] = room_info
             player_num = 2
 
@@ -2730,6 +2768,7 @@ def handle_memory_start_game(data=None, *args, **kwargs):
     if not room_info:
         emit('memory_error', {'message': 'Session not found.'}, room=request.sid)
         return
+    room_info['touched_at'] = datetime.datetime.now(datetime.timezone.utc)
     if room_info.get('host_sid') != request.sid:
         emit('memory_error', {'message': 'Only the host can restart the board.'}, room=request.sid)
         return
@@ -2763,6 +2802,7 @@ def handle_memory_flip_card(data=None, *args, **kwargs):
     if not room_info:
         emit('memory_error', {'message': 'Session not found.'}, room=request.sid)
         return
+    room_info['touched_at'] = datetime.datetime.now(datetime.timezone.utc)
     player_num = 1 if room_info.get('host_sid') == request.sid else 2 if room_info.get('guest_sid') == request.sid else None
     if player_num is None:
         emit('memory_error', {'message': 'You are not in this room.'}, room=request.sid)
@@ -3204,11 +3244,11 @@ def _prune_unattended_game_rooms():
                   active_memory_rooms, active_chain_rooms, active_gomoku_rooms,
                   active_whack_rooms, active_sudoku_rooms, active_air_rooms):
         for rid, rinfo in list(store.items()):
-            created = rinfo.get('created_at')
-            if created:
-                if created.tzinfo is None:
-                    created = created.replace(tzinfo=datetime.timezone.utc)
-                if created < one_hour_ago:
+            touched = rinfo.get('touched_at') or rinfo.get('last_active_at') or rinfo.get('created_at')
+            if touched:
+                if touched.tzinfo is None:
+                    touched = touched.replace(tzinfo=datetime.timezone.utc)
+                if touched < one_hour_ago:
                     store.pop(rid, None)
 
 
@@ -6643,17 +6683,33 @@ def handle_dm_disconnect(*args, **kwargs):
             emit('chain_partner_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
             active_chain_rooms.pop(room_id, None)
 
-    # Cleanup This or That rooms on disconnect
+    # Cleanup This or That rooms on disconnect: allow reconnect grace period
     for room_id, rinfo in list(active_tot_rooms.items()):
-        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+        if rinfo.get('host_sid') == request.sid:
+            rinfo['host_disconnected_at'] = now_ts
+        elif rinfo.get('guest_sid') == request.sid:
+            rinfo['guest_disconnected_at'] = now_ts
+        else:
+            continue
+        if not rinfo.get('guest_sid') or (rinfo.get('host_disconnected_at') and rinfo.get('guest_disconnected_at')):
             emit('tot_partner_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
             active_tot_rooms.pop(room_id, None)
+        else:
+            emit('tot_partner_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
 
-    # Cleanup Memory Match rooms on disconnect
+    # Cleanup Memory Match rooms on disconnect: allow reconnect grace period
     for room_id, rinfo in list(active_memory_rooms.items()):
-        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+        if rinfo.get('host_sid') == request.sid:
+            rinfo['host_disconnected_at'] = now_ts
+        elif rinfo.get('guest_sid') == request.sid:
+            rinfo['guest_disconnected_at'] = now_ts
+        else:
+            continue
+        if not rinfo.get('guest_sid') or (rinfo.get('host_disconnected_at') and rinfo.get('guest_disconnected_at')):
             emit('memory_partner_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
             active_memory_rooms.pop(room_id, None)
+        else:
+            emit('memory_partner_left', {'room_id': room_id, 'reason': 'disconnected'}, room=room_id)
 
     # Cleanup Emoji Decoder rooms on disconnect
     for room_id, rinfo in list(active_emoji_rooms.items()):
@@ -7608,9 +7664,7 @@ def handle_ratelimit_exception(e):
     period_remaining = math.ceil(e.period_remaining)
     # Monitoring hook: distinct event from normal failed logins (PLAN §5)
     try:
-        # Use X-Forwarded-For aware IP for correct attribution behind ProxyFix
-        fwd = request.headers.get('X-Forwarded-For', '')
-        ip = fwd.split(',')[0].strip() if fwd and ',' in fwd else (fwd.strip() if fwd else request.remote_addr)
+        ip = get_client_ip()
         app.logger.warning(
             f"rate_limit_exceeded endpoint={request.endpoint} ip={ip} remaining={period_remaining}",
             extra={'event': 'rate_limit_exceeded', 'endpoint': str(request.endpoint), 'ip': str(ip), 'period_remaining': period_remaining}

@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 import datetime, os, json, hashlib, re
 from bson.objectid import ObjectId
-from security import limits, admin_required, brute_force_check, brute_force_record_failure, _bf_get_client_ip, normalize_email, email_match_filter, email_suppression_hash
+from security import limits, get_client_ip, admin_required, brute_force_check, brute_force_record_failure, _bf_get_client_ip, normalize_email, email_match_filter, email_suppression_hash
 
 def csrf_exempt(view):
     """Mark view as exempt from CSRF protection."""
@@ -640,7 +640,7 @@ def api_newsletter_subscribe():
     if not email or '@' not in email:
         return jsonify({'error': 'Invalid email address'}), 400
     try:
-        m.newsletter_conf.insert_one({'email': email, 'subscribed_at': datetime.datetime.now(datetime.timezone.utc), 'ip': request.remote_addr})
+        m.newsletter_conf.insert_one({'email': email, 'subscribed_at': datetime.datetime.now(datetime.timezone.utc), 'ip': get_client_ip()})
         # Explicit (re-)subscription overrides any previous opt-out.
         suppression_hash = email_suppression_hash(email)
         if suppression_hash:

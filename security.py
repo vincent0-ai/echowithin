@@ -8,6 +8,7 @@ import time as _time
 import secrets as _secrets
 import threading
 import socket
+import ipaddress
 from functools import wraps
 from urllib.parse import urlparse, urljoin, quote
 
@@ -362,17 +363,134 @@ _BF_CONFIG = {
 }
 
 
-def _bf_get_client_ip():
-    """Client IP respecting ProxyFix / X-Forwarded-For (same logic as auth._record_login_session)."""
+def is_valid_ip(ip_str):
+    if not ip_str or not isinstance(ip_str, str):
+        return False
     try:
-        fwd = request.headers.get('X-Forwarded-For', '')
-        if fwd and ',' in fwd:
-            return fwd.split(',')[0].strip()
-        if fwd:
-            return fwd.strip()
-    except Exception:
-        pass
-    return request.remote_addr or 'unknown'
+        ipaddress.ip_address(ip_str.strip())
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
+def is_valid_public_ip(ip_str):
+    if not ip_str or not isinstance(ip_str, str):
+        return False
+    try:
+        obj = ipaddress.ip_address(ip_str.strip())
+        return not (obj.is_private or obj.is_loopback or obj.is_reserved or obj.is_link_local)
+    except (ValueError, AttributeError):
+        return False
+
+
+def get_client_ip(req=None):
+    """Resolve the real client IP address behind reverse proxies.
+
+    Handles infrastructure layers in priority order:
+    1. CF-Connecting-IP (Cloudflare Edge - tamper-proof, stripped on entry by CF)
+    2. True-Client-IP (Cloudflare Enterprise / Akamai)
+    3. X-Real-IP (Traefik / Nginx upstream client IP)
+    4. X-Forwarded-For (Traefik / reverse proxy chain): picks the leftmost
+       public IP (or leftmost valid IP).
+    5. request.remote_addr (standard WSGI socket peer address).
+    """
+    r = req or (request if has_request_context() else None)
+    if not r:
+        return 'unknown'
+
+    try:
+        headers = r.headers
+    except AttributeError:
+        headers = {}
+
+    # 1. Cloudflare Connecting IP
+    cf_ip = headers.get('CF-Connecting-IP')
+    if cf_ip and is_valid_ip(cf_ip):
+        return cf_ip.strip()
+
+    # 2. True-Client-IP
+    true_ip = headers.get('True-Client-IP')
+    if true_ip and is_valid_ip(true_ip):
+        return true_ip.strip()
+
+    # 3. X-Real-IP (if public)
+    x_real = headers.get('X-Real-IP')
+    if x_real and is_valid_public_ip(x_real):
+        return x_real.strip()
+
+    # 4. X-Forwarded-For chain
+    fwd = headers.get('X-Forwarded-For', '')
+    if fwd:
+        candidates = [p.strip() for p in fwd.split(',') if p.strip()]
+        for cand in candidates:
+            if is_valid_public_ip(cand):
+                return cand
+        for cand in candidates:
+            if is_valid_ip(cand):
+                return cand
+
+    # 3b. Fallback to private X-Real-IP if valid
+    if x_real and is_valid_ip(x_real):
+        return x_real.strip()
+
+    # 5. Socket peer remote_addr
+    remote = getattr(r, 'remote_addr', None)
+    if remote and is_valid_ip(remote):
+        return remote.strip()
+
+    return remote or 'unknown'
+
+
+class RealIPWSGIMiddleware:
+    """WSGI middleware ensuring environ['REMOTE_ADDR'] reflects the actual client IP.
+
+    When running behind Cloudflare -> Traefik -> Docker Container -> Gunicorn,
+    Traefik and Docker bridge networks set REMOTE_ADDR to internal addresses
+    (e.g., 172.18.0.x or 10.x.x.x). This middleware extracts the client IP from
+    CF-Connecting-IP, True-Client-IP, X-Real-IP, or X-Forwarded-For, and overrides
+    REMOTE_ADDR so that all downstream WSGI/Flask components (request.remote_addr,
+    Werkzeug, Flask-Login, rate-limiters, Engine.IO/Socket.IO) receive the true client IP.
+    """
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        cf_ip = environ.get('HTTP_CF_CONNECTING_IP')
+        if cf_ip and is_valid_ip(cf_ip):
+            environ['REMOTE_ADDR'] = cf_ip.strip()
+            return self.wsgi_app(environ, start_response)
+
+        true_ip = environ.get('HTTP_TRUE_CLIENT_IP')
+        if true_ip and is_valid_ip(true_ip):
+            environ['REMOTE_ADDR'] = true_ip.strip()
+            return self.wsgi_app(environ, start_response)
+
+        x_real = environ.get('HTTP_X_REAL_IP')
+        if x_real and is_valid_public_ip(x_real):
+            environ['REMOTE_ADDR'] = x_real.strip()
+            return self.wsgi_app(environ, start_response)
+
+        xff = environ.get('HTTP_X_FORWARDED_FOR')
+        if xff:
+            candidates = [p.strip() for p in xff.split(',') if p.strip()]
+            for cand in candidates:
+                if is_valid_public_ip(cand):
+                    environ['REMOTE_ADDR'] = cand
+                    return self.wsgi_app(environ, start_response)
+            for cand in candidates:
+                if is_valid_ip(cand):
+                    environ['REMOTE_ADDR'] = cand
+                    return self.wsgi_app(environ, start_response)
+
+        if x_real and is_valid_ip(x_real):
+            environ['REMOTE_ADDR'] = x_real.strip()
+
+        return self.wsgi_app(environ, start_response)
+
+
+def _bf_get_client_ip():
+    """Client IP respecting Cloudflare, Traefik, ProxyFix and X-Forwarded-For."""
+    return get_client_ip()
 
 
 def _bf_normalize_account(value):

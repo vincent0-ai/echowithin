@@ -182,8 +182,22 @@ function initOnline() {
     if (socket && socket !== window.socket) socket.disconnect();
     socket = (window.socket && window.socket.connected) ? window.socket : io({ transports: ['polling', 'websocket'] });
 
+    function getSeatToken() {
+        try {
+            var k = 'ew_seat_token_' + room;
+            var t = sessionStorage.getItem(k);
+            if (!t) {
+                t = 's_' + Math.random().toString(36).slice(2, 14);
+                sessionStorage.setItem(k, t);
+            }
+            return t;
+        } catch (e) {
+            return 's_' + Math.random().toString(36).slice(2, 14);
+        }
+    }
+
     socket.on('connect', () => {
-        socket.emit('tot_join_room', { room, bond_id: bondId || undefined });
+        socket.emit('tot_join_room', { room, bond_id: bondId || undefined, client_token: getSeatToken() });
     });
 
     socket.on('tot_room_joined', (data) => {
@@ -218,8 +232,12 @@ function initOnline() {
         setOnlineStatus((data && data.message) || 'Game sync error. Please retry.', true);
     });
 
-    socket.on('tot_partner_left', () => {
-        setOnlineStatus('Partner left. Start a fresh challenge.', true);
+    socket.on('tot_partner_left', (data) => {
+        if (data && data.reason === 'disconnected') {
+            setOnlineStatus('Partner disconnected. Reconnecting...', false);
+        } else {
+            setOnlineStatus('Partner left. Start a fresh challenge.', true);
+        }
     });
 }
 

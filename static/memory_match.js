@@ -103,8 +103,22 @@ document.addEventListener('DOMContentLoaded', () => {
         socket = (window.socket && window.socket.connected) ? window.socket : io({ transports: ['polling', 'websocket'] });
         setStatus('Connecting to room...');
 
+        function getSeatToken() {
+            try {
+                var k = 'ew_seat_token_' + roomId;
+                var t = sessionStorage.getItem(k);
+                if (!t) {
+                    t = 's_' + Math.random().toString(36).slice(2, 14);
+                    sessionStorage.setItem(k, t);
+                }
+                return t;
+            } catch (e) {
+                return 's_' + Math.random().toString(36).slice(2, 14);
+            }
+        }
+
         socket.on('connect', () => {
-            socket.emit('memory_join_room', { room: roomId, bond_id: bondId || undefined });
+            socket.emit('memory_join_room', { room: roomId, bond_id: bondId || undefined, client_token: getSeatToken() });
         });
 
         socket.on('memory_room_joined', (data) => {
@@ -190,8 +204,12 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => setStatus(currentPlayer === myPlayerNum ? 'Your turn.' : 'Waiting for partner...'), 2200);
         });
 
-        socket.on('memory_partner_left', () => {
-            setStatus('Partner left. Start a fresh challenge.', true);
+        socket.on('memory_partner_left', (data) => {
+            if (data && data.reason === 'disconnected') {
+                setStatus('Partner disconnected. Reconnecting...', false);
+            } else {
+                setStatus('Partner left. Start a fresh challenge.', true);
+            }
         });
     }
 

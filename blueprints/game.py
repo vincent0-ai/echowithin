@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 from pymongo.errors import DuplicateKeyError
 import datetime, secrets, hashlib, time
-from security import limits
+from security import limits, get_client_ip
 import database
 from cachetools import TTLCache
 from blueprints.game_registry import all_games
@@ -897,7 +897,7 @@ def view_lobby(lobby_id):
 
     gt = lobby.get('game_type', 'poll')
     total = m.game_votes_conf.count_documents({'lobby_id': lobby_id})
-    ip = (request.headers.get('X-Forwarded-For','').split(',')[0].strip() or request.remote_addr or '')
+    ip = get_client_ip()
     ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:16] if ip else ''
 
     # Multi-question vote state for poll/trivia
@@ -1009,7 +1009,7 @@ def vote_lobby(lobby_id):
     if gt not in ('caption',) and lobby.get('status') not in ('active',):
         return jsonify({'error':'Game not active'}),400
     # per-IP 5/600
-    ip = (request.headers.get('X-Forwarded-For','').split(',')[0].strip() or request.remote_addr or '')
+    ip = get_client_ip()
     rate_key = f'game_vote_rate_{lobby_id}:{ip}'
     if m.redis_cache:
         try:
@@ -1407,7 +1407,7 @@ def live_submit_answer(lobby_id):
 
     # Claim the vote first: the unique vote index turns a concurrent
     # double-submit into DuplicateKeyError before any tally is mutated.
-    ip = (request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or request.remote_addr or '')
+    ip = get_client_ip()
     ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:16] if ip else ''
     try:
         _fp_uid = ObjectId(current_user.id) if current_user.is_authenticated else None

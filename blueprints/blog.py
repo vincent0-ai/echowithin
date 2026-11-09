@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, math, json, random, os, re, hashlib
-from security import limits
+from security import limits, get_client_ip
 from cachetools import TTLCache
 
 _user_interests_memory_cache = TTLCache(maxsize=256, ttl=300)
@@ -2121,7 +2121,7 @@ def api_record_post_view(post_id):
                 # Privacy: do not store raw IP addresses in logs. Hash the IP so
                 # per-visitor dedup still works without persisting PII.
                 import hashlib
-                ip_hash = hashlib.sha256((request.remote_addr or '').encode('utf-8')).hexdigest()[:16]
+                ip_hash = hashlib.sha256((get_client_ip() or '').encode('utf-8')).hexdigest()[:16]
                 user_identifier = f"iphash:{ip_hash}"
 
         view_record = m.logs_conf.find_one({

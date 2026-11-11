@@ -342,7 +342,7 @@
                 <label for="comment-content" class="visually-hidden">Write a comment</label>
                 <textarea id="comment-content" name="content" rows="3" style="width:100%;"
                     placeholder="Write a comment..."></textarea>
-                <div style="font-size:0.8em; color:#888; margin-top:4px;">Markdown supported</div>
+                <div style="font-size:0.8em; color:#6f6f6f; margin-top:4px;">Markdown supported</div>
                 <button id="comment-submit" type="submit">Post Comment</button>
             </form>
             {% else %}
@@ -751,7 +751,7 @@
             const form = document.createElement('form');
             form.className = 'reply-form';
             form.style.marginTop = '8px';
-            form.innerHTML = `<textarea rows="2" style="width:100%;" class="reply-content"></textarea><div style="font-size:0.75em; color:#888;">Markdown supported</div><button type="submit" class="reply-submit-btn">Reply</button> <button type="button" class="cancel-reply">Cancel</button>`;
+            form.innerHTML = `<textarea rows="2" style="width:100%;" class="reply-content"></textarea><div style="font-size:0.75em; color:#6f6f6f;">Markdown supported</div><button type="submit" class="reply-submit-btn">Reply</button> <button type="button" class="cancel-reply">Cancel</button>`;
             replies.insertBefore(form, replies.firstChild);
 
             form.addEventListener('submit', async (ev) => {

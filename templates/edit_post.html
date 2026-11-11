@@ -210,7 +210,7 @@
                         if (xhr.status >= 200 && xhr.status < 300) {
                             window.location.href = xhr.responseURL;
                         } else {
-                            statusElement.textContent = 'Upload failed. Server responded with an error.';
+                            statusElement.textContent = 'Upload failed. Try again.';
                             resetEditUploadUI();
                         }
                     };
@@ -221,7 +221,7 @@
                     };
 
                     xhr.onerror = function () {
-                        statusElement.textContent = 'Upload failed due to a network error.';
+                        statusElement.textContent = 'Upload failed. Check your internet and try again.';
                         resetEditUploadUI();
                     };
 

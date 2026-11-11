@@ -7,7 +7,7 @@
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
     <div>
       <h1 style="margin: 0; font-size: 1.4rem; color: #3e2217;">Admin Post Management</h1>
-      <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: #888;">
+      <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: #6f6f6f;">
         {{ total }} post{{ 's' if total != 1 }} &bull;
         <span style="color: {{ '#c62828' if total_pending_reports > 0 else '#888' }}; font-weight: {{ '700' if total_pending_reports > 0 else '400' }};">
           {{ total_pending_reports }} pending report{{ 's' if total_pending_reports != 1 }}
@@ -58,7 +58,7 @@
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; flex-wrap: wrap;">
           <h3 style="margin: 0 0 0.4rem 0; font-size: 1.05rem;">
             <a href="{{ url_for('blog.view_post', slug=post.slug) }}" target="_blank" style="color: #3e2217; text-decoration: none; font-weight: 600;">
-              {{ post.title }} <i class="fas fa-external-link-alt" style="font-size: 0.75rem; color: #aaa;"></i>
+              {{ post.title }} <i class="fas fa-external-link-alt" style="font-size: 0.75rem; color: var(--text-muted);"></i>
             </a>
           </h3>
 
@@ -104,7 +104,7 @@
         </div>
         {% endif %}
 
-        <div class="post-meta" style="font-size: 0.8rem; color: #888; margin-top: 0.5rem;">
+        <div class="post-meta" style="font-size: 0.8rem; color: #6f6f6f; margin-top: 0.5rem;">
           {% if post.edited_at %}
           Edited <span class="relative-time" data-timestamp="{{ (post.edited_at.isoformat() + 'Z').replace('+00:00Z', 'Z') if post.edited_at else '' }}">{{ post.edited_at|localtime }}</span>
           {% else %}
@@ -156,9 +156,9 @@
         </div>
       </div>
       {% else %}
-      <div style="text-align: center; padding: 3rem 1rem; color: #aaa;">
+      <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
         <i class="fas fa-newspaper" style="font-size: 2.5rem; margin-bottom: 0.75rem; display: block;"></i>
-        <h3 style="color: #888; margin: 0 0 0.25rem 0;">No posts found</h3>
+        <h3 style="color: #6f6f6f; margin: 0 0 0.25rem 0;">No posts found</h3>
         <p>{% if filter_type == 'reported' %}No posts with pending reports.{% elif filter_type == 'ai_flagged' %}No AI-flagged posts.{% elif filter_type == 'pinned' %}No pinned posts.{% else %}No posts match your search.{% endif %}</p>
       </div>
       {% endfor %}
@@ -171,7 +171,7 @@
         <li class="page-item {% if page <= 1 %}disabled{% endif %}">
           <a class="page-link" href="{{ url_for('admin.admin_posts', page=page-1, filter=filter_type, query=query) }}" style="padding: 0.4rem 0.8rem; border-radius: 6px; background: #f5f5f5; color: #333; text-decoration: none; font-size: 0.82rem; font-weight: 600;">Previous</a>
         </li>
-        <li style="display: flex; align-items: center; font-size: 0.85rem; color: #888;">
+        <li style="display: flex; align-items: center; font-size: 0.85rem; color: #6f6f6f;">
           Page {{ page }} of {{ total_pages }}
         </li>
         <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
@@ -186,10 +186,10 @@
 <!-- Post Reports Modal -->
 <div id="postReportsModal" style="display:none;position:fixed;z-index:1000;left:0;top:0;right:0;bottom:0;width:100%;width:100vw;width:100dvw;height:100%;height:100vh;height:100dvh;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;backdrop-filter:blur(3px);box-sizing:border-box;padding:env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px) env(safe-area-inset-bottom, 16px) env(safe-area-inset-left, 16px);" onclick="if(event.target===this)this.style.display='none'">
   <div style="background:#fff;padding:1.5rem;border-radius:12px;width:min(90%,600px);max-width:calc(100vw - 32px);max-width:calc(100dvw - 32px);box-shadow:0 10px 30px rgba(0,0,0,0.2);position:relative;max-height:90vh;max-height:90dvh;overflow-y:auto;box-sizing:border-box;margin:auto;">
-    <span onclick="document.getElementById('postReportsModal').style.display='none'" style="position:absolute;top:0.75rem;right:1rem;font-size:1.3rem;color:#aaa;cursor:pointer;">&times;</span>
+    <span onclick="document.getElementById('postReportsModal').style.display='none'" style="position:absolute;top:0.75rem;right:1rem;font-size:1.3rem;color: var(--text-muted);cursor:pointer;">&times;</span>
     <h2 id="post-reports-modal-title" style="margin:0 0 1rem 0;color:#3e2217;font-size:1.1rem;">Post Reports</h2>
     <div id="post-reports-list" style="min-height: 60px;">
-      <p style="color: #999; text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading reports...</p>
+      <p style="color: #6f6f6f; text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading reports...</p>
     </div>
   </div>
 </div>
@@ -201,7 +201,7 @@
     const list = document.getElementById('post-reports-list');
 
     title.textContent = 'Reports: ' + postTitle;
-    list.innerHTML = '<p style="color: #999; text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading reports...</p>';
+    list.innerHTML = '<p style="color: #6f6f6f; text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading reports...</p>';
     modal.style.display = 'flex';
 
     try {
@@ -209,7 +209,7 @@
       const data = await res.json();
 
       if (!data.reports || data.reports.length === 0) {
-        list.innerHTML = '<p style="color: #aaa; text-align: center; padding: 1rem;">No reports for this post.</p>';
+        list.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 1rem;">No reports for this post.</p>';
         return;
       }
 
@@ -231,8 +231,8 @@
         html += `<div style="border: 1px solid #eee; border-radius: 8px; padding: 0.85rem; margin-bottom: 0.6rem; background: #fafafa;">`;
         html += `<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">`;
         html += `<div>`;
-        html += `<div style="font-weight: 600; font-size: 0.85rem; color: #333;"><i class="fas fa-user" style="color:#aaa; margin-right:4px;"></i> ${r.reporter_username}</div>`;
-        html += `<div style="font-size: 0.78rem; color: #aaa; margin-top: 2px;">${date}</div>`;
+        html += `<div style="font-weight: 600; font-size: 0.85rem; color: #333;"><i class="fas fa-user" style="color: var(--text-muted); margin-right:4px;"></i> ${r.reporter_username}</div>`;
+        html += `<div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">${date}</div>`;
         html += `</div>`;
         html += `<div style="display: flex; align-items: center; gap: 0.4rem;">`;
         html += `<span style="background: ${statusBg}; color: ${statusColor}; padding: 0.1rem 0.45rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase;">${r.status}</span>`;

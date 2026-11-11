@@ -198,7 +198,7 @@
           <label style="font-weight: 600; margin-bottom: 0.3rem; display: block;">Notification Categories</label>
           <p style="font-size: 0.85rem; color: #666; margin-bottom: 0.8rem;">Choose which types of push notifications you want to receive.</p>
 
-          <div id="notification-prefs-loading" style="font-size: 0.85rem; color: #888;">
+          <div id="notification-prefs-loading" style="font-size: 0.85rem; color: #6f6f6f;">
             <i class="fas fa-spinner fa-spin"></i> Loading preferences...
           </div>
 
@@ -335,14 +335,10 @@
       </div>
       {% else %}
       {% if user_is_trial %}
-      <div
-        style="background: linear-gradient(135deg, #f5f0eb 0%, #e8ddd3 100%); color: #3e2217 !important; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border: 1px solid #d4c5b5; box-shadow: 0 4px 12px rgba(62, 34, 23, 0.05);">
-        <p style="margin: 0; font-weight: 600; color: #3e2217 !important;">
-          You are on a Premium Trial
-        </p>
-        <p style="margin: 0; font-size: 0.85rem; color: #3e2217 !important; margin-top: 0.2rem;">
-          Your trial expires in {{ trial_days_remaining }} day(s). Upgrade now to keep your premium features.
-        </p>
+      <div class="plan-callout">
+        <div class="plan-callout-body">
+          <span><strong>You are on a Premium Trial.</strong> Your trial expires in {{ trial_days_remaining }} day(s).</span>
+        </div>
       </div>
       {% else %}
       <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">
@@ -352,7 +348,7 @@
       {% endif %}
 
       <button type="button" id="upgrade-btn" class="btn"
-        style="background: linear-gradient(135deg, #3e2217, #5a3828); color: white; border: none; padding: 0.6rem 1.5rem; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;"
+        style="background: var(--primary-color); color: var(--text-light-color); border: none; padding: 0.6rem 1.5rem; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;"
         onclick="initializePayment()">
         Upgrade to Premium
       </button>
@@ -501,7 +497,7 @@
     style="background:white; padding:1.5rem; border-radius:15px; max-width: calc(100vw - 32px); max-width: calc(100dvw - 32px); width:min(90%, 320px); position:relative; box-sizing:border-box; max-height:90vh; max-height:90dvh; overflow-y:auto; margin:auto;">
     <div class="pin-modal-content" style="text-align:center;">
       <h2 id="pin-modal-title" style="margin: 0 0 0.5rem 0; color: #3e2217; font-size: 1.3rem;">Enter PIN</h2>
-      <p id="pin-modal-desc" style="margin: 0 0 1.5rem 0; color: #888; font-size: 0.9rem;">Enter your 4-digit PIN</p>
+      <p id="pin-modal-desc" style="margin: 0 0 1.5rem 0; color: #6f6f6f; font-size: 0.9rem;">Enter your 4-digit PIN</p>
 
       <div id="pin-error" style="color: #d32f2f; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem;"></div>
 
@@ -529,17 +525,17 @@
       </div>
 
       <div id="pin-forgot-link" style="margin-top: 0.5rem; text-align: center; display: none;">
-        <a href="#" onclick="event.preventDefault(); startPinReset()" style="font-size: 0.82rem; color: #888; text-decoration: underline;">Forgot PIN?</a>
+        <a href="#" onclick="event.preventDefault(); startPinReset()" style="font-size: 0.82rem; color: #6f6f6f; text-decoration: underline;">Forgot PIN?</a>
       </div>
 
       <button onclick="closePinModal()" class="btn"
-        style="width: 100%; background: none; border: none; color: #888; font-size: 0.85rem;">Cancel</button>
+        style="width: 100%; background: none; border: none; color: #6f6f6f; font-size: 0.85rem;">Cancel</button>
     </div>
 
     <!-- PIN Reset: Code Entry View -->
     <div id="pin-reset-code-view" style="display: none; text-align: center;">
       <h2 style="margin: 0 0 0.5rem 0; color: #3e2217; font-size: 1.3rem;">Verify Identity</h2>
-      <p id="pin-reset-desc" style="margin: 0 0 1rem 0; color: #888; font-size: 0.85rem;">Enter the 6-digit code sent to your email</p>
+      <p id="pin-reset-desc" style="margin: 0 0 1rem 0; color: #6f6f6f; font-size: 0.85rem;">Enter the 6-digit code sent to your email</p>
       <div id="pin-reset-error" style="color: #d32f2f; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem;"></div>
       <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 1.2rem;">
         <input type="text" maxlength="1" class="reset-code-input" data-idx="0" inputmode="numeric" pattern="[0-9]" autocomplete="off">
@@ -551,7 +547,7 @@
       </div>
       <button class="btn" style="width: 100%; background: #3e2217; color: white; border: none; padding: 0.6rem; border-radius: 10px; font-weight: 600; font-size: 0.95rem; cursor: pointer;" onclick="submitResetCode()">Verify Code</button>
       <div style="display: flex; justify-content: space-between; margin-top: 0.75rem;">
-        <a href="#" onclick="event.preventDefault(); cancelPinReset()" style="font-size: 0.82rem; color: #888;">Back</a>
+        <a href="#" onclick="event.preventDefault(); cancelPinReset()" style="font-size: 0.82rem; color: #6f6f6f;">Back</a>
         <a href="#" id="pin-reset-resend" onclick="event.preventDefault(); resendPinResetCode()" style="font-size: 0.82rem; color: #3e2217; font-weight: 600;">Resend Code</a>
       </div>
     </div>
@@ -559,7 +555,7 @@
     <!-- PIN Reset: New PIN Entry View -->
     <div id="pin-reset-newpin-view" style="display: none; text-align: center;">
       <h2 id="pin-reset-newpin-title" style="margin: 0 0 0.5rem 0; color: #3e2217; font-size: 1.3rem;">New PIN</h2>
-      <p id="pin-reset-newpin-desc" style="margin: 0 0 1rem 0; color: #888; font-size: 0.85rem;">Enter a new 4-digit PIN</p>
+      <p id="pin-reset-newpin-desc" style="margin: 0 0 1rem 0; color: #6f6f6f; font-size: 0.85rem;">Enter a new 4-digit PIN</p>
       <div id="pin-reset-newpin-error" style="color: #d32f2f; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem;"></div>
       <div class="pin-dots" id="pin-reset-dots" style="display: flex; justify-content: center; gap: 14px; margin-bottom: 1.5rem;">
         <div class="pin-dot"></div>
@@ -582,7 +578,7 @@
         <button class="pin-key" onclick="handleResetPinKey('backspace')"><i class="fas fa-backspace"></i></button>
       </div>
       <button onclick="cancelPinReset()" class="btn"
-        style="width: 100%; background: none; border: none; color: #888; font-size: 0.85rem;">Cancel</button>
+        style="width: 100%; background: none; border: none; color: #6f6f6f; font-size: 0.85rem;">Cancel</button>
     </div>
   </div>
 </div>
@@ -1030,7 +1026,7 @@
       }
     } catch (e) {
       if (errorDiv) {
-        errorDiv.textContent = 'Network error. Please try again.';
+        errorDiv.textContent = 'Connection lost. Check your internet and try again.';
         errorDiv.style.display = 'block';
       }
       btn.innerHTML = originalText;
@@ -1141,7 +1137,7 @@
         if (resetError) resetError.textContent = data.error || 'Failed to send code';
       }
     } catch (e) {
-      if (resetError) resetError.textContent = 'Network error. Please try again.';
+      if (resetError) resetError.textContent = 'Connection lost. Check your internet and try again.';
     }
   };
 
@@ -1163,7 +1159,7 @@
         if (resetError) resetError.textContent = data.error || 'Failed to resend';
       }
     } catch (e) {
-      if (resetError) resetError.textContent = 'Network error';
+      if (resetError) resetError.textContent = 'Connection lost. Check your internet and try again.';
     } finally {
       if (resendLink) { resendLink.textContent = 'Resend Code'; resendLink.style.pointerEvents = ''; }
     }
@@ -1296,7 +1292,7 @@
         }
       }
     } catch (e) {
-      if (errorEl) errorEl.textContent = 'Network error. Please try again.';
+      if (errorEl) errorEl.textContent = 'Connection lost. Check your internet and try again.';
     }
   }
 
@@ -1951,7 +1947,7 @@
           if (btn) { btn.disabled = false; btn.textContent = 'Revoke'; }
         }
       }).catch(() => {
-        alert('Network error. Please try again.');
+        alert('Connection lost. Check your internet and try again.');
         if (btn) { btn.disabled = false; btn.textContent = 'Revoke'; }
       });
     };
@@ -1981,7 +1977,7 @@
         }
         if (btn) { btn.disabled = false; btn.textContent = 'Sign Out All Other Sessions'; }
       }).catch(() => {
-        alert('Network error. Please try again.');
+        alert('Connection lost. Check your internet and try again.');
         if (btn) { btn.disabled = false; btn.textContent = 'Sign Out All Other Sessions'; }
       });
     };

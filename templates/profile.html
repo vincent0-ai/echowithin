@@ -89,13 +89,13 @@
             </a>
             {% elif dm_status == 'pending' %}
             <button class="btn" disabled
-                style="width: 100%; margin-top: 1rem; background-color: #999; color: white; text-align: center; display: block; padding: 10px; border-radius: 5px; border: none; cursor: not-allowed; opacity: 0.8;"
+                style="width: 100%; margin-top: 1rem; background-color: #6f6f6f; color: white; text-align: center; display: block; padding: 10px; border-radius: 5px; border: none; cursor: not-allowed; opacity: 0.8;"
                 id="dm-request-btn">
                 <i class="fas fa-clock"></i> Request Pending
             </button>
             {% elif dm_status == 'disabled' %}
             <button class="btn" disabled
-                style="width: 100%; margin-top: 1rem; background-color: #ccc; color: #888; text-align: center; display: block; padding: 10px; border-radius: 5px; border: none; cursor: not-allowed;">
+                style="width: 100%; margin-top: 1rem; background-color: var(--text-muted); color: #6f6f6f; text-align: center; display: block; padding: 10px; border-radius: 5px; border: none; cursor: not-allowed;">
                 <i class="fas fa-lock"></i> Messages Disabled
             </button>
             {% elif dm_status == 'none' %}
@@ -143,7 +143,7 @@
             </a>
             {% elif bond_status and bond_status.status == 'pending' %}
             <button class="btn" disabled
-                style="width: 100%; margin-top: 0.5rem; background-color: #999; color: white; text-align: center; display: block; padding: 10px; border-radius: 5px; border: none; cursor: not-allowed; opacity: 0.8;">
+                style="width: 100%; margin-top: 0.5rem; background-color: #6f6f6f; color: white; text-align: center; display: block; padding: 10px; border-radius: 5px; border: none; cursor: not-allowed; opacity: 0.8;">
                 {% if bond_status.is_requester %}Bond Request Sent{% else %}Bond Request Received{% endif %}
             </button>
             {% elif dm_status == 'accepted' %}
@@ -308,19 +308,19 @@
             <!-- Premium Tier Banner -->
             {% if current_user.is_authenticated and current_user.username == user.username %}
                 {% if user_is_trial %}
-                <div style="background: linear-gradient(135deg, #f5f0eb 0%, #e8ddd3 100%); color: #3e2217 !important; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem; border: 1px solid #d4c5b5; box-shadow: 0 4px 12px rgba(62, 34, 23, 0.05);">
-                    <div style="display: flex; align-items: center; gap: 0.5rem; color: #3e2217 !important;">
-                        <i class="fas fa-crown" style="font-size: 1rem; color: #3e2217 !important;"></i>
-                        <span style="color: #3e2217 !important;"><strong>Premium Trial</strong> — {{ trial_days_remaining }} day{{ 's' if trial_days_remaining != 1 }} remaining. Enjoying unlimited features!</span>
+                <div class="plan-callout">
+                    <div class="plan-callout-body">
+                        <i class="fas fa-crown" aria-hidden="true"></i>
+                        <span><strong>Premium Trial</strong> — {{ trial_days_remaining }} day{{ 's' if trial_days_remaining != 1 }} remaining.</span>
                     </div>
-                    <a href="{{ url_for('profile.profile_settings', username=current_user.username) }}#premium" style="background: #3e2217; color: white !important; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Subscribe — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
+                    <a class="plan-callout-action" href="{{ url_for('profile.profile_settings', username=current_user.username) }}#premium">Subscribe — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
                 </div>
                 {% elif not user_is_premium %}
-                <div style="background: linear-gradient(135deg, #f5f0eb 0%, #e8ddd3 100%); color: #3e2217; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem; border: 1px solid #d4c5b5;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div class="plan-callout">
+                    <div class="plan-callout-body">
                         <span>Unlock <strong>note locking, scheduled messages</strong> and more with Premium.</span>
                     </div>
-                    <a href="{{ url_for('profile.profile_settings', username=current_user.username) }}#premium" style="background: #3e2217; color: white; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Upgrade — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
+                    <a class="plan-callout-action" href="{{ url_for('profile.profile_settings', username=current_user.username) }}#premium">Upgrade — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
                 </div>
                 {% endif %}
             {% endif %}
@@ -383,7 +383,7 @@
                 {% endfor %}
             </div>
             {% else %}
-            <p style="color: #888; text-align: center; padding: 2rem 0;">{{ user.username }} has not created any posts yet.</p>
+            <p style="color: #6f6f6f; text-align: center; padding: 2rem 0;">{{ user.username }} has not created any posts yet.</p>
             {% endif %}
             {% if user_posts and total_pages > 1 %}
             <nav class="pagination-nav" style="margin-top: 2rem;">
@@ -680,14 +680,14 @@
 
     .profile-post-card-date {
         font-size: 0.82rem;
-        color: #999;
+        color: #6f6f6f;
     }
 
     .profile-post-card-stats {
         display: flex;
         gap: 0.8rem;
         font-size: 0.82rem;
-        color: #999;
+        color: #6f6f6f;
     }
 
     .profile-post-card-stats span {
@@ -1069,7 +1069,7 @@
                 }
             })
             .catch(function() {
-                errorEl.textContent = 'Network error. Try again.';
+                errorEl.textContent = 'Connection lost. Check your internet and try again.';
                 setupFirstPin = null;
                 descEl.textContent = 'Set a 4-digit PIN for your private vault';
                 clearPinRow('vault-setup-pin-row');
@@ -1100,7 +1100,7 @@
             }
         })
         .catch(function() {
-            errorEl.textContent = 'Network error. Try again.';
+            errorEl.textContent = 'Connection lost. Check your internet and try again.';
             clearPinRow('vault-unlock-pin-row');
         });
     });

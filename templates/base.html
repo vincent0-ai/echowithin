@@ -947,7 +947,7 @@
                         <h3 style="margin:0; font-size:1.1rem; color:var(--text-dark-color); display:flex; align-items:center; gap:6px;">
                             <i class="fas fa-flag" style="color:#c62828;"></i> Report Post
                         </h3>
-                        <span id="post-report-modal-close" style="font-size:1.4rem; color:#888; cursor:pointer; line-height:1;">&times;</span>
+                        <span id="post-report-modal-close" style="font-size:1.4rem; color:#6f6f6f; cursor:pointer; line-height:1;">&times;</span>
                     </div>
                     <p id="post-report-modal-target" style="font-size:0.85rem; color:#666; margin-bottom:0.75rem; font-weight:600;"></p>
                     <form id="post-report-form">
@@ -1019,12 +1019,12 @@
                 <h4 style="margin: 0 0 6px 0; color: #3e2217; font-family: 'Poppins', sans-serif; font-size: 1.1rem; font-weight: 700; text-align: left;">Note App</h4>
                 <p style="margin: 0; color: #555; font-size: 0.88rem; line-height: 1.45; text-align: left;">This is a note app adapted from this website that enables you to sync with your notes, dark theme, notifications supported.</p>
             </div>
-            <button onclick="dismissNativePromo(true)" style="background: none; border: none; font-size: 1.5rem; color: #999; cursor: pointer; padding: 0 4px; line-height: 0.8; font-weight: bold;">&times;</button>
+            <button onclick="dismissNativePromo(true)" style="background: none; border: none; font-size: 1.5rem; color: #6f6f6f; cursor: pointer; padding: 0 4px; line-height: 0.8; font-weight: bold;">&times;</button>
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
             <button onclick="dismissNativePromo(true)" style="background: none; border: none; color: #7f6e65; font-size: 0.8rem; cursor: pointer; font-weight: 600; padding: 8px 10px; margin-right: auto; text-decoration: underline;">Don't show again</button>
             <button onclick="dismissNativePromo(false)" style="background: none; border: 1px solid rgba(62, 34, 23, 0.3); color: #3e2217; padding: 8px 16px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: background 0.2s;">Later</button>
-            <a href="{{ url_for('pages.about') }}#native-app-section" onclick="dismissNativePromo(false)" class="install-btn" style="background: linear-gradient(135deg, #3e2217 0%, #5a3328 100%); color: white; padding: 8px 20px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; box-shadow: 0 2px 8px rgba(62, 34, 23, 0.3);">
+            <a href="{{ url_for('pages.about') }}#native-app-section" onclick="dismissNativePromo(false)" class="install-btn" style="background: var(--primary-color); color: var(--text-light-color); padding: 8px 20px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; box-shadow: 0 2px 8px rgba(62, 34, 23, 0.25);">
                 Download
             </a>
         </div>
@@ -1260,12 +1260,12 @@
                     'To install this app on your iPhone or iPad:' +
                 '</p>' +
                 '<div style="text-align:left;font-size:0.95rem;color:#333;line-height:1.8;padding:0 8px;">' +
-                    '<div>1. Tap the <b>Share</b> button <span style="font-size:1.2rem;">&#x1F4E4;</span> at the bottom of Safari</div>' +
+                    '<div>1. Tap the <b>Share</b> button at the bottom of Safari</div>' +
                     '<div>2. Scroll down and tap <b>"Add to Home Screen"</b></div>' +
                     '<div>3. Tap <b>"Add"</b> in the top right</div>' +
                 '</div>' +
-                '<p style="color:#888;font-size:0.85rem;margin-top:14px;">Once installed, you\'ll get push notifications and a full app experience.</p>' +
-                '<button id="ios-a2hs-close" style="margin-top:16px;background:#6366f1;color:#fff;border:none;padding:10px 32px;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;">Got it</button>' +
+                '<p style="color:#6f6f6f;font-size:0.85rem;margin-top:14px;">Once installed, you\'ll get push notifications and a full app experience.</p>' +
+                '<button id="ios-a2hs-close" style="margin-top:16px;background:var(--primary-color);color:var(--text-light-color);border:none;padding:10px 32px;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;">Got it</button>' +
             '</div>';
 
         document.body.appendChild(overlay);
@@ -1508,14 +1508,14 @@
         var banner = document.createElement('div');
         banner.id = 'ios-notif-banner';
         banner.setAttribute('style',
-            'position:fixed;bottom:0;left:0;right:0;background:#6366f1;color:#fff;' +
+            'position:fixed;bottom:0;left:0;right:0;background:var(--primary-color);color:var(--text-light-color);' +
             'padding:16px 20px;z-index:10000;box-shadow:0 -2px 12px rgba(0,0,0,.15);' +
             'font-size:0.95rem;display:flex;align-items:center;justify-content:space-between;gap:12px;'
         );
         banner.innerHTML =
             '<span style="flex:1;">Enable notifications to stay updated on new posts and replies</span>' +
             '<div style="display:flex;gap:8px;flex-shrink:0;">' +
-                '<button id="ios-notif-enable" style="background:#fff;color:#6366f1;border:none;padding:8px 18px;border-radius:8px;font-weight:600;cursor:pointer;">Enable</button>' +
+                '<button id="ios-notif-enable" style="background:#fff;color:var(--primary-color);border:none;padding:8px 18px;border-radius:8px;font-weight:600;cursor:pointer;">Enable</button>' +
                 '<button id="ios-notif-dismiss" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);padding:8px 14px;border-radius:8px;cursor:pointer;">Later</button>' +
             '</div>';
 
@@ -2171,14 +2171,13 @@
                                 setTimeout(() => window.location.reload(), 1500);
                             }
                         } else {
-                            const err = data.error || 'Failed to submit report.';
-                            if (window.showToast) window.showToast(err, 'error');
-                            else alert(err);
+                            if (window.showToast) window.showToast('Report not sent. Try again.', 'error');
+                            else alert('Report not sent. Try again.');
                         }
                     } catch (err) {
                         hideReportModal();
-                        if (window.showToast) window.showToast('Network error while reporting.', 'error');
-                        else alert('Network error while reporting.');
+                        if (window.showToast) window.showToast('Connection lost. Check your internet and try again.', 'error');
+                        else alert('Connection lost. Check your internet and try again.');
                     } finally {
                         submitBtn.disabled = false;
                         submitBtn.textContent = 'Submit Report';
@@ -2518,12 +2517,12 @@
                         newsletterForm.reset();
                     } else {
                         newsletterMessage.style.color = '#8b0000';
-                        newsletterMessage.textContent = data.error || 'Something went wrong. Please try again.';
+                        newsletterMessage.textContent = 'Subscription failed. Check the email address and try again.';
                     }
                 } catch (err) {
                     console.error('Newsletter error:', err);
                     newsletterMessage.style.color = '#8b0000';
-                    newsletterMessage.textContent = 'Network error. Please try again later.';
+                    newsletterMessage.textContent = 'Subscription failed. Check your connection and try again.';
                 } finally {
                     btn.disabled = false;
                     btn.textContent = originalBtnText;

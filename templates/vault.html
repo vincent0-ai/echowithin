@@ -833,7 +833,7 @@
                 clearPinRow('unlock-pin-row');
             }
         }).catch(function () {
-            document.getElementById('unlock-pin-error').textContent = 'Network error';
+            document.getElementById('unlock-pin-error').textContent = 'Connection lost. Check your internet and try again.';
             clearPinRow('unlock-pin-row');
         });
     });
@@ -1360,7 +1360,7 @@
                 err.textContent = d.error || 'Failed to change PIN';
             }
         }).catch(function () {
-            err.textContent = 'Network error';
+            err.textContent = 'Connection lost. Check your internet and try again.';
         });
     };
 
@@ -1393,7 +1393,7 @@
                 err.textContent = d.error || 'Failed to send code';
             }
         }).catch(function () {
-            err.textContent = 'Network error';
+            err.textContent = 'Connection lost. Check your internet and try again.';
         });
     };
 
@@ -1424,7 +1424,7 @@
                 clearPinRow('forgot-pin-confirm-row');
             }
         }).catch(function () {
-            err.textContent = 'Network error';
+            err.textContent = 'Connection lost. Check your internet and try again.';
         });
     };
 

@@ -90,7 +90,7 @@
     }
 
     .info-label {
-        color: #999;
+        color: #6f6f6f;
     }
 
     .info-value {
@@ -112,7 +112,7 @@
 
     .form-group .help-text {
         font-size: 0.72rem;
-        color: #999;
+        color: #6f6f6f;
         margin-top: 0.15rem;
     }
 
@@ -468,7 +468,7 @@
             });
 
             xhr.addEventListener('error', function () {
-                progressText.textContent = 'Network error. Please try again.';
+                progressText.textContent = 'Connection lost. Check your internet and try again.';
                 saveBtn.disabled = false;
                 saveBtn.textContent = 'Save Settings';
                 saveBtn.style.opacity = '1';

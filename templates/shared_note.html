@@ -67,7 +67,7 @@
                 style="font-size:1rem;font-weight:600;color:#3e2217;margin-bottom:1rem;"></div>
             <div id="capsule-countdown"
                 style="display:flex;justify-content:center;gap:1rem;flex-wrap:wrap;"></div>
-            <p style="font-size:0.78rem;color:#999;margin-top:1.5rem;">The sender has locked this note as a Time Capsule. Check back when the timer reaches zero.</p>
+            <p style="font-size:0.78rem;color:#6f6f6f;margin-top:1.5rem;">The sender has locked this note as a Time Capsule. Check back when the timer reaches zero.</p>
         </div>
         <script>
         (function() {
@@ -84,7 +84,7 @@
             function makeUnit(val, label) {
                 return `<div style="text-align:center;">
                     <div style="font-size:1.5rem;font-weight:700;color:#3e2217;background:#faf5f0;border:1px solid #e8ddd3;border-radius:8px;padding:0.5rem 0.75rem;min-width:50px;">${pad(val)}</div>
-                    <div style="font-size:0.7rem;color:#999;margin-top:0.25rem;">${label}</div>
+                    <div style="font-size:0.7rem;color:#6f6f6f;margin-top:0.25rem;">${label}</div>
                 </div>`;
             }
 
@@ -198,7 +198,7 @@
                 {% if permissions == 'edit' %}
                 <div class="note-content rendered-note" id="note-view" data-raw="{{ content | e }}"
                     data-updated-at="{{ (updated_at or created_at).isoformat() if (updated_at or created_at) else '' }}">
-                    <div style="text-align: center; color: #999; padding: 1rem 0;">
+                    <div style="text-align: center; color: #6f6f6f; padding: 1rem 0;">
                         <i class="fas fa-spinner fa-spin"></i> Loading note...
                     </div>
                 </div>
@@ -240,7 +240,7 @@
                 </div>
                 {% else %}
                 <div class="note-content rendered-note" data-raw="{{ content | e }}">
-                    <div style="text-align: center; color: #999; padding: 1rem 0;">
+                    <div style="text-align: center; color: #6f6f6f; padding: 1rem 0;">
                         <i class="fas fa-spinner fa-spin"></i> Loading note...
                     </div>
                 </div>
@@ -362,36 +362,36 @@
             <!-- Educational Tips Banner -->
             <div class="shared-note-tips" id="shared-note-tips">
                 <div class="tips-header">
-                    <span class="tips-icon">💡</span>
+                    
                     <span class="tips-title">Quick Tips</span>
                     <button class="tips-dismiss" id="dismiss-shared-tips" aria-label="Dismiss tips">&times;</button>
                 </div>
                 <div class="tips-body">
                     <div class="tip-item">
-                        <span class="tip-emoji">📖</span>
+                        <i class="fas fa-book-open tip-emoji" aria-hidden="true"></i>
                         <span>Use markdown headers (<code># H1</code>, <code>## H2</code>, <code>### H3</code>) to
                             auto-generate a Table of Contents sidebar</span>
                     </div>
                     {% if permissions == 'edit' and not is_owner %}
                     <div class="tip-item">
-                        <span class="tip-emoji">✏️</span>
+                        <i class="fas fa-pen tip-emoji" aria-hidden="true"></i>
                         <span>Click <strong>Edit</strong> to propose changes — the note owner will review and approve
                             them</span>
                     </div>
                     <div class="tip-item">
-                        <span class="tip-emoji">🔀</span>
+                        <i class="fas fa-code-branch tip-emoji" aria-hidden="true"></i>
                         <span>If the note changes while you're editing, a merge dialog lets you combine both
                             versions</span>
                     </div>
                     {% endif %}
                     {% if is_owner %}
                     <div class="tip-item">
-                        <span class="tip-emoji">🕐</span>
+                        <i class="fas fa-clock-rotate-left tip-emoji" aria-hidden="true"></i>
                         <span><strong>Version Control</strong> — view all versions, compare changes, and restore any
                             previous version</span>
                     </div>
                     <div class="tip-item">
-                        <span class="tip-emoji">🔗</span>
+                        <i class="fas fa-link tip-emoji" aria-hidden="true"></i>
                         <span><strong>Shared Links</strong> — manage all active share links and permissions for this
                             note</span>
                     </div>
@@ -402,7 +402,7 @@
             {% if permissions == 'edit' %}
             <div class="note-content rendered-note" id="note-view" data-raw="{{ content | e }}"
                 data-updated-at="{{ (updated_at or created_at).isoformat() if (updated_at or created_at) else '' }}">
-                <div style="text-align: center; color: #999; padding: 1rem 0;">
+                <div style="text-align: center; color: #6f6f6f; padding: 1rem 0;">
                     <i class="fas fa-spinner fa-spin"></i> Loading note...
                 </div>
             </div>
@@ -486,7 +486,7 @@
             </div>
             {% else %}
             <div class="note-content rendered-note" data-raw="{{ content | e }}">
-                <div style="text-align: center; color: #999; padding: 1rem 0;">
+                <div style="text-align: center; color: #6f6f6f; padding: 1rem 0;">
                     <i class="fas fa-spinner fa-spin"></i> Loading note...
                 </div>
             </div>
@@ -751,8 +751,8 @@
                                 <i class="fas fa-arrows-split-up-and-left" style="transform: rotate(180deg);"></i> Combine Both
                             </button>
                             <button type="button" id="ai-merge-btn" class="btn btn-sm" onclick="runAiMerge()" 
-                                style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; border: 1px solid #dcd0ff; background: #f3f0ff; color: #5f27cd; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; font-weight: 600;">
-                                <i class="fas fa-wand-magic-sparkles"></i> ✨ AI Smart Merge
+                                style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--surface-bg); color: var(--text-dark-color); cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; font-weight: 600;">
+                                <i class="fas fa-code-merge" aria-hidden="true"></i> Merge with AI
                             </button>
                         </div>
                     </div>
@@ -885,7 +885,7 @@
         display: none;
         background: none;
         border: none;
-        color: #999;
+        color: #6f6f6f;
         cursor: pointer;
         font-size: 0.85rem;
         padding: 0.2rem 0.4rem;
@@ -932,7 +932,7 @@
 
     .toc-count {
         font-size: 0.7rem;
-        color: #aaa;
+        color: var(--text-muted);
         text-align: center;
         margin-top: 0.5rem;
         display: none;
@@ -1027,7 +1027,7 @@
         justify-content: space-between;
         align-items: center;
         font-size: 0.75rem;
-        color: #999;
+        color: #6f6f6f;
         padding: 0.35rem 0;
         margin-bottom: 0.5rem;
     }
@@ -1096,8 +1096,8 @@
     }
 
     .premium-badge-small {
-        background: linear-gradient(135deg, #f5af19, #f12711);
-        color: white;
+        background: #c9a84c;
+        color: #2a1810;
         padding: 1px 6px;
         border-radius: 8px;
         font-size: 0.65rem;
@@ -1119,14 +1119,14 @@
     .upload-progress-bar {
         height: 100%;
         width: 0%;
-        background: linear-gradient(90deg, #3e2217, #7a5d52);
+        background: var(--primary-color);
         border-radius: 4px;
         transition: width 0.3s;
     }
 
     .upload-progress-text {
         font-size: 0.72rem;
-        color: #999;
+        color: #6f6f6f;
         white-space: nowrap;
         margin-left: 0.5rem;
     }
@@ -1206,8 +1206,8 @@
         width: 40px;
         height: 40px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #3e2217, #7a5d52);
-        color: white;
+        background: var(--primary-color);
+        color: var(--text-light-color);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1242,7 +1242,7 @@
         padding: 0.4rem 0.75rem;
         border-top: 1px solid #f0eee9;
         font-size: 0.72rem;
-        color: #999;
+        color: #6f6f6f;
     }
 
     .attachment-uploader {
@@ -1252,7 +1252,7 @@
     .attachment-delete-btn {
         background: none;
         border: none;
-        color: #ccc;
+        color: var(--text-muted);
         cursor: pointer;
         font-size: 0.85rem;
         padding: 0.15rem 0.35rem;
@@ -1267,7 +1267,7 @@
 
     .attachments-empty {
         font-size: 0.85rem;
-        color: #aaa;
+        color: var(--text-muted);
         text-align: center;
         padding: 1rem 0;
         margin: 0;
@@ -1367,7 +1367,7 @@
     .error-state i,
     .auth-state i {
         font-size: 4rem;
-        color: #ccc;
+        color: var(--text-muted);
         margin-bottom: 1.5rem;
     }
 
@@ -1485,9 +1485,10 @@
     }
 
     .rendered-note blockquote {
-        border-left: 4px solid #ddd;
-        padding-left: 1rem;
-        color: #666;
+        border: 1px solid #e6e1da;
+        border-radius: 6px;
+        padding: 0.5rem 1rem;
+        color: #4a4a4a;
         margin: 1rem 0;
     }
 
@@ -1688,7 +1689,7 @@
         border: none;
         font-size: 1.5rem;
         cursor: pointer;
-        color: #999;
+        color: #6f6f6f;
         line-height: 1;
     }
 
@@ -1717,7 +1718,7 @@
 
     .history-time {
         font-size: 0.75rem;
-        color: #888;
+        color: #6f6f6f;
     }
 
     .history-theme {
@@ -1942,7 +1943,7 @@
 
     .char-count {
         font-size: 0.8rem;
-        color: #999;
+        color: #6f6f6f;
     }
 
     .login-prompt {
@@ -1995,7 +1996,7 @@
 
     .comment-time {
         font-size: 0.7rem;
-        color: #aaa;
+        color: var(--text-muted);
     }
 
     .comment-body {
@@ -2072,7 +2073,7 @@
 
     .empty-discussion {
         text-align: center;
-        color: #999;
+        color: #6f6f6f;
         padding: 2rem;
         font-size: 0.95rem;
     }
@@ -2169,7 +2170,7 @@
         background: none;
         border: none;
         font-size: 1.2rem;
-        color: #aaa;
+        color: var(--text-muted);
         cursor: pointer;
         padding: 0 0.25rem;
         line-height: 1;
@@ -2211,7 +2212,7 @@
 
     /* Valentine's Day Special CSS */
     .valentine-note {
-        background: linear-gradient(135deg, #fff5f7 0%, #ffe4e9 100%);
+        background: #fff5f7;
         min-height: 100vh;
         min-height: 100dvh;
         color: #d32f2f;
@@ -2479,7 +2480,7 @@
         height: 28px;
         border: none;
         background: transparent;
-        color: #aaa;
+        color: var(--text-muted);
         font-size: 1.2rem;
         line-height: 1;
         cursor: pointer;
@@ -2586,7 +2587,8 @@
 
     .cta-community {
         background: #fff;
-        border-top: 5px solid #6366f1;
+        border: 1px solid #e6ded6;
+        border-top-width: 1px;
     }
 
     .cta-community-header {
@@ -2608,8 +2610,8 @@
         font-size: 0.7rem;
         font-weight: 700;
         text-transform: uppercase;
-        background: rgba(99, 102, 241, 0.1);
-        color: #6366f1;
+        background: rgba(62, 34, 23, 0.08);
+        color: #5a3828;
         padding: 0.2rem 0.6rem;
         border-radius: 6px;
     }
@@ -2639,7 +2641,7 @@
         justify-content: center;
         gap: 0.6rem;
         font-size: 0.85rem;
-        color: #888;
+        color: #6f6f6f;
         padding: 1rem 0;
         font-weight: 500;
     }
@@ -3428,7 +3430,7 @@
                         status.style.color = 'red';
                     }
                 } catch (e) {
-                    status.textContent = 'Network error. Try again.';
+                    status.textContent = 'Connection lost. Check your internet and try again.';
                     status.style.color = 'red';
                 } finally {
                     saveSharedBtn.disabled = false;
@@ -3669,7 +3671,7 @@
 
         xhr.onerror = function () {
             if (progressWrap) progressWrap.style.display = 'none';
-            alert('Network error during upload.');
+            alert('Connection lost. Check your internet and try again.');
         };
 
         xhr.send(formData);
@@ -3777,7 +3779,7 @@
             }
         } catch (e) {
             console.error('Ping error:', e);
-            alert('Network error while pinging.');
+            alert('Connection lost. Check your internet and try again.');
         } finally {
             icon.className = originalClass;
             btn.disabled = false;
@@ -3817,7 +3819,7 @@
                 alert(result.error || 'Failed to delete attachment.');
             }
         } catch (e) {
-            alert('Network error while deleting.');
+            alert('Connection lost. Check your internet and try again.');
         }
     }
 
@@ -4183,7 +4185,7 @@
                         alert(result.error || 'Failed to post comment');
                     }
                 } catch (e) {
-                    alert('Network error. Please try again.');
+                    alert('Connection lost. Check your internet and try again.');
                 } finally {
                     postBtn.disabled = false;
                     postBtn.innerHTML = originalText;
@@ -4238,7 +4240,7 @@
                     alert(result.error || 'Failed to post reply');
                 }
             } catch (e) {
-                alert('Network error. Please try again.');
+                alert('Connection lost. Check your internet and try again.');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalText;
@@ -4268,7 +4270,7 @@
                     btn.innerHTML = originalText;
                 }
             } catch (e) {
-                alert('Network error. Please try again.');
+                alert('Connection lost. Check your internet and try again.');
                 btn.disabled = false;
                 btn.innerHTML = originalText;
             }
@@ -4497,7 +4499,7 @@
         
         // Check for unresolved conflict markers
         if (mergedText.includes('<<<<<<< CURRENT') || mergedText.includes('=======') || mergedText.includes('>>>>>>> INCOMING')) {
-            if (!confirm('⚠️ Warning: The merged note still contains raw conflict markers (<<<<<<< CURRENT, =======, or >>>>>>> INCOMING). Are you sure you want to save it with these markers?')) {
+            if (!confirm('This note still has unresolved merge marks. Review those sections, then save.')) {
                 return;
             }
         }
@@ -4590,7 +4592,7 @@
             }
         } catch (e) {
             console.error(e);
-            alert('Network error connecting to AI helper. Please merge manually.');
+            alert('Connection lost. Check your internet and try again.');
         } finally {
             aiBtn.disabled = false;
             aiBtn.innerHTML = originalHtml;
@@ -4693,7 +4695,7 @@
             }
 
             if (!Array.isArray(versions) || versions.length === 0) {
-                versionList.innerHTML = '<div class="version-empty"><i class="fas fa-clock-rotate-left" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; opacity: 0.4;"></i>No edit history yet.<br><small style="color: #bbb;">Versions are recorded when someone edits via a shared link.</small></div>';
+                versionList.innerHTML = '<div class="version-empty"><i class="fas fa-clock-rotate-left" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; opacity: 0.4;"></i>No edit history yet.<br><small style="color: var(--text-muted);">Versions are recorded when someone edits via a shared link.</small></div>';
                 return;
             }
 
@@ -4918,7 +4920,7 @@
                 return;
             }
             if (!Array.isArray(shares) || shares.length === 0) {
-                ownerLinksList.innerHTML = '<p style="text-align:center; color:#888; padding:1rem;">No active share links found.</p>';
+                ownerLinksList.innerHTML = '<p style="text-align:center; color:#6f6f6f; padding:1rem;">No active share links found.</p>';
                 return;
             }
 
@@ -4956,7 +4958,7 @@
                 btn.disabled = false;
             }
         } catch (e) {
-            alert('Network error. Please try again.');
+            alert('Connection lost. Check your internet and try again.');
             btn.disabled = false;
         }
     };
@@ -4976,12 +4978,12 @@
                 }
 
                 if (!data.length) {
-                    historyList.innerHTML = '<p style="text-align:center; color:#888; padding:1rem;">No history records found yet.</p>';
+                    historyList.innerHTML = '<p style="text-align:center; color:#6f6f6f; padding:1rem;">No history records found yet.</p>';
                     return;
                 }
 
                 if (!data || data.length === 0) {
-                    historyList.innerHTML = '<p style="text-align:center; color:#888; padding: 2rem 0;">No access history recorded yet.</p>';
+                    historyList.innerHTML = '<p style="text-align:center; color:#6f6f6f; padding: 2rem 0;">No access history recorded yet.</p>';
                     return;
                 }
 
@@ -5087,7 +5089,7 @@
                 saveToNotesBtn.innerHTML = '<i class="fas fa-bookmark"></i> Save to My Notes';
             }
         } catch (e) {
-            alert('Network error. Please try again.');
+            alert('Connection lost. Check your internet and try again.');
             saveToNotesBtn.disabled = false;
             saveToNotesBtn.innerHTML = '<i class="fas fa-bookmark"></i> Save to My Notes';
         }
@@ -5105,7 +5107,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <h3 style="color: #3e2217; margin: 0; font-size: 1.05rem;"><i class="fas fa-download"></i> Export Note</h3>
             <button onclick="document.getElementById('export-shared-modal').style.display='none'"
-                style="border:none; background:none; color:#999; cursor:pointer; font-size:1.1rem;"><i
+                style="border:none; background:none; color:#6f6f6f; cursor:pointer; font-size:1.1rem;"><i
                     class="fas fa-times"></i></button>
         </div>
         <div style="display: flex; flex-direction: column; gap: 0.6rem;">
@@ -5115,7 +5117,7 @@
                     style="font-size: 1.2rem; color: #8b6f5e; width: 24px; text-align: center;"></i>
                 <div>
                     <div style="font-weight: 600;">Plain Text</div>
-                    <div style="font-size: 0.75rem; color: #888;">Download as .txt file</div>
+                    <div style="font-size: 0.75rem; color: #6f6f6f;">Download as .txt file</div>
                 </div>
             </button>
             <button onclick="exportSharedNote('docx')"
@@ -5124,7 +5126,7 @@
                     style="font-size: 1.2rem; color: #2b579a; width: 24px; text-align: center;"></i>
                 <div>
                     <div style="font-weight: 600;">Word Document</div>
-                    <div style="font-size: 0.75rem; color: #888;">Download as .doc file</div>
+                    <div style="font-size: 0.75rem; color: #6f6f6f;">Download as .doc file</div>
                 </div>
             </button>
         </div>
@@ -5152,7 +5154,7 @@
                 var blob = new Blob([rawContent + '\n\n---\nExported from EchoWithin'], { type: 'text/plain;charset=utf-8' });
                 dlBlob(blob, safeName + '.txt');
             } else if (format === 'docx') {
-                var dh = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><style>body{font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5;color:#333;}h1{font-size:18pt;}h2{font-size:14pt;}code{background:#f5f5f5;padding:2px 4px;font-family:Consolas,monospace;}</style></head><body>' + renderedContent + '<p style="margin-top:20px;border-top:1px solid #eee;padding-top:8px;font-size:8pt;color:#aaa;text-align:center;">Exported from EchoWithin</p></body></html>';
+                var dh = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><style>body{font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5;color:#333;}h1{font-size:18pt;}h2{font-size:14pt;}code{background:#f5f5f5;padding:2px 4px;font-family:Consolas,monospace;}</style></head><body>' + renderedContent + '<p style="margin-top:20px;border-top:1px solid #eee;padding-top:8px;font-size:8pt;color: var(--text-muted);text-align:center;">Exported from EchoWithin</p></body></html>';
                 var blob = new Blob(['\ufeff' + dh], { type: 'application/msword' });
                 dlBlob(blob, safeName + '.doc');
             }

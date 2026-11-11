@@ -3,7 +3,7 @@
             text-align: center;
             margin-bottom: 1.25rem;
             padding: 1rem 1.25rem;
-            background: linear-gradient(135deg, #3e2217 0%, #5a3328 100%);
+            background: var(--primary-color);
             border-radius: 12px;
             color: white;
         }
@@ -135,11 +135,11 @@
             width: 80px;
             height: 80px;
             border-radius: 8px;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            background: var(--surface-bg);
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #999;
+            color: var(--text-muted);
             flex-shrink: 0;
         }
 
@@ -165,7 +165,7 @@
 
         .saved-post-meta {
             font-size: 0.85rem;
-            color: #888;
+            color: #6f6f6f;
             margin-bottom: 0.5rem;
         }
 
@@ -296,7 +296,7 @@
         .note-actions .action-label {
             font-size: 0.68rem;
             font-weight: 500;
-            color: #888;
+            color: #6f6f6f;
             margin-left: 2px;
             vertical-align: middle;
         }
@@ -336,7 +336,8 @@
         }
 
         .note-content blockquote {
-            border-left: 3px solid var(--primary-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
             margin: 0.5em 0;
             padding: 0.5em 1em;
             background: #f9f9f9;
@@ -535,7 +536,7 @@
 
         .note-date {
             font-size: 0.75rem;
-            color: #999;
+            color: #6f6f6f;
         }
 
         .note-actions {
@@ -703,14 +704,14 @@
         }
 
         .activity-header-subtitle {
-            color: #888;
+            color: #6f6f6f;
             font-size: 0.82rem;
             margin: 0;
         }
 
         .activity-clear-btn {
             font-size: 0.75rem;
-            color: #888;
+            color: #6f6f6f;
             background: none;
             border: 1px solid #e0cfc8;
             padding: 0.4rem 0.8rem;
@@ -775,7 +776,7 @@
 
         .activity-card-meta {
             font-size: 0.78rem;
-            color: #999;
+            color: #6f6f6f;
             display: flex;
             flex-wrap: wrap;
             gap: 0.75rem;
@@ -963,7 +964,7 @@
 
         .activity-auto-summary {
             font-size: 0.76rem;
-            color: #888;
+            color: #6f6f6f;
         }
 
         /* Activity tab badge styling */
@@ -1025,7 +1026,7 @@
         }
 
         .pin-modal-content p {
-            color: #888;
+            color: #6f6f6f;
             margin: 0 0 1.5rem 0;
             font-size: 0.9rem;
         }
@@ -1132,7 +1133,7 @@
 
         .pin-key:hover {
             background: #f0f0f0;
-            border-color: #bbb;
+            border-color: #8f8f8f;
         }
 
         .pin-key:active {
@@ -1146,7 +1147,7 @@
 
         .pin-key.backspace {
             font-size: 1.1rem;
-            color: #888;
+            color: #6f6f6f;
         }
 
         .pin-error-msg {
@@ -1161,7 +1162,7 @@
         .locked-gate {
             text-align: center;
             padding: 3rem 1rem;
-            color: #888;
+            color: #6f6f6f;
         }
 
         .locked-gate i.gate-icon {
@@ -1182,7 +1183,7 @@
         }
 
         .locked-gate .unlock-btn {
-            background: linear-gradient(135deg, #3e2217 0%, #5a3328 100%);
+            background: var(--primary-color);
             color: white;
             border: none;
             padding: 0.7rem 2rem;
@@ -1201,7 +1202,7 @@
         .locked-gate .setup-hint {
             margin-top: 1rem;
             font-size: 0.8rem;
-            color: #aaa;
+            color: #6f6f6f;
         }
 
         .locked-gate .setup-hint a {
@@ -1265,7 +1266,7 @@
             background: none;
             border: none;
             font-size: 1.2rem;
-            color: #aaa;
+            color: #6f6f6f;
             cursor: pointer;
             padding: 0 0.25rem;
             line-height: 1;
@@ -1328,7 +1329,7 @@
 
         .edit-char-count {
             font-size: 0.8rem;
-            color: #999;
+            color: #6f6f6f;
             text-align: right;
             margin-top: 0.3rem;
         }
@@ -1437,7 +1438,7 @@
 
         .char-count {
             font-size: 0.8rem;
-            color: #999;
+            color: #6f6f6f;
         }
 
         .char-count.warning {
@@ -1481,7 +1482,7 @@
 
         .note-preview-label {
             font-size: 0.75rem;
-            color: #999;
+            color: #6f6f6f;
             margin-bottom: 0.5rem;
             display: flex;
             align-items: center;
@@ -1490,7 +1491,7 @@
 
         .format-hint {
             font-size: 0.75rem;
-            color: #888;
+            color: #6f6f6f;
             margin-top: 0.5rem;
         }
 
@@ -1840,7 +1841,7 @@
         }
 
         .note-search-bar i.search-icon {
-            color: #999;
+            color: #6f6f6f;
             font-size: 0.95rem;
             flex-shrink: 0;
         }
@@ -1855,13 +1856,13 @@
         }
 
         .note-search-bar input::placeholder {
-            color: #bbb;
+            color: #6f6f6f;
         }
 
         .note-search-bar .search-clear {
             background: none;
             border: none;
-            color: #999;
+            color: #6f6f6f;
             cursor: pointer;
             padding: 0.2rem;
             font-size: 0.85rem;
@@ -1879,7 +1880,7 @@
 
         .note-search-hint {
             font-size: 0.72rem;
-            color: #aaa;
+            color: #6f6f6f;
             margin-top: 0.3rem;
             padding-left: 0.25rem;
         }
@@ -1910,7 +1911,7 @@
         .note-search-status .search-stats {
             margin-left: auto;
             font-size: 0.75rem;
-            color: #aaa;
+            color: #6f6f6f;
         }
 
         .search-results-container {
@@ -1950,13 +1951,13 @@
             align-items: center;
             margin-top: 0.5rem;
             font-size: 0.78rem;
-            color: #999;
+            color: #6f6f6f;
         }
 
         /* Highlighted match in search results */
         mark.search-highlight,
         .search-result-snippet mark.search-highlight {
-            background: linear-gradient(120deg, #fff3cd 0%, #ffe69c 100%);
+            background: #f5d97a;
             color: #333;
             padding: 0.05em 0.2em;
             border-radius: 3px;
@@ -2035,8 +2036,8 @@
 
         /* --- Share Feature Promo Card --- */
         .share-promo-card {
-            background: linear-gradient(135deg, #fdf2f8, #fef3e7);
-            border: 1px solid #f5d0e0;
+            background: var(--surface-bg);
+            border: 1px solid var(--border-color);
             border-radius: 12px;
             padding: 1rem 1.25rem;
             margin-bottom: 1rem;
@@ -2094,7 +2095,7 @@
             background: none;
             border: none;
             cursor: pointer;
-            color: #999;
+            color: #6f6f6f;
             font-size: 1.1rem;
             padding: 4px;
             line-height: 1;
@@ -2226,16 +2227,16 @@
 
         .offline-banner.offline {
             display: flex;
-            background: linear-gradient(135deg, #fff3e0, #ffe0b2);
-            color: #e65100;
+            background: #fff3e0;
+            color: #a63d00;
             border: 1px solid #ffcc80;
         }
 
         .offline-banner.syncing {
             display: flex;
-            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
-            color: #1565c0;
-            border: 1px solid #90caf9;
+            background: #e8f1fb;
+            color: #14538c;
+            border: 1px solid #a8c9ea;
         }
 
         .offline-banner i {
@@ -2367,7 +2368,7 @@
 
     .version-time {
         font-size: 0.8rem;
-        color: #999;
+        color: #6f6f6f;
     }
 
     .version-preview {
@@ -2401,7 +2402,7 @@
 
     .version-empty {
         text-align: center;
-        color: #999;
+        color: #6f6f6f;
         padding: 2rem;
     }
 
@@ -2473,7 +2474,7 @@
 
     .note-preview-header-meta {
         font-size: 0.7rem;
-        color: #888;
+        color: #6f6f6f;
         margin-top: 1px;
     }
 
@@ -2689,7 +2690,7 @@
 
     .note-preview-edit-status {
         font-size: 0.7rem;
-        color: #888;
+        color: #6f6f6f;
     }
 
     @media (max-width: 720px) {

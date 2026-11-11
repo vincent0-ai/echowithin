@@ -2035,21 +2035,21 @@
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.3rem;">
                     {% if bond.streak_count > 0 %}
-                    <div class="bond-streak">🔥 {{ bond.streak_count }}d{% if user_tier == 'premium' and not
+                    <div class="bond-streak"><i class="fas fa-fire" aria-hidden="true"></i> {{ bond.streak_count }}d{% if user_tier == 'premium' and not
                         bond.streak_shield_used_this_week %}<button class="streak-shield-btn"
                             title="Use Streak Shield (1/week, premium)"
-                            onclick="useStreakShield('{{ bond.id }}')">🛡️</button>{% endif %}</div>
+                            onclick="useStreakShield('{{ bond.id }}')"><i class="fas fa-shield-halved" aria-hidden="true"></i></button>{% endif %}</div>
                     {% elif bond.streak_recoverable > 0 and user_tier == 'premium' and not
                     bond.streak_shield_used_this_week %}
-                    <div class="bond-streak" style="opacity: 0.85;"><span style="color: var(--text-muted);">💔 {{
+                    <div class="bond-streak" style="opacity: 0.85;"><span style="color: var(--text-muted);"><i class="fas fa-heart-crack" aria-hidden="true"></i> {{
                             bond.streak_recoverable }}d</span> <button class="streak-shield-btn"
                             title="Recover your {{ bond.streak_recoverable }}-day streak with a shield!"
                             onclick="useStreakShield('{{ bond.id }}')"
-                            style="font-size: 0.82rem; animation: pulse-shield 1.5s ease-in-out infinite;">🛡️
+                            style="font-size: 0.82rem; animation: pulse-shield 1.5s ease-in-out infinite;"><i class="fas fa-shield-halved" aria-hidden="true"></i>
                             Save</button></div>
                     {% endif %}
-                    <button class="bond-nudge-btn" title="Send a nudge" onclick="sendNudge('{{ bond.id }}', this)"><span
-                            class="nudge-icon">💭</span> <span class="nudge-count" style="font-size: 0.7rem;">({{
+                    <button class="bond-nudge-btn" title="Send a nudge" onclick="sendNudge('{{ bond.id }}', this)"><i
+                            class="fas fa-comment-dots nudge-icon" aria-hidden="true"></i> <span class="nudge-count" style="font-size: 0.7rem;">({{
                             bond.nudge_remaining }} left)</span></button>
                 </div>
             </div>
@@ -2158,14 +2158,14 @@
                         today?</strong>
                 </div>
                 <div class="mood-section" id="mood-content-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; padding: 0.5rem;">Loading...</div>
+                    <div style="color: #6f6f6f; font-size: 0.85rem; padding: 0.5rem;">Loading...</div>
                 </div>
             </div>
 
             <!-- QotD Section -->
             <div class="bond-expand-section" id="qotd-{{ bond.id }}">
                 <div id="qotd-content-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; padding: 0.5rem;">Loading question...</div>
+                    <div style="color: #6f6f6f; font-size: 0.85rem; padding: 0.5rem;">Loading question...</div>
                 </div>
             </div>
 
@@ -2177,7 +2177,7 @@
                         onclick="showGoalModal('{{ bond.id }}')">+ Propose Goal</button>
                 </div>
                 <div id="goals-list-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 1rem;">Loading goals...
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 1rem;">Loading goals...
                     </div>
                 </div>
             </div>
@@ -2191,7 +2191,7 @@
                         onclick="createJournalEntry('{{ bond.id }}')">Add Entry</button>
                 </div>
                 <div id="journal-list-{{ bond.id }}" style="margin-top: 0.8rem;">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 1rem;">Loading journal...
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 1rem;">Loading journal...
                     </div>
                 </div>
             </div>
@@ -2217,7 +2217,7 @@
                     </div>
                 </div>
                 <div id="habits-list-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading habits...
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading habits...
                     </div>
                 </div>
             </div>
@@ -2312,7 +2312,7 @@
                         style="display:flex; justify-content:space-between; align-items:center; margin-top:0.4rem; flex-wrap:wrap; gap:0.4rem;">
                         <label
                             style="font-size:0.75rem; color:var(--text-muted); display:flex; align-items:center; gap:0.3rem; cursor:pointer;">
-                            <input type="checkbox" id="event-surprise-input-{{ bond.id }}"> Secret surprise event 🎁
+                            <input type="checkbox" id="event-surprise-input-{{ bond.id }}"> Secret surprise event
                         </label>
                         <div style="display:flex; gap:0.4rem;">
                             <button class="btn btn-bond-secondary" style="font-size:0.75rem; padding:0.2rem 0.5rem;"
@@ -2394,7 +2394,7 @@
                     </div>
                 </div>
                 <div id="countdowns-list-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading
                         countdowns...</div>
                 </div>
             </div>
@@ -2474,14 +2474,14 @@
                         <select id="album-cat-{{ bond.id }}" onchange="setAlbumCategory('{{ bond.id }}', this.value)"
                             style="font-size: 0.75rem; padding: 0.2rem 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; touch-action: manipulation;">
                             <option value="all">All Photos</option>
-                            <option value="memory">📸 Memories</option>
-                            <option value="milestone">🏆 Milestones</option>
-                            <option value="fun">😄 Fun</option>
-                            <option value="travel">✈️ Travel</option>
-                            <option value="special">✨ Special</option>
-                            <option value="food">🍴 Food</option>
-                            <option value="pets">🐾 Pets</option>
-                            <option value="jokes">💬 Inside Jokes</option>
+                            <option value="memory">Memories</option>
+                            <option value="milestone">Milestones</option>
+                            <option value="fun">Fun</option>
+                            <option value="travel">Travel</option>
+                            <option value="special">Special</option>
+                            <option value="food">Food</option>
+                            <option value="pets">Pets</option>
+                            <option value="jokes">Inside Jokes</option>
                             <option value="other">Other</option>
                         </select>
 
@@ -2499,7 +2499,7 @@
 
                 <!-- Photo Grid -->
                 <div id="album-grid-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading photos...
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading photos...
                     </div>
                 </div>
             </div>
@@ -2537,7 +2537,7 @@
                     </div>
                 </div>
                 <div id="bucketlist-container-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading bucket
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading bucket
                         list...</div>
                 </div>
             </div>
@@ -2596,7 +2596,7 @@
                     </div>
                 </div>
                 <div id="recs-list-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading
                         recommendations...</div>
                 </div>
             </div>
@@ -2627,7 +2627,7 @@
                         style="font-size:1.4rem; background:transparent; border:2px solid transparent; border-radius:8px; cursor:pointer; padding:0.3rem 0.4rem; transition:border 0.15s;">😤</button>
                 </div>
                 <div id="pulses-list-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading pulses...
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading pulses...
                     </div>
                 </div>
             </div>
@@ -2635,7 +2635,7 @@
             <!-- Insights Section -->
             <div class="bond-expand-section" id="insights-{{ bond.id }}">
                 <div id="insights-content-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading
                         relationship insights...</div>
                 </div>
                 <div style="margin-top:1rem;padding-top:0.8rem;border-top:1px solid var(--border-color);">
@@ -2646,7 +2646,7 @@
                             onclick="exportMemoryBook('{{ bond.id }}')">Export Memory Book</button>
                     </div>
                     <div id="timeline-content-{{ bond.id }}">
-                        <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading
+                        <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading
                             timeline...</div>
                     </div>
                     <div id="timeline-load-more-{{ bond.id }}"
@@ -2757,7 +2757,7 @@
             <!-- Mood Section (Read-Only) -->
             <div class="bond-expand-section" id="mood-{{ bond.id }}">
                 <div id="mood-status-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading mood
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading mood
                         history...</div>
                 </div>
             </div>
@@ -2765,7 +2765,7 @@
             <!-- QotD Section (Read-Only) -->
             <div class="bond-expand-section" id="qotd-{{ bond.id }}">
                 <div id="qotd-content-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading question
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading question
                         history...</div>
                 </div>
             </div>
@@ -2773,7 +2773,7 @@
             <!-- Goals Section (Read-Only) -->
             <div class="bond-expand-section" id="goals-{{ bond.id }}">
                 <div id="goals-list-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading past
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading past
                         goals...</div>
                 </div>
             </div>
@@ -2781,7 +2781,7 @@
             <!-- Journal Section (Read-Only) -->
             <div class="bond-expand-section" id="journal-{{ bond.id }}">
                 <div id="journal-list-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading journal
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading journal
                         archive...</div>
                 </div>
             </div>
@@ -2789,7 +2789,7 @@
             <!-- Habits Section (Read-Only) -->
             <div class="bond-expand-section" id="habits-{{ bond.id }}">
                 <div id="habits-list-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading habit
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading habit
                         stats...</div>
                 </div>
             </div>
@@ -2797,7 +2797,7 @@
             <!-- Insights Section (Read-Only) -->
             <div class="bond-expand-section" id="insights-{{ bond.id }}">
                 <div id="insights-content-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading recap...
+                    <div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading recap...
                     </div>
                 </div>
             </div>
@@ -2958,14 +2958,14 @@
                         style="display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Category</label>
                     <select id="album-upload-cat"
                         style="width: 100%; font-size: 0.85rem; padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; box-sizing: border-box;">
-                        <option value="memory">📸 Memory</option>
-                        <option value="milestone">🏆 Milestone</option>
-                        <option value="fun">😄 Fun</option>
-                        <option value="travel">✈️ Travel</option>
-                        <option value="special">✨ Special</option>
-                        <option value="food">🍴 Food</option>
-                        <option value="pets">🐾 Pets</option>
-                        <option value="jokes">💬 Inside Jokes</option>
+                        <option value="memory">Memory</option>
+                        <option value="milestone">Milestone</option>
+                        <option value="fun">Fun</option>
+                        <option value="travel">Travel</option>
+                        <option value="special">Special</option>
+                        <option value="food">Food</option>
+                        <option value="pets">Pets</option>
+                        <option value="jokes">Inside Jokes</option>
                         <option value="other">Other</option>
                     </select>
                 </div>
@@ -3091,7 +3091,7 @@
         <div style="display: flex; align-items: center; gap: 0.6rem;">
             <i class="fas fa-film" style="color: var(--primary-color);"></i>
             <span style="font-weight: 600; font-size: 0.95rem; color: #fff;">Memory Lane Slideshow</span>
-            <span id="slideshow-counter" style="font-size: 0.8rem; color: #aaa; margin-left: 0.4rem;"></span>
+            <span id="slideshow-counter" style="font-size: 0.8rem; color: var(--text-muted); margin-left: 0.4rem;"></span>
         </div>
         <button type="button" onclick="stopAlbumSlideshow()"
             style="background: none; border: none; color: #fff; font-size: 1.6rem; cursor: pointer; line-height: 1;">&times;</button>
@@ -3106,7 +3106,7 @@
             <div id="slideshow-title"
                 style="font-size: 1.05rem; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
             </div>
-            <div id="slideshow-meta" style="font-size: 0.78rem; color: #bbb; margin-top: 2px;"></div>
+            <div id="slideshow-meta" style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;"></div>
         </div>
 
         <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -3246,14 +3246,14 @@
                         style="display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Category</label>
                     <select id="edit-photo-cat"
                         style="width: 100%; font-size: 0.85rem; padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; box-sizing: border-box;">
-                        <option value="memory">📸 Memory</option>
-                        <option value="milestone">🏆 Milestone</option>
-                        <option value="fun">😄 Fun</option>
-                        <option value="travel">✈️ Travel</option>
-                        <option value="special">✨ Special</option>
-                        <option value="food">🍴 Food</option>
-                        <option value="pets">🐾 Pets</option>
-                        <option value="jokes">💬 Inside Jokes</option>
+                        <option value="memory">Memory</option>
+                        <option value="milestone">Milestone</option>
+                        <option value="fun">Fun</option>
+                        <option value="travel">Travel</option>
+                        <option value="special">Special</option>
+                        <option value="food">Food</option>
+                        <option value="pets">Pets</option>
+                        <option value="jokes">Inside Jokes</option>
                         <option value="other">Other</option>
                     </select>
                 </div>
@@ -3750,7 +3750,7 @@
                 const el = document.getElementById('goals-list-' + bondId);
                 if (!el) return;
                 if (!data.goals || data.goals.length === 0) {
-                    el.innerHTML = '<div style="color: #999; font-size: 0.85rem; text-align: center; padding: 1rem;">No goals yet. Propose one to get started.</div>';
+                    el.innerHTML = '<div style="color: #6f6f6f; font-size: 0.85rem; text-align: center; padding: 1rem;">No goals yet. Propose one to get started.</div>';
                     return;
                 }
                 el.innerHTML = data.goals.map(g => renderGoalCard(g, bondId)).join('');
@@ -4021,7 +4021,7 @@
             } else {
                 if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to create goal.', 'danger');
             }
-        }).catch(() => { if (window.showCustomAlert) showCustomAlert('Network error.', 'danger'); });
+        }).catch(() => { if (window.showCustomAlert) showCustomAlert('Connection lost. Check your internet and try again.', 'danger'); });
     }
 
     function approveGoal(goalId, bondId) {
@@ -4883,7 +4883,7 @@
                 loadQotd(bondId);
             }
         }).catch(function () {
-            if (window.showCustomAlert) showCustomAlert('Network error.', 'danger');
+            if (window.showCustomAlert) showCustomAlert('Connection lost. Check your internet and try again.', 'danger');
             loadQotd(bondId);
         });
     }
@@ -4900,7 +4900,7 @@
                 showCustomAlert(d.error || 'Failed to react.', 'danger');
             }
         }).catch(function () {
-            if (window.showCustomAlert) showCustomAlert('Network error.', 'danger');
+            if (window.showCustomAlert) showCustomAlert('Connection lost. Check your internet and try again.', 'danger');
         });
     }
 
@@ -4917,13 +4917,13 @@
                 if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to update AI consent.', 'danger');
             }
         }).catch(() => {
-            if (window.showCustomAlert) showCustomAlert('Network error.', 'danger');
+            if (window.showCustomAlert) showCustomAlert('Connection lost. Check your internet and try again.', 'danger');
         });
     }
 
     function generateAiQotd(bondId) {
         const container = document.getElementById('qotd-content-' + bondId);
-        container.innerHTML = '<div style="color:#999; font-size:0.85rem; text-align:center; padding:0.8rem;">Generating AI Question...</div>';
+        container.innerHTML = '<div style="color:#6f6f6f; font-size:0.85rem; text-align:center; padding:0.8rem;">Generating AI Question...</div>';
         echoFetch('/api/bonds/' + bondId + '/qotd/generate_ai?force_new=true', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
@@ -4936,7 +4936,7 @@
                 loadQotd(bondId);
             }
         }).catch(() => {
-            if (window.showCustomAlert) showCustomAlert('Network error.', 'danger');
+            if (window.showCustomAlert) showCustomAlert('Connection lost. Check your internet and try again.', 'danger');
             loadQotd(bondId);
         });
     }
@@ -5074,7 +5074,7 @@
                 if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to submit.', 'danger');
             }
         }).catch(function () {
-            if (window.showCustomAlert) showCustomAlert('Network error.', 'danger');
+            if (window.showCustomAlert) showCustomAlert('Connection lost. Check your internet and try again.', 'danger');
         });
     }
 
@@ -5106,7 +5106,7 @@
                 if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to update.', 'danger');
             }
         }).catch(function () {
-            if (window.showCustomAlert) showCustomAlert('Network error.', 'danger');
+            if (window.showCustomAlert) showCustomAlert('Connection lost. Check your internet and try again.', 'danger');
         });
     }
 
@@ -5571,7 +5571,7 @@
                     if (el) el.innerHTML = renderAlbumContentHtml(bondId, cached.photos, viewMode) + renderLoadMoreBtn(bondId);
                 }
             }).catch(function () { });
-            container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:0.8rem;">Loading photos...</div>';
+            container.innerHTML = '<div style="color:#6f6f6f;font-size:0.85rem;text-align:center;padding:0.8rem;">Loading photos...</div>';
         }
 
         echoFetch('/api/bonds/' + bondId + '/album/photos?category=' + cat + '&sort=' + sort + '&page=1&per_page=30')
@@ -6586,14 +6586,14 @@
                 cancelCollageMode(bondId);
                 loadAlbum(bondId);
             } else {
-                if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to create collage.', 'danger');
+                if (window.showCustomAlert) showCustomAlert(d.error || 'Collage not created. Try again.', 'danger');
                 if (btn) {
                     btn.disabled = false;
                     btn.innerHTML = 'Generate Collage';
                 }
             }
         }).catch(function (err) {
-            if (window.showCustomAlert) showCustomAlert('Failed to create collage: ' + err.message, 'danger');
+            if (window.showCustomAlert) showCustomAlert('Collage not created. Try again.', 'danger');
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = 'Generate Collage';
@@ -6868,7 +6868,7 @@
                 + '</div>'
                 + '<div style="display:flex;flex-direction:column;align-items:center;gap:0.2rem;flex-shrink:0;">';
             if (!r.recommended_by_me) {
-                html += '<button onclick="toggleTriedRec(\'' + r.id + '\',\'' + bondId + '\')" style="font-size:0.68rem;padding:0.2rem 0.5rem;border-radius:5px;cursor:pointer;' + (r.tried_by_partner ? 'background:#c8e6c9;color:#2e7d32;border:1px solid #a5d6a7;' : 'background:transparent;color:#888;border:1px solid var(--border-color);') + '">' + (r.tried_by_partner ? 'Tried it' : 'Tried?') + '</button>';
+                html += '<button onclick="toggleTriedRec(\'' + r.id + '\',\'' + bondId + '\')" style="font-size:0.68rem;padding:0.2rem 0.5rem;border-radius:5px;cursor:pointer;' + (r.tried_by_partner ? 'background:#c8e6c9;color:#2e7d32;border:1px solid #a5d6a7;' : 'background:transparent;color:#6f6f6f;border:1px solid var(--border-color);') + '">' + (r.tried_by_partner ? 'Tried it' : 'Tried?') + '</button>';
             }
             if (r.recommended_by_me) {
                 html += '<button onclick="deleteRecommendation(\'' + r.id + '\',\'' + bondId + '\')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:0.8rem;padding:0;">&times;</button>';
@@ -7201,7 +7201,7 @@
         }).catch(() => {
             iconSpan.innerHTML = origIcon;
             btn.disabled = false;
-            if (window.showCustomAlert) showCustomAlert('Network error while sending nudge.', 'danger');
+            if (window.showCustomAlert) showCustomAlert('Connection lost. Check your internet and try again.', 'danger');
         });
     }
 
@@ -8604,7 +8604,7 @@
                 handlePinError(d.error || 'Incorrect PIN');
             }
         }).catch(function () {
-            handlePinError('Network error');
+            handlePinError('Connection lost. Check your internet and try again.');
         });
     }
 
@@ -8622,7 +8622,7 @@
                 handlePinError(d.error || 'Failed to set PIN');
             }
         }).catch(function () {
-            handlePinError('Network error');
+            handlePinError('Connection lost. Check your internet and try again.');
         });
     }
 

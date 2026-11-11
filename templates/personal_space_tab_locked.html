@@ -22,7 +22,7 @@
                 PIN</button>
             <div style="margin-top: 0.75rem;">
                 <a href="#" onclick="event.preventDefault(); startPinReset()"
-                    style="font-size: 0.85rem; color: #888; text-decoration: underline;">Forgot PIN?</a>
+                    style="font-size: 0.85rem; color: #6f6f6f; text-decoration: underline;">Forgot PIN?</a>
             </div>
         </div>
         <!-- Locked notes content — always rendered, hidden until unlocked -->
@@ -34,7 +34,7 @@
             <div style="font-size: 0.9rem; color: #5a3328; font-weight: 600;">
                 <i class="fas fa-lock-open" style="margin-right: 4px;"></i> Unlocked
                 <span id="relock-timer"
-                    style="font-weight: 400; font-size: 0.8rem; color: #999; margin-left: 6px;"></span>
+                    style="font-weight: 400; font-size: 0.8rem; color: #6f6f6f; margin-left: 6px;"></span>
             </div>
             <button type="button" class="btn"
                 style="background: #3e2217; color: white; border: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; border-radius: 6px; cursor: pointer;"
@@ -149,7 +149,7 @@
                                     {% if share.surprise_theme != 'none' %}<i class="fas fa-gift"
                                         style="color: #ff4d6d;"></i>{% endif %}
                                     <i class="fas fa-{{ 'pen' if share.permissions == 'edit' else 'eye' }}"
-                                        style="color: #888;" title="{{ share.permissions }} access"></i>
+                                        style="color: #6f6f6f;" title="{{ share.permissions }} access"></i>
                                     <span style="overflow: hidden; text-overflow: ellipsis;">{{
                                         share.share_url[-8:] }}</span>
                                 </span>

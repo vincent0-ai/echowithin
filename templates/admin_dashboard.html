@@ -330,7 +330,7 @@
   // --- System Health Panel ---
   async function loadHealth() {
     const panel = document.getElementById('health-panel');
-    panel.innerHTML = '<p style="color:#999;font-size:0.9rem;">Loading health data...</p>';
+    panel.innerHTML = '<p style="color:#6f6f6f;font-size:0.9rem;">Loading health data...</p>';
     try {
       const res = await fetch('/admin/system_health');
       const h = await res.json();
@@ -446,7 +446,8 @@ html += '</div>';
       const json = await res.json();
       alert(json.message || JSON.stringify(json));
     } catch (err) {
-      alert('Failed to reindex notes: ' + err.message);
+      console.error('Reindex failed', err);
+      alert('Notes were not reindexed. Try again.');
     }
     btn.disabled = false;
     btn.textContent = 'Reindex Notes';

@@ -15,8 +15,8 @@
     max-height: calc(100vh - 32px);
     overflow-y: auto;
     z-index: 10000;
-    background: linear-gradient(135deg, #fdf2f8, #fef3e7);
-    border: 1px solid #f5d0e0;
+    background: #fbf6f1;
+    border: 1px solid #e8d9cb;
     border-radius: 12px;
     padding: 0.9rem 1rem 0.8rem;
     box-shadow: 0 6px 22px rgba(62, 34, 23, 0.14);

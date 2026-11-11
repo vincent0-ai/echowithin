@@ -33,27 +33,19 @@
 
     <!-- Premium Tier Banner -->
     {% if user_is_trial %}
-    <div
-        style="background: linear-gradient(135deg, #f5f0eb 0%, #e8ddd3 100%); color: #3e2217 !important; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem; border: 1px solid #d4c5b5; box-shadow: 0 4px 12px rgba(62, 34, 23, 0.05);">
-        <div style="display: flex; align-items: center; gap: 0.5rem; color: #3e2217 !important;">
-            <i class="fas fa-crown" style="font-size: 1rem; color: #3e2217 !important;"></i>
-            <span style="color: #3e2217 !important;"><strong>Premium Trial</strong> — {{ trial_days_remaining }} day{{
-                's' if trial_days_remaining != 1 }}
-                remaining. Enjoying unlimited features!</span>
+    <div class="plan-callout">
+        <div class="plan-callout-body">
+            <i class="fas fa-crown" aria-hidden="true"></i>
+            <span><strong>Premium Trial</strong> — {{ trial_days_remaining }} day{{ 's' if trial_days_remaining != 1 }} remaining.</span>
         </div>
-        <a href="{{ url_for('profile.profile_settings', username=current_user.username) }}#premium"
-            style="background: #3e2217; color: white !important; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Subscribe
-            — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
+        <a class="plan-callout-action" href="{{ url_for('profile.profile_settings', username=current_user.username) }}#premium">Subscribe — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
     </div>
     {% elif not user_is_premium %}
-    <div
-        style="background: linear-gradient(135deg, #f5f0eb 0%, #e8ddd3 100%); color: #3e2217; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem; border: 1px solid #d4c5b5;">
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
+    <div class="plan-callout">
+        <div class="plan-callout-body">
             <span>Unlock <strong>note locking, scheduled messages</strong> and more with Premium.</span>
         </div>
-        <a href="{{ url_for('profile.profile_settings', username=current_user.username) }}#premium"
-            style="background: #3e2217; color: white; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Upgrade
-            — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
+        <a class="plan-callout-action" href="{{ url_for('profile.profile_settings', username=current_user.username) }}#premium">Upgrade — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
     </div>
     {% endif %}
 
@@ -117,7 +109,7 @@
         <!-- Share promo (hidden by default, shown via JS only for first-time users) -->
         {% if not (current_user.is_authenticated and current_user.is_guest) %}
         <div class="share-promo-card" id="share-promo-card" data-promo-mode="temporary" style="display: none;">
-            <div class="share-promo-icon">🎁</div>
+            <i class="fas fa-gift share-promo-icon" aria-hidden="true"></i>
             <div class="share-promo-body">
                 <h4 id="share-promo-title">Surprise someone special!</h4>
                 <p>
@@ -134,7 +126,7 @@
         <!-- Feature Tips Card for new users (guest tour tips are rendered by tour.js) -->
         <div class="feature-tips-card" id="feature-tips-card" {% if current_user.is_authenticated and current_user.is_guest %}style="display: none;"{% endif %}>
             <div class="feature-tips-header">
-                <span>💡</span>
+                
                 <strong>Quick Tips</strong>
                 <a href="{{ url_for('notes.personal_space', tour=1) }}" id="replay-tour-link" style="margin-left: auto; font-size: 0.72rem; font-weight: 600; color: var(--primary-color); text-decoration: underline;">Replay tour</a>
                 <button class="feature-tips-dismiss" id="dismiss-feature-tips" aria-label="Dismiss" style="margin-left: 0.35rem;">&times;</button>
@@ -147,8 +139,7 @@
                 </div>
                 <div class="feature-tip-row">
                     <i class="fas fa-share-alt" style="color: #2e7d32;"></i>
-                    <span><strong>Share</strong> any note as a read-only or editable link — pick a surprise theme to
-                        make it special 🎁</span>
+                    <span><strong>Share</strong> any note as a read-only or editable link — pick a theme to make it stand out</span>
                 </div>
                 <div class="feature-tip-row">
                     <i class="fas fa-lock" style="color: #e65100;"></i>
@@ -316,7 +307,7 @@
                                     {% if share.surprise_theme != 'none' %}<i class="fas fa-gift"
                                         style="color: #ff4d6d;"></i>{% endif %}
                                     <i class="fas fa-{{ 'pen' if share.permissions == 'edit' else 'eye' }}"
-                                        style="color: #888;" title="{{ share.permissions }} access"></i>
+                                        style="color: #6f6f6f;" title="{{ share.permissions }} access"></i>
                                     <span style="overflow: hidden; text-overflow: ellipsis;">{{
                                         share.share_url[-8:] }}</span>
                                 </span>
@@ -574,34 +565,34 @@
             <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                 <button type="button" class="share-mode-btn" data-mode="simple"
                     style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
-                    <span style="font-size: 1.5rem;">📄</span>
+                    <i class="fas fa-link" style="font-size: 1.15rem; color: var(--text-accent);" aria-hidden="true"></i>
                     <div>
                         <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Simple Share</div>
-                        <div style="font-size: 0.75rem; color: #888;">Send a read-only link to view your note</div>
+                        <div style="font-size: 0.75rem; color: #6f6f6f;">Send a read-only link to view your note</div>
                     </div>
                 </button>
                 <button type="button" class="share-mode-btn" data-mode="collaborate"
                     style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
-                    <span style="font-size: 1.5rem;">✏️</span>
+                    <i class="fas fa-pen-to-square" style="font-size: 1.15rem; color: var(--text-accent);" aria-hidden="true"></i>
                     <div>
                         <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Collaborate</div>
-                        <div style="font-size: 0.75rem; color: #888;">Let someone edit, with version control & proposals</div>
+                        <div style="font-size: 0.75rem; color: #6f6f6f;">Let someone edit, with version control & proposals</div>
                     </div>
                 </button>
                 <button type="button" class="share-mode-btn" data-mode="direct_message"
                     style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
-                    <span style="font-size: 1.5rem;">💬</span>
+                    <i class="fas fa-paper-plane" style="font-size: 1.15rem; color: var(--text-accent);" aria-hidden="true"></i>
                     <div>
                         <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Send in Message</div>
-                        <div style="font-size: 0.75rem; color: #888;">Send a private note link directly to a friend in chat</div>
+                        <div style="font-size: 0.75rem; color: #6f6f6f;">Send a private note link directly to a friend in chat</div>
                     </div>
                 </button>
                 <button type="button" class="share-mode-btn" data-mode="circle_feed"
                     style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
-                    <span style="font-size: 1.5rem;">⭕</span>
+                    <i class="fas fa-users" style="font-size: 1.15rem; color: var(--text-accent);" aria-hidden="true"></i>
                     <div>
                         <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Post to Trusted Circle</div>
-                        <div style="font-size: 0.75rem; color: #888;">Share this note to your circle's discussion feed</div>
+                        <div style="font-size: 0.75rem; color: #6f6f6f;">Share this note to your circle's discussion feed</div>
                     </div>
                 </button>
             </div>
@@ -677,7 +668,7 @@
             </div>
             <div style="margin-bottom: 1rem;">
                 <label style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.88rem;">Select Recipient</label>
-                <div id="share-dm-recipient-loading" style="font-size: 0.82rem; color: #888; padding: 0.5rem 0;">Loading contacts...</div>
+                <div id="share-dm-recipient-loading" style="font-size: 0.82rem; color: #6f6f6f; padding: 0.5rem 0;">Loading contacts...</div>
                 <select id="share-dm-recipient-select" style="display: none; width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd; background: #fff; font-size: 0.88rem;">
                 </select>
                 <div id="share-dm-no-recipients" style="display: none; padding: 0.75rem; background: #faf8f7; border: 1px solid #eee; border-radius: 8px; font-size: 0.82rem; color: #777;">
@@ -710,7 +701,7 @@
             </div>
             <div style="margin-bottom: 1rem;">
                 <label style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.88rem;">Select Circle</label>
-                <div id="share-circle-loading" style="font-size: 0.82rem; color: #888; padding: 0.5rem 0;">Loading circles...</div>
+                <div id="share-circle-loading" style="font-size: 0.82rem; color: #6f6f6f; padding: 0.5rem 0;">Loading circles...</div>
                 <select id="share-circle-select" style="display: none; width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd; background: #fff; font-size: 0.88rem;">
                 </select>
                 <div id="share-circle-empty" style="display: none; padding: 0.75rem; background: #faf8f7; border: 1px solid #eee; border-radius: 8px; font-size: 0.82rem; color: #777;">
@@ -958,8 +949,8 @@
                         <i class="fas fa-arrows-split-up-and-left" style="transform: rotate(180deg);"></i> Combine Both
                     </button>
                     <button type="button" id="ai-merge-btn" class="btn btn-sm" onclick="runAiMerge()"
-                        style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; border: 1px solid #dcd0ff; background: #f3f0ff; color: #5f27cd; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; font-weight: 600;">
-                        <i class="fas fa-wand-magic-sparkles"></i> ✨ AI Smart Merge
+                        style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--surface-bg); color: var(--text-dark-color); cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; font-weight: 600;">
+                        <i class="fas fa-code-merge" aria-hidden="true"></i> Merge with AI
                     </button>
                 </div>
             </div>
@@ -1013,17 +1004,17 @@
 
             <div id="pin-forgot-link" style="margin-top: 0.5rem; display: none;">
                 <a href="#" onclick="event.preventDefault(); startPinReset()"
-                    style="font-size: 0.82rem; color: #888; text-decoration: underline;">Forgot PIN?</a>
+                    style="font-size: 0.82rem; color: #6f6f6f; text-decoration: underline;">Forgot PIN?</a>
             </div>
 
             <button onclick="closePinModal()" class="btn edit-btn"
-                style="width: 100%; margin-top: 0.5rem; background: none; border: none; color: #888; font-size: 0.85rem;">Cancel</button>
+                style="width: 100%; margin-top: 0.5rem; background: none; border: none; color: #6f6f6f; font-size: 0.85rem;">Cancel</button>
         </div>
 
         <!-- PIN Reset: Code Entry View -->
         <div id="pin-reset-code-view" style="display: none; text-align: center;">
             <h2 style="margin: 0 0 0.5rem 0; color: #3e2217; font-size: 1.3rem;">Verify Identity</h2>
-            <p id="pin-reset-desc" style="margin: 0 0 1rem 0; color: #888; font-size: 0.85rem;">Enter the 6-digit code
+            <p id="pin-reset-desc" style="margin: 0 0 1rem 0; color: #6f6f6f; font-size: 0.85rem;">Enter the 6-digit code
                 sent to your email</p>
             <div id="pin-reset-error"
                 style="color: #d32f2f; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem;"></div>
@@ -1046,7 +1037,7 @@
                 onclick="submitResetCode()">Verify Code</button>
             <div style="display: flex; justify-content: space-between; margin-top: 0.75rem;">
                 <a href="#" onclick="event.preventDefault(); cancelPinReset()"
-                    style="font-size: 0.82rem; color: #888;">Back</a>
+                    style="font-size: 0.82rem; color: #6f6f6f;">Back</a>
                 <a href="#" id="pin-reset-resend" onclick="event.preventDefault(); resendPinResetCode()"
                     style="font-size: 0.82rem; color: #3e2217; font-weight: 600;">Resend Code</a>
             </div>
@@ -1056,7 +1047,7 @@
         <div id="pin-reset-newpin-view" style="display: none; text-align: center;">
             <h2 id="pin-reset-newpin-title" style="margin: 0 0 0.5rem 0; color: #3e2217; font-size: 1.3rem;">New PIN
             </h2>
-            <p id="pin-reset-newpin-desc" style="margin: 0 0 1rem 0; color: #888; font-size: 0.85rem;">Enter a new
+            <p id="pin-reset-newpin-desc" style="margin: 0 0 1rem 0; color: #6f6f6f; font-size: 0.85rem;">Enter a new
                 4-digit PIN</p>
             <div id="pin-reset-newpin-error"
                 style="color: #d32f2f; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem;"></div>
@@ -1083,7 +1074,7 @@
                 </button>
             </div>
             <button onclick="cancelPinReset()" class="btn edit-btn"
-                style="width: 100%; margin-top: 0.5rem; background: none; border: none; color: #888; font-size: 0.85rem;">Cancel</button>
+                style="width: 100%; margin-top: 0.5rem; background: none; border: none; color: #6f6f6f; font-size: 0.85rem;">Cancel</button>
         </div>
     </div>
 </div>
@@ -1099,7 +1090,7 @@
             <button class="btn-icon" onclick="closeVersionModal()"><i class="fas fa-times"></i></button>
         </div>
         <div id="version-list" style="display: flex; flex-direction: column; gap: 1rem;">
-            <div style="text-align: center; color: #999; padding: 2rem;">Loading...</div>
+            <div style="text-align: center; color: #6f6f6f; padding: 2rem;">Loading...</div>
         </div>
     </div>
 </div>
@@ -1326,7 +1317,7 @@
             }
         } catch (e) {
             console.error('PIN verification error:', e);
-            handlePinError('Network error. Check connection.');
+            handlePinError('Connection lost. Check your internet and try again.');
         }
     }
 
@@ -1442,7 +1433,7 @@
                 if (resetError) resetError.textContent = data.error || 'Failed to send code';
             }
         } catch (e) {
-            if (resetError) resetError.textContent = 'Network error. Please try again.';
+            if (resetError) resetError.textContent = 'Connection lost. Check your internet and try again.';
         }
     };
 
@@ -1467,7 +1458,7 @@
                 if (resetError) resetError.textContent = data.error || 'Failed to resend';
             }
         } catch (e) {
-            if (resetError) resetError.textContent = 'Network error';
+            if (resetError) resetError.textContent = 'Connection lost. Check your internet and try again.';
         } finally {
             if (resendLink) { resendLink.textContent = 'Resend Code'; resendLink.style.pointerEvents = ''; }
         }
@@ -1613,7 +1604,7 @@
                 }
             }
         } catch (e) {
-            if (errorEl) errorEl.textContent = 'Network error. Please try again.';
+            if (errorEl) errorEl.textContent = 'Connection lost. Check your internet and try again.';
         }
     }
 
@@ -2043,7 +2034,7 @@
 
             // Check for unresolved conflict markers
             if (mergedText.includes('<<<<<<< CURRENT') || mergedText.includes('=======') || mergedText.includes('>>>>>>> INCOMING')) {
-                if (!confirm('⚠️ Warning: The merged note still contains raw conflict markers (<<<<<<< CURRENT, =======, or >>>>>>> INCOMING). Are you sure you want to save it with these markers?')) {
+                if (!confirm('This note still has unresolved merge marks. Review those sections, then save.')) {
                     return;
                 }
             }
@@ -2157,7 +2148,7 @@
                 }
             } catch (e) {
                 console.error(e);
-                alert('Network error connecting to AI helper. Please merge manually.');
+                alert('Connection lost. Check your internet and try again.');
             } finally {
                 aiBtn.disabled = false;
                 aiBtn.innerHTML = originalHtml;
@@ -2192,14 +2183,14 @@
             const list = document.getElementById('version-list');
             if (!list) return;
 
-            list.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+            list.innerHTML = '<div style="text-align: center; color: #6f6f6f; padding: 2rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
 
             try {
                 const response = await fetch(`/personal_post/versions/${noteId}`);
                 const versions = await response.json();
 
                 if (!Array.isArray(versions) || versions.length === 0) {
-                    list.innerHTML = '<div class="version-empty"><i class="fas fa-clock-rotate-left" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; opacity: 0.4;"></i>No edit history yet.<br><small style="color: #bbb;">Versions are recorded when someone edits via a shared link.</small></div>';
+                    list.innerHTML = '<div class="version-empty"><i class="fas fa-clock-rotate-left" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; opacity: 0.4;"></i>No edit history yet.<br><small style="color: var(--text-muted);">Versions are recorded when someone edits via a shared link.</small></div>';
                     return;
                 }
 
@@ -2451,7 +2442,7 @@
                     }
                 } catch (err) {
                     console.error('Revoke failed:', err);
-                    alert('Network error. Please try again.');
+                    alert('Connection lost. Check your internet and try again.');
                     revokeBtn.disabled = false;
                 }
             };
@@ -2652,7 +2643,7 @@
                 }
             } catch (err) {
                 console.error('Failed to toggle auto-approve:', err);
-                alert('Network error. Please try again.');
+                alert('Connection lost. Check your internet and try again.');
                 matchingCheckboxes.forEach(cb => {
                     cb.checked = originalState;
                 });
@@ -3035,7 +3026,7 @@
                 }
             } catch (err) {
                 console.error('Sync failed:', err);
-                alert('Network error. Please try again.');
+                alert('Connection lost. Check your internet and try again.');
                 if (icon) icon.className = 'fas fa-sync-alt';
             } finally {
                 btn.classList.remove('syncing');
@@ -3795,8 +3786,8 @@
                 panel.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-exclamation-circle" style="color:#d32f2f;"></i>
-                        <h3>Failed to load content</h3>
-                        <p>There was an error loading this tab. Please check your connection and try again.</p>
+                        <h3>This tab didn't load</h3>
+                        <p>Check your connection and try again.</p>
                         <button type="button" class="btn comment-btn" onclick="const p = document.getElementById('tab-${tabId}'); if (p) { p.removeAttribute('data-loaded'); switchToTab('${tabId}'); }">Retry</button>
                     </div>
                 `;
@@ -3943,7 +3934,7 @@
             if (text.trim()) {
                 previewContent.innerHTML = renderMarkdownWithMath(text);
             } else {
-                previewContent.innerHTML = '<span style="color: #999; font-style: italic;">Preview will appear here...</span>';
+                previewContent.innerHTML = '<span style="color: #6f6f6f; font-style: italic;">Preview will appear here...</span>';
             }
         }
     }
@@ -4046,10 +4037,10 @@
             if (searchResultsContainer) {
                 if (results.length === 0) {
                     searchResultsContainer.innerHTML = `
-                                <div style="text-align: center; padding: 2rem 1rem; color: #888;">
+                                <div style="text-align: center; padding: 2rem 1rem; color: #6f6f6f;">
                                     <i class="fas fa-search" style="font-size: 2rem; opacity: 0.3; margin-bottom: 0.75rem; display: block;"></i>
                                     <p style="margin: 0;">No notes match <strong>"${query.replace(/</g, '&lt;')}"</strong></p>
-                                    <p style="font-size: 0.8rem; margin-top: 0.5rem; color: #aaa;">Try different keywords or use <code>"quotes"</code> for exact phrases</p>
+                                    <p style="font-size: 0.8rem; margin-top: 0.5rem; color: var(--text-muted);">Try different keywords or use <code>"quotes"</code> for exact phrases</p>
                                 </div>
                             `;
                 } else {
@@ -4503,7 +4494,7 @@
                                 </button>
                             </div>
                             <div class="share-link-meta" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.3rem;">
-                                <span style="font-size:0.75rem;color:#888;">
+                                <span style="font-size:0.75rem;color:#6f6f6f;">
                                     ${s.permissions.charAt(0).toUpperCase() + s.permissions.slice(1)}
                                     ${s.expires_at ? ' · Exp: ' + (window.parseServerTime(s.expires_at) || new Date(0)).toLocaleDateString() : ''}
                                 </span>
@@ -4589,7 +4580,7 @@
                     generateBtn.disabled = false;
                     generateBtn.textContent = originalText;
                     if (progressArea) progressArea.style.display = 'none';
-                    alert('Network error. Try again.');
+                    alert('Connection lost. Check your internet and try again.');
                 };
 
                 xhr.send(formData);
@@ -4696,7 +4687,7 @@
                 html = htmlEscape(raw);
             }
         } else {
-            html = '<p style="color:#888;font-style:italic;">No content.</p>';
+            html = '<p style="color:#6f6f6f;font-style:italic;">No content.</p>';
         }
 
         let headerExtras = '';
@@ -5138,7 +5129,7 @@
     <div class="custom-modal" style="max-width: 380px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <h3 style="color: #3e2217; margin: 0; font-size: 1.05rem;"><i class="fas fa-download"></i> Export Note</h3>
-            <button class="btn-icon" onclick="closeExportModal()" style="color: #999;"><i
+            <button class="btn-icon" onclick="closeExportModal()" style="color: #6f6f6f;"><i
                     class="fas fa-times"></i></button>
         </div>
         <div style="display: flex; flex-direction: column; gap: 0.6rem;">
@@ -5148,7 +5139,7 @@
                     style="font-size: 1.2rem; color: #8b6f5e; width: 24px; text-align: center;"></i>
                 <div>
                     <div style="font-weight: 600;">Plain Text</div>
-                    <div style="font-size: 0.75rem; color: #888; font-weight: 400;">Download as .txt file</div>
+                    <div style="font-size: 0.75rem; color: #6f6f6f; font-weight: 400;">Download as .txt file</div>
                 </div>
             </button>
             <button onclick="exportNote('docx')" class="btn"
@@ -5157,9 +5148,9 @@
                     style="font-size: 1.2rem; color: #2b579a; width: 24px; text-align: center;"></i>
                 <div>
                     <div style="font-weight: 600;">Word Document{% if not user_is_premium %} <span
-                            style="background: linear-gradient(135deg, #c9a84c, #e0c068); color: white; font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; vertical-align: middle;">PREMIUM</span>{%
+                            style="background: #c9a84c; color: #2a1810; font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; vertical-align: middle;">PREMIUM</span>{%
                         endif %}</div>
-                    <div style="font-size: 0.75rem; color: #888; font-weight: 400;">Download as .docx file</div>
+                    <div style="font-size: 0.75rem; color: #6f6f6f; font-weight: 400;">Download as .docx file</div>
                 </div>
             </button>
         </div>
@@ -5352,7 +5343,7 @@
                         } else {
                             const entry = nodeMap[noteId];
                             if (entry && !entry.contentEl.textContent.trim()) {
-                                entry.contentEl.innerHTML = '<div style="color:#999;font-size:0.82rem;padding:0.5rem 0;font-style:italic;">This note has not been cached yet. View it online first to enable offline access.</div>';
+                                entry.contentEl.innerHTML = '<div style="color:#6f6f6f;font-size:0.82rem;padding:0.5rem 0;font-style:italic;">This note has not been cached yet. View it online first to enable offline access.</div>';
                             }
                         }
                     }
@@ -5363,7 +5354,7 @@
                     console.warn('IndexedDB fallback also failed:', dbErr);
                     lazyNodes.forEach(node => {
                         if (!node.textContent.trim()) {
-                            node.innerHTML = '<div style="color:#999;font-size:0.82rem;padding:0.5rem 0;font-style:italic;">Content unavailable offline.</div>';
+                            node.innerHTML = '<div style="color:#6f6f6f;font-size:0.82rem;padding:0.5rem 0;font-style:italic;">Content unavailable offline.</div>';
                         }
                     });
                 }

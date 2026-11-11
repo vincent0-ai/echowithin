@@ -205,7 +205,7 @@
             <button type="submit" class="btn delete-btn">Delete</button>
         </form>
         {% elif current_user.is_authenticated %}
-        <button type="button" class="btn report-post-btn" onclick="openPostReportModal('{{ post._id|string }}', '{{ post.title | e }}')" title="Report post" style="background: none; border: none; color: #888; padding: 0 4px; font-size: 0.9rem; cursor: pointer;">
+        <button type="button" class="btn report-post-btn" onclick="openPostReportModal('{{ post._id|string }}', '{{ post.title | e }}')" title="Report post" style="background: none; border: none; color: #6f6f6f; padding: 0 4px; font-size: 0.9rem; cursor: pointer;">
             <i class="far fa-flag"></i>
         </button>
         {% endif %}

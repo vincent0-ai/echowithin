@@ -104,6 +104,24 @@ REALTIME_GAMES = (
 INLINE_PROBE_GAMES = ('connect_four', 'ping_pong', 'slime_volleyball')
 
 
+class TestSharedSocketJoin:
+    """The global socket may already be connected before a game page binds it.
+
+    Reusing window.socket without emitting immediately leaves the game waiting
+    for a 'connect' event that already fired.
+    """
+
+    def test_memory_match_joins_an_already_connected_socket(self):
+        js = _read('static/memory_match.js')
+        assert 'if (socket.connected) joinRoom();' in js, \
+            'memory match must emit its join when the shared socket is already connected'
+
+    def test_this_or_that_joins_an_already_connected_socket(self):
+        js = _read('static/this_or_that.js')
+        assert 'if (socket.connected) joinRoom();' in js, \
+            'this-or-that must emit its join when the shared socket is already connected'
+
+
 class TestConnectionQualityIndicator:
     def test_shared_probe_exists(self):
         js = _read('static/net_quality.js')

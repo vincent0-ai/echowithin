@@ -196,9 +196,12 @@ function initOnline() {
         }
     }
 
-    socket.on('connect', () => {
+    function joinRoom() {
         socket.emit('tot_join_room', { room, bond_id: bondId || undefined, client_token: getSeatToken() });
-    });
+    }
+
+    socket.on('connect', joinRoom);
+    if (socket.connected) joinRoom();
 
     socket.on('tot_room_joined', (data) => {
         myPlayerNum = data.player_num || 1;

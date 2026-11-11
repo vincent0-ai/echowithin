@@ -94,14 +94,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function initSocket() {
-        if (socket) return;
         if (typeof io === 'undefined') {
             setStatus('Live play is unavailable. Try again after reconnecting.', true);
             return;
         }
-        roomId = urlRoom || `memory_${Math.random().toString(36).slice(2, 8)}`;
-        socket = (window.socket && window.socket.connected) ? window.socket : io({ transports: ['polling', 'websocket'] });
-        setStatus('Connecting to room...');
+        roomId = roomId || urlRoom || `memory_${Math.random().toString(36).slice(2, 8)}`;
 
         function getSeatToken() {
             try {
@@ -117,9 +114,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        socket.on('connect', () => {
+        function joinRoom() {
             socket.emit('memory_join_room', { room: roomId, bond_id: bondId || undefined, client_token: getSeatToken() });
-        });
+        }
+
+        if (socket) {
+            // The shared socket may already be connected, so 'connect' will not fire again.
+            if (socket.connected) joinRoom();
+            return;
+        }
+
+        socket = (window.socket && window.socket.connected) ? window.socket : io({ transports: ['polling', 'websocket'] });
+        setStatus('Connecting to room...');
+
+        socket.on('connect', joinRoom);
+        if (socket.connected) joinRoom();
 
         socket.on('memory_room_joined', (data) => {
             myPlayerNum = data.player_num || 1;

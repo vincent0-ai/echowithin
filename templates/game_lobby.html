@@ -1284,7 +1284,9 @@ window.hostShowPodium = window.hostShowPodium || function(){};
   // Sockets Setup
   if(typeof io !== 'undefined') {
     const socket = io({transports:['websocket','polling'], reconnectionAttempts: 10});
-    socket.on('connect', ()=>{ socket.emit('join_game', {lobby_id: lobbyId}); });
+    const joinLobby = () => socket.emit('join_game', {lobby_id: lobbyId});
+    socket.on('connect', joinLobby);
+    if (socket.connected) joinLobby();
     
     socket.on('game_presence_update', (data)=>{
       updatePresenceUI(data);

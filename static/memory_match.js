@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (urlRoom) {
         ui.modeSelect.value = 'online';
         ui.startBtn.textContent = 'Join Room';
-        setStatus('Room ' + urlRoom + ' — pick a board size, then Join Room.');
+        initSocket();
     }
 
     function setStatus(message, isError = false) {

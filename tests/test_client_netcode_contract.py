@@ -116,6 +116,12 @@ class TestSharedSocketJoin:
         assert 'if (socket.connected) joinRoom();' in js, \
             'memory match must emit its join when the shared socket is already connected'
 
+    def test_memory_match_auto_joins_a_url_room(self):
+        js = _read('static/memory_match.js')
+        block = js.split('if (urlRoom) {', 1)[1].split('}', 1)[0]
+        assert 'initSocket();' in block, \
+            'memory match must join the room from ?room= on load, like the other games'
+
     def test_this_or_that_joins_an_already_connected_socket(self):
         js = _read('static/this_or_that.js')
         assert 'if (socket.connected) joinRoom();' in js, \

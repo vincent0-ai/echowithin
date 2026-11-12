@@ -1889,6 +1889,56 @@ class TestLiveMultiplayerTriviaAndThumbnails:
             assert inserted.get('image_url') == 'https://example.com/funny_cat.jpg'
             assert inserted.get('prompt') == 'What did the cat see?'
 
+    def test_bond_party_challenge_pulls_partner_into_created_lobby(self, auth_client):
+        """Creating a lobby from a bond challenge link should notify the partner to join it."""
+        import main as m
+        from bson import ObjectId
+        partner_id = str(ObjectId())
+        bond_id = str(ObjectId())
+        emitted = {}
+
+        def fake_emit(event, payload=None, **kwargs):
+            emitted['event'] = event
+            emitted['payload'] = payload or {}
+            emitted['room'] = kwargs.get('room')
+
+        with patch.object(m.game_sessions_conf, 'insert_one'), \
+             patch.object(m.game_sessions_conf, 'update_one'), \
+             patch.object(m.bonds_conf, 'find_one', return_value={
+                 '_id': ObjectId(bond_id),
+                 'user_a_id': '507f1f77bcf86cd799439011',
+                 'user_b_id': partner_id,
+             }), \
+             patch.object(m.socketio, 'emit', side_effect=fake_emit):
+            res = auth_client.post(
+                '/games/create?bond_id=' + bond_id + '&room=testroom',
+                data={'title': 'Bond Night', 'game_type': 'ttal'},
+                follow_redirects=False,
+            )
+            assert res.status_code == 302
+            lobby_url = res.headers['Location']
+
+            # A partner opening the same challenge link late is sent to the
+            # lobby the first partner created, not a second setup form.
+            late = auth_client.get(
+                '/games/create?bond_id=' + bond_id + '&room=testroom&type=ttal',
+                follow_redirects=False,
+            )
+
+        assert emitted['event'] == 'bond_game_challenge'
+        assert emitted['payload']['lobby_ready'] is True
+        assert emitted['payload']['game_url'].startswith('/g/')
+        assert emitted['room'] == 'user_' + partner_id
+        assert late.status_code == 302
+        assert late.headers['Location'] == lobby_url
+
+    def test_bond_challenge_create_page_keeps_bond_context(self, auth_client):
+        res = auth_client.get('/games/create?type=ttal&bond_id=abc123')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'name="bond_id" value="abc123"' in html
+        assert 'lobby_ready' in html
+
     def test_game_create_selected_type_preselection(self, auth_client):
         """Verify visiting /games/create?type=caption preselects caption in Jinja and hides multi-q fields."""
         res = auth_client.get('/games/create?type=caption')

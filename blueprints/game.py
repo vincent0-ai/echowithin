@@ -6,7 +6,7 @@ import datetime, secrets, hashlib, time
 from security import limits, get_client_ip
 import database
 from cachetools import TTLCache
-from blueprints.game_registry import all_games
+from blueprints.game_registry import all_games, game_label
 
 bp = Blueprint('game', __name__)
 
@@ -33,6 +33,65 @@ def _nested_total(counts):
         elif isinstance(v, (int, float)):
             total += v
     return total
+
+
+def _notify_bond_partner_lobby_ready(m, bond_id, lobby_id, game_type, title):
+    """Pull the other bond partner into the lobby just created from a challenge link."""
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': m.safe_object_id(bond_id)})
+    except Exception:
+        return
+    if not bond_doc:
+        return
+    user_id = str(current_user.id)
+    user_a = str(bond_doc.get('user_a_id', ''))
+    user_b = str(bond_doc.get('user_b_id', ''))
+    if user_id not in (user_a, user_b):
+        return
+    partner_id = user_b if user_id == user_a else user_a
+    m.socketio.emit('bond_game_challenge', {
+        'bond_id': bond_id,
+        'game': game_type,
+        'game_label': game_label(game_type),
+        'game_url': f"/g/{lobby_id}",
+        'room_id': lobby_id,
+        'title': title,
+        'challenger_id': user_id,
+        'challenger_name': current_user.username,
+        'created_at': datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
+        'lobby_ready': True,
+    }, room=f"user_{partner_id}")
+
+
+# Party challenges open a setup form before a lobby exists. Remember which
+# lobby a challenge room produced so a partner who opens the link late still
+# lands in that lobby instead of a second setup form.
+_BOND_PARTY_LOBBIES = {}
+_BOND_PARTY_TTL_S = 600
+
+
+def _remember_bond_lobby(bond_id, room_token, lobby_id):
+    if not bond_id or not room_token:
+        return
+    now = time.time()
+    for key, (_lobby, created) in list(_BOND_PARTY_LOBBIES.items()):
+        if now - created > _BOND_PARTY_TTL_S:
+            _BOND_PARTY_LOBBIES.pop(key, None)
+    _BOND_PARTY_LOBBIES[(bond_id, room_token)] = (lobby_id, now)
+
+
+def _recall_bond_lobby(bond_id, room_token):
+    if not bond_id or not room_token:
+        return None
+    entry = _BOND_PARTY_LOBBIES.get((bond_id, room_token))
+    if not entry:
+        return None
+    lobby_id, created = entry
+    if time.time() - created > _BOND_PARTY_TTL_S:
+        _BOND_PARTY_LOBBIES.pop((bond_id, room_token), None)
+        return None
+    return lobby_id
+
 
 def _decrypt_lobby(lobby):
     """Return a copy of a game lobby doc with any at-rest encrypted fields decrypted for display.
@@ -550,6 +609,12 @@ def games_create():
         return redirect(url_for('auth.login'))
     selected_type = (request.args.get('type') or request.args.get('game_type') or 'poll').strip().lower()
     circle_id = (request.args.get('circle_id') or request.form.get('circle_id') or '').strip()
+    bond_id = (request.args.get('bond_id') or request.form.get('bond_id') or '').strip()
+    room_token = (request.args.get('room') or request.form.get('room') or '').strip()
+    if request.method == 'GET' and bond_id and room_token:
+        existing_lobby = _recall_bond_lobby(bond_id, room_token)
+        if existing_lobby:
+            return redirect(url_for('game.view_lobby', lobby_id=existing_lobby))
     circle_oid = None
     if circle_id:
         try:
@@ -815,9 +880,12 @@ def games_create():
             m.game_sessions_conf.update_one({'lobby_id': lobby_id}, {'$set': m.generate_game_envelope_keys()})
         except Exception as e:
             m.app.logger.warning(f"Could not create game envelope key for {lobby_id}: {e}")
+        if bond_id:
+            _remember_bond_lobby(bond_id, room_token, lobby_id)
+            _notify_bond_partner_lobby_ready(m, bond_id, lobby_id, game_type, title)
         flash('Game lobby created — share the link.', 'success')
         return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
-    return render_template('game_create.html', active_page='games', selected_type=selected_type, circle_id=circle_id)
+    return render_template('game_create.html', active_page='games', selected_type=selected_type, circle_id=circle_id, bond_id=bond_id, bond_room=room_token)
 
 @bp.route('/api/game/poll/create', methods=['POST'])
 @login_required

@@ -26,219 +26,470 @@
 
 {% block extra_head_css %}
 <style nonce="{{ csp_nonce }}">
-    /* style.css makes every <main> a centered flex column. Reset it here so the
-       landing page keeps a single centered column at a readable width. */
-    main.public-home {
+    /* Hearth Dark. Scoped to this public landing page so the global light/dark
+       themes and every other page keep their existing palette. */
+    body:has(main.hearth-home) {
+        --hearth-bg: #170e0b;
+        --hearth-text: #f6ece4;
+        --hearth-muted: #c9b5a8;
+        --hearth-soft: #b9a396;
+        --hearth-card: #241712;
+        --hearth-card-border: #3a2820;
+        --hearth-line: #2e1f18;
+        --hearth-accent: #f0a868;
+        background-color: var(--hearth-bg) !important;
+        color: var(--hearth-text) !important;
+    }
+
+    body:has(main.hearth-home) .page-container {
+        background-color: var(--hearth-bg);
+        overflow-x: clip;
+    }
+
+    /* The landing page owns its width and spacing. */
+    body:has(main.hearth-home) .container {
+        padding: 0;
+    }
+
+    /* Header: the existing markup and links, moved onto the dark surface. */
+    body:has(main.hearth-home) .navbar {
+        background-color: transparent !important;
+        padding: 14px 24px;
+        gap: 12px 24px;
+        border-bottom: 1px solid var(--hearth-line);
+    }
+
+    body:has(main.hearth-home) .navbar a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        color: var(--hearth-soft) !important;
+    }
+
+    body:has(main.hearth-home) .nav-brand {
+        color: var(--hearth-text) !important;
+        gap: 10px;
+        font-size: 18px;
+        font-weight: 600;
+    }
+
+    body:has(main.hearth-home) .nav-logo {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+    }
+
+    body:has(main.hearth-home) .nav-socials a {
+        justify-content: center;
+        min-width: 44px;
+        color: var(--hearth-soft) !important;
+    }
+
+    body:has(main.hearth-home) .nav-links a {
+        padding: 10px 8px;
+        font-size: 14px;
+    }
+
+    body:has(main.hearth-home) .nav-links a:hover {
+        color: var(--hearth-text) !important;
+        text-decoration: underline;
+        text-underline-offset: 4px;
+    }
+
+    body:has(main.hearth-home) .nav-links a.active {
+        color: var(--hearth-text) !important;
+        text-decoration: underline;
+        text-underline-offset: 4px;
+    }
+
+    body:has(main.hearth-home) .nav-links > a[href^="/login"]:not([href*="personal_space"]) {
+        padding: 11px 20px;
+        border-radius: 999px;
+        background: var(--hearth-accent);
+        color: var(--hearth-bg) !important;
+        font-weight: 500;
+        text-decoration: none;
+    }
+
+    body:has(main.hearth-home) .nav-links > a[href^="/login"]:not([href*="personal_space"]):hover {
+        background: #f6b87e;
+        color: var(--hearth-bg) !important;
+        text-decoration: none;
+    }
+
+    main.hearth-home {
         display: block;
         width: 100%;
-        max-width: 620px;
+        max-width: 1040px;
         min-height: 0;
         margin: 0 auto;
-        padding: 0 1rem;
+        padding: 0 24px 24px;
+        color: var(--hearth-text);
+        text-align: left;
+    }
+
+    .hearth-hero {
+        position: relative;
+        overflow: hidden;
+        padding: 64px 0 40px;
         text-align: center;
     }
 
-    .public-hero {
-        padding: clamp(1.5rem, 4vw, 2.25rem) 0 clamp(1.5rem, 3vw, 2rem);
+    .hearth-rings {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 600px;
+        height: 600px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
     }
 
-    .public-hero h1 {
-        max-width: 20ch;
-        margin: 0 auto;
-        color: var(--primary-dark-color);
-        font-size: clamp(1.9rem, 4.6vw, 2.8rem);
-        font-weight: 700;
-        line-height: 1.06;
-        letter-spacing: -.04em;
+    .hearth-hero-inner {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .hearth-eyebrow {
+        margin: 0 0 14px;
+        color: var(--hearth-accent);
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: .14em;
+        line-height: 1.4;
+        text-transform: uppercase;
+    }
+
+    main.hearth-home .hearth-hero h1 {
+        max-width: 22ch;
+        margin: 0;
+        color: var(--hearth-text) !important;
+        font-size: clamp(24px, calc(18px + 1.7vw), 36px);
+        font-weight: 600;
+        letter-spacing: -.015em;
+        line-height: 1.2;
         overflow-wrap: break-word;
     }
 
-    .public-lede {
-        max-width: 34ch;
-        margin: .75rem auto 0;
-        color: var(--text-secondary);
-        font-size: 1rem;
-        line-height: 1.5;
+    .hearth-sub {
+        max-width: 40ch;
+        margin: 14px 0 0;
+        color: var(--hearth-muted);
+        font-size: 16px;
+        line-height: 1.6;
     }
 
-    .public-actions {
+    .hearth-actions {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: center;
-        flex-wrap: wrap;
-        gap: .6rem;
-        margin-top: 1.5rem;
+        gap: 12px;
+        margin-top: 26px;
     }
 
-    .public-btn {
+    .hearth-btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         min-height: 44px;
-        padding: .6rem 1.2rem;
-        border: 1px solid transparent;
-        border-radius: 8px;
-        font-size: .9rem;
-        font-weight: 600;
+        border-radius: 999px;
+        font-size: 15px;
         line-height: 1.2;
         text-decoration: none;
-        transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+        transition: background-color .18s ease, border-color .18s ease;
     }
 
-    .public-btn-primary {
-        background: var(--primary-color);
-        border-color: var(--primary-color);
-        color: var(--text-light-color);
+    .hearth-btn-primary {
+        padding: 13px 26px;
+        background: var(--hearth-accent);
+        color: var(--hearth-bg);
+        font-weight: 600;
     }
 
-    .public-btn-primary:hover {
-        background: var(--primary-dark-color);
-        border-color: var(--primary-dark-color);
+    .hearth-btn-primary:hover {
+        background: #f6b87e;
     }
 
-    .public-btn-secondary {
-        background: transparent;
-        border-color: var(--border-color);
-        color: var(--primary-color);
+    .hearth-btn-secondary {
+        padding: 11.5px 26px;
+        border: 1.5px solid #80604c;
+        color: var(--hearth-text);
+        font-weight: 500;
     }
 
-    .public-btn-secondary:hover {
-        border-color: var(--primary-color);
+    .hearth-btn-secondary:hover {
+        border-color: var(--hearth-accent);
     }
 
-    .public-btn:focus-visible,
-    .public-link:focus-visible {
-        outline: 3px solid var(--primary-color);
-        outline-offset: 3px;
-    }
-
-    .public-paths {
-        padding: clamp(1.5rem, 3vw, 2rem) 0 clamp(1.5rem, 3vw, 2rem);
-        border-top: 1px solid var(--border-color);
-    }
-
-    .public-paths h2 {
-        margin: 0 0 1rem;
-        color: var(--primary-dark-color);
-        font-size: clamp(1.25rem, 2.4vw, 1.6rem);
+    .hearth-tour {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 44px;
+        padding: 10px 8px;
+        color: var(--hearth-accent);
+        font-size: 15px;
+        font-weight: 500;
         line-height: 1.2;
-        letter-spacing: -.02em;
+        text-decoration: none;
+        transition: color .18s ease;
     }
 
-    .public-path-panel {
-        overflow: hidden;
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
+    .hearth-tour:hover {
+        color: #f6b87e;
     }
 
-    .public-path-row {
-        padding: .9rem 1.1rem;
-        border-top: 1px solid var(--border-color);
+    .hearth-tour svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
     }
 
-    .public-path-row:first-child {
-        border-top: 0;
+    .hearth-spaces-head {
+        margin-bottom: 16px;
     }
 
-    .public-path-row-lead {
-        background: var(--surface-bg);
-    }
-
-    .public-path-label {
-        display: block;
-        margin-bottom: .15rem;
-        color: var(--primary-color);
-        font-size: .72rem;
+    main.hearth-home .hearth-spaces-head h2 {
+        margin: 0;
+        color: var(--hearth-text) !important;
+        font-size: 20px;
         font-weight: 600;
         line-height: 1.3;
     }
 
-    .public-path-row h3 {
-        margin: 0;
-        color: var(--primary-dark-color);
-        font-size: 1rem;
+    .hearth-cards {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+    }
+
+    .hearth-card {
+        display: flex;
+        flex: 1 1 300px;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+        padding: 22px;
+        background: var(--hearth-card);
+        border: 1px solid var(--hearth-card-border);
+        border-radius: 20px;
+        color: var(--hearth-text);
+        text-decoration: none;
+        transition: border-color .18s ease, transform .18s ease;
+    }
+
+    .hearth-card:hover {
+        border-color: #80604c;
+        transform: translateY(-2px);
+    }
+
+    .hearth-card-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+
+    .hearth-card-num {
+        color: var(--hearth-accent);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: .02em;
+        line-height: 1.4;
+    }
+
+    .hearth-card-top svg {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        color: var(--hearth-muted);
+    }
+
+    .hearth-card-eyebrow {
+        color: var(--hearth-muted);
+        font-size: 12px;
+        letter-spacing: .08em;
+        line-height: 1.4;
+        text-transform: uppercase;
+    }
+
+    .hearth-card-title {
+        color: var(--hearth-text);
+        font-size: 18px;
+        font-weight: 600;
         line-height: 1.35;
     }
 
-    .public-path-row p {
-        margin: .15rem 0 0;
-        color: var(--text-secondary);
-        font-size: .85rem;
-        line-height: 1.5;
+    .hearth-card-desc {
+        color: var(--hearth-muted);
+        font-size: 14px;
+        line-height: 1.55;
     }
 
-    .public-link {
-        display: inline-block;
-        margin-top: .45rem;
-        color: var(--primary-color);
-        font-size: .85rem;
-        font-weight: 600;
-        text-decoration: underline;
-        text-decoration-thickness: 1px;
-        text-underline-offset: 3px;
+    /* Footer: same footer markup and links, read on the dark surface. */
+    body:has(main.hearth-home) .footer {
+        padding: 24px;
+        border-top: 1px solid var(--hearth-line);
+        background-color: transparent;
+        color: var(--hearth-soft);
+        font-size: 14px;
     }
 
-    .public-link:hover {
-        color: var(--primary-dark-color);
+    body:has(main.hearth-home) .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 8px;
+        font-size: 0;
     }
 
-    @media (max-width: 420px) {
-        .public-actions {
+    body:has(main.hearth-home) .footer-links a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 10px;
+        color: #d9c6b9;
+        font-size: 14px;
+        line-height: 1.2;
+    }
+
+    body:has(main.hearth-home) .footer-links a:hover {
+        color: var(--hearth-text);
+    }
+
+    body:has(main.hearth-home) .footer p {
+        margin: 0;
+        color: var(--hearth-soft);
+    }
+
+    @media (max-width: 900px) {
+        body:has(main.hearth-home) .footer-content {
             flex-direction: column;
-            align-items: stretch;
+            align-items: center;
+            gap: 4px;
+        }
+
+        body:has(main.hearth-home) .footer p {
+            text-align: center;
         }
     }
 
+    body:has(main.hearth-home) a:focus-visible,
+    body:has(main.hearth-home) button:focus-visible {
+        outline: 3px solid var(--hearth-accent);
+        outline-offset: 3px;
+    }
+
     @media (prefers-reduced-motion: reduce) {
-        .public-btn,
-        .public-link {
+        .hearth-btn,
+        .hearth-tour,
+        .hearth-card {
             transition: none;
+        }
+
+        .hearth-card:hover {
+            transform: none;
         }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<main class="public-home">
-    <section class="public-hero" aria-labelledby="public-hero-title">
-        <h1 id="public-hero-title">A quieter place for the people and moments that matter.</h1>
-        <p class="public-lede">Write privately. Share only with the people you choose.</p>
-        <div class="public-actions">
-            <a href="{{ url_for('auth.register', next=url_for('pages.home')) }}" class="public-btn public-btn-primary" rel="nofollow">Create your account</a>
-            <a href="{{ url_for('auth.start_guest_tour') }}" class="public-btn public-btn-secondary" rel="nofollow">Take the tour</a>
+<main class="hearth-home">
+    <section class="hearth-hero" aria-labelledby="hearth-hero-title">
+        <svg class="hearth-rings" viewBox="0 0 600 600" width="600" height="600" fill="none" stroke="#2e1f18" stroke-width="1.5" aria-hidden="true" focusable="false">
+            <circle cx="300" cy="300" r="90"></circle>
+            <circle cx="300" cy="300" r="160"></circle>
+            <circle cx="300" cy="300" r="230"></circle>
+            <circle cx="300" cy="300" r="298"></circle>
+        </svg>
+
+        <div class="hearth-hero-inner">
+            <p class="hearth-eyebrow">Private by design</p>
+            <h1 id="hearth-hero-title">A quieter place for the people and moments that matter.</h1>
+            <p class="hearth-sub">Write privately. Share only with the people you choose.</p>
+
+            <div class="hearth-actions">
+                <a href="{{ url_for('auth.register', next=url_for('pages.home')) }}" class="hearth-btn hearth-btn-primary" rel="nofollow">Register</a>
+                <a href="{{ url_for('auth.login', next=url_for('pages.home')) }}" class="hearth-btn hearth-btn-secondary" rel="nofollow">Login</a>
+                <a href="{{ url_for('auth.start_guest_tour') }}" class="hearth-tour" rel="nofollow">
+                    Take a tour
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M5 12h14M13 6l6 6-6 6"></path>
+                    </svg>
+                </a>
+            </div>
         </div>
     </section>
 
-    <section class="public-paths" aria-labelledby="public-paths-title">
-        <h2 id="public-paths-title">Start where you are.</h2>
+    <section class="hearth-spaces" aria-labelledby="hearth-spaces-title">
+        <div class="hearth-spaces-head">
+            <h2 id="hearth-spaces-title">Start where you are.</h2>
+        </div>
 
-        <div class="public-path-panel">
-            <article class="public-path-row public-path-row-lead">
-                <span class="public-path-label">For yourself</span>
-                <h3>Notes and a Vault.</h3>
-                <p>Encrypted notes and a PIN-protected Vault.</p>
-            </article>
-            <article class="public-path-row">
-                <span class="public-path-label">For two</span>
-                <h3>Bonds</h3>
-                <p>Shared questions, streaks, and a calendar built for two.</p>
-            </article>
-            <article class="public-path-row">
-                <span class="public-path-label">For your people</span>
-                <h3>Circles</h3>
-                <p>Small groups that stay in the room.</p>
-            </article>
-            <article class="public-path-row">
-                <span class="public-path-label">For play</span>
-                <h3>Games and Whispers</h3>
-                <p>Play in real time, or talk and let it disappear.</p>
-            </article>
-            <article class="public-path-row">
-                <span class="public-path-label">For everyone</span>
-                <h3>Blog</h3>
-                <p>Public posts, when you want an audience.</p>
-            </article>
+        <div class="hearth-cards">
+            <a href="{{ url_for('notes.personal_space') }}" class="hearth-card">
+                <span class="hearth-card-top">
+                    <span class="hearth-card-num">01</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M7 17L17 7M9 7h8v8"></path>
+                    </svg>
+                </span>
+                <span class="hearth-card-eyebrow">For yourself</span>
+                <span class="hearth-card-title">Notes and a Vault</span>
+                <span class="hearth-card-desc">Encrypted notes and a PIN-protected Vault.</span>
+            </a>
+
+            <a href="{{ url_for('bonds.bonds_page') }}" class="hearth-card">
+                <span class="hearth-card-top">
+                    <span class="hearth-card-num">02</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M7 17L17 7M9 7h8v8"></path>
+                    </svg>
+                </span>
+                <span class="hearth-card-eyebrow">For two</span>
+                <span class="hearth-card-title">Bonds</span>
+                <span class="hearth-card-desc">Shared questions, streaks, and a calendar built for two.</span>
+            </a>
+
+            <a href="{{ url_for('circles.circles_page') }}" class="hearth-card">
+                <span class="hearth-card-top">
+                    <span class="hearth-card-num">03</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M7 17L17 7M9 7h8v8"></path>
+                    </svg>
+                </span>
+                <span class="hearth-card-eyebrow">For your people</span>
+                <span class="hearth-card-title">Circles</span>
+                <span class="hearth-card-desc">Small groups that stay in the room.</span>
+            </a>
+
+            <a href="{{ url_for('game.games_list') }}" class="hearth-card">
+                <span class="hearth-card-top">
+                    <span class="hearth-card-num">04</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M7 17L17 7M9 7h8v8"></path>
+                    </svg>
+                </span>
+                <span class="hearth-card-eyebrow">For play</span>
+                <span class="hearth-card-title">Games and Whispers</span>
+                <span class="hearth-card-desc">Play in real time, or talk and let it disappear.</span>
+            </a>
+
+            <a href="{{ url_for('blog.blog') }}" class="hearth-card">
+                <span class="hearth-card-top">
+                    <span class="hearth-card-num">05</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M7 17L17 7M9 7h8v8"></path>
+                    </svg>
+                </span>
+                <span class="hearth-card-eyebrow">For everyone</span>
+                <span class="hearth-card-title">Blog</span>
+                <span class="hearth-card-desc">Public posts, when you want an audience.</span>
+            </a>
         </div>
     </section>
 </main>
